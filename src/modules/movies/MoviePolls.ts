@@ -255,6 +255,35 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
 
     console.log(`[MoviePoll] Poll closed by ${closedBy}. Winner: ${winningMovie.title}${tieBreak ? " (tie-breaker)" : ""}`);
 
+    // Update the poll message to show it's closed and disable buttons
+    try {
+        if (activePoll.messageId && activePoll.channelId) {
+            const channel = await client.channels.fetch(activePoll.channelId);
+            if (channel?.isTextBased()) {
+                const message = await channel.messages.fetch(activePoll.messageId);
+                const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                    activePoll.options.map((movie, i) => {
+                        const truncatedTitle = movie.title.length > 20 ? movie.title.slice(0, 17) + "…" : movie.title;
+                        const emojiNumbers = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
+                        const label = `${emojiNumbers[i]} ${truncatedTitle}`;
+                        return new ButtonBuilder()
+                            .setCustomId(`movie_vote_${i}_disabled`)
+                            .setLabel(label)
+                            .setStyle(ButtonStyle.Secondary)
+                            .setDisabled(true);
+                    })
+                );
+                await message.edit({
+                    content: `📊 **Vote for the next movie night pick!**\n~~Poll ended~~ - **${winningMovie.title}** was selected!`,
+                    embeds: message.embeds,
+                    components: [disabledRow],
+                });
+            }
+        }
+    } catch (error) {
+        console.error('[MoviePoll] Failed to update poll message:', error);
+    }
+
     return {
         success: true,
         message: baseMessage,

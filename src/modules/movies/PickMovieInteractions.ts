@@ -71,11 +71,12 @@ function getPollSession(poll: MoviePoll): PollSession<Movie> {
 }
 
 export async function handleMoviePickChooseModalSubmit(services: ServiceContainer, interaction: ModalSubmitInteraction) {
+    await interaction.deferReply({ flags: 1 << 6 });
+
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
-        await interaction.reply({
-            content: "Movie repository unavailable.",
-            flags: 1 << 6,
+        await interaction.editReply({
+            content: "Movie repository unavailable."
         });
         return;
     }
@@ -84,7 +85,7 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     const movies: Movie[] = await movieRepo.getAllMovies();
 
     if (!movies.length) {
-        await interaction.reply({ content: "Movie list is empty.", flags: 1 << 6 });
+        await interaction.editReply({ content: "Movie list is empty." });
         return;
     }
 
@@ -113,7 +114,7 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     }
 
     if (!selectedMovie) {
-        await interaction.reply({ content: "No matching movie found.", flags: 1 << 6 });
+        await interaction.editReply({ content: "No matching movie found." });
         return;
     }
 
@@ -149,6 +150,8 @@ export async function handleRandomPollCountSelect(services: ServiceContainer, in
 }
 
 export async function handleConfirmRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
+    await interaction.deferReply({ flags: 1 << 6 });
+
     const message = interaction.message as Message;
     const embed = message.embeds[0];
     const channel = interaction.channel as TextChannel;
@@ -156,15 +159,14 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     const parts = interaction.customId.split("_");
     const movieId = parts[3];
     if (!movieId) {
-        await interaction.reply({ content: "Could not identify movie ID.", flags: 1 << 6 });
+        await interaction.editReply({ content: "Could not identify movie ID." });
         return;
     }
 
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
-        await interaction.reply({
-            content: "Movie repository unavailable.",
-            flags: 1 << 6,
+        await interaction.editReply({
+            content: "Movie repository unavailable."
         });
         return;
     }
@@ -172,9 +174,8 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     const movies = await movieRepo.getAllMovies();
     const selectedMovie = movies.find((m) => m.id === movieId);
     if (!selectedMovie) {
-        await interaction.reply({
-            content: "Could not find the selected movie in list.",
-            flags: 1 << 6,
+        await interaction.editReply({
+            content: "Could not find the selected movie in list."
         });
         return;
     }
@@ -242,32 +243,30 @@ export async function handleRerollRandomMovie(services: ServiceContainer, intera
 }
 
 export async function handleMoviePollVote(services: ServiceContainer, interaction: ButtonInteraction) {
+    await interaction.deferReply({ flags: 1 << 6 });
+
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
-        await interaction.reply({ content: "Movie repository unavailable.", flags: 1 << 6 });
+        await interaction.editReply({ content: "Movie repository unavailable." });
         return;
     }
 
     const activePoll = await movieRepo.getActivePoll();
     if (!activePoll || !activePoll.isActive) {
-        await interaction.reply({ content: "This poll is no longer active.", flags: 1 << 6 });
+        await interaction.editReply({ content: "This poll is no longer active." });
         return;
     }
 
     if (interaction.message.id !== activePoll.messageId) {
-        await interaction.reply({ content: "This poll message is outdated.", flags: 1 << 6 });
+        await interaction.editReply({ content: "This poll message is outdated." });
         return;
     }
 
     const selectedIndex = parseInt(interaction.customId.replace("movie_vote_", ""), 10);
     const selectedMovie = activePoll.options[selectedIndex];
     if (!selectedMovie) {
-        await interaction.reply({ content: "Invalid vote option.", flags: 1 << 6 });
+        await interaction.editReply({ content: "Invalid vote option." });
         return;
-    }
-
-    if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ flags: 1 << 6 });
     }
 
     const userId = interaction.user.id;

@@ -47,11 +47,14 @@ export async function handleMovieNightDate(interaction: StringSelectMenuInteract
 }
 
 export async function handleMovieNightTime(interaction: ModalSubmitInteraction, services: ServiceContainer) {
+    // Defer reply immediately to avoid 3-second timeout
+    await interaction.deferReply({ flags: 1 << 6 });
+
     const { repos } = services;
     const movieRepo = repos.movieRepo;
     if (!movieRepo) {
         console.error("[MovieScheduler] No movie repository found in services.");
-        return interaction.reply({ content: "Internal error: missing movie repository.", flags: 1 << 6 });
+        return interaction.editReply({ content: "Internal error: missing movie repository." });
     }
 
     const guildConfig = await services.guilds.requireConfig(interaction);
@@ -64,9 +67,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(time)) {
-        return await interaction.reply({
-            content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30).",
-            flags: 1 << 6
+        return await interaction.editReply({
+            content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30)."
         });
     }
 
@@ -144,9 +146,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const guild = interaction.guild;
     if (!guild) {
-        return interaction.reply({
-            content: "Could not identify the guild. Please try again in a server channel.",
-            flags: 1 << 6,
+        return interaction.editReply({
+            content: "Could not identify the guild. Please try again in a server channel."
         });
     }
 
@@ -213,8 +214,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     // Schedule reminders
     await scheduleMovieReminders(services, utcDateTime, interaction.client);
 
-    await interaction.reply({
-        content: `Movie night scheduled for **${readableDate}** at **${time}**.`,
-        flags: 1 << 6
+    // Edit deferred reply with success message
+    await interaction.editReply({
+        content: `Movie night scheduled for **${readableDate}** at **${time}**.`
     });
 }

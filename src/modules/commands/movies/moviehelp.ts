@@ -15,6 +15,7 @@ const moviehelp: Command = {
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: any }) {
         if (!interaction) return;
+        await interaction.deferReply({ flags: 1 << 6 });
 
         const guildConfig = await services.guilds.requireConfig(interaction);
         const guild = interaction.guild!;
@@ -76,7 +77,7 @@ const moviehelp: Command = {
                 text: `BustinBot ${packageVersion} • Developed by dossyb`
             });
 
-        await interaction.reply({ embeds: [embed], flags: 1 << 6 });
+        await interaction.editReply({ embeds: [embed] });
     }
 };
 

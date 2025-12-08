@@ -58,6 +58,31 @@ export async function scheduleActivePollClosure(services: ServiceContainer, clie
             const result = await closeActiveMoviePoll(services, client, 'Scheduler');
             console.log(`[MoviePollScheduler] Poll auto-closed: ${result.message}`);
 
+            // Send winner announcement if poll was successful
+            if (result.success && result.winner) {
+                try {
+                    const guildId = process.env.DISCORD_GUILD_ID;
+                    if (guildId) {
+                        const guild = await client.guilds.fetch(guildId);
+                        const channel = guild.channels.cache.find(
+                            (ch) => ch.name === 'movie-night' && ch.isTextBased()
+                        );
+                        if (channel && 'send' in channel) {
+                            const { createMoviePollClosedEmbed } = await import('./MovieEmbeds.js');
+                            const embed = createMoviePollClosedEmbed(
+                                result.winner,
+                                'Scheduler',
+                                result.winningVotes ?? 0,
+                                result.tieBreak ?? false
+                            );
+                            await channel.send({ embeds: [embed] });
+                        }
+                    }
+                } catch (error) {
+                    console.error('[MoviePollScheduler] Failed to announce poll winner:', error);
+                }
+            }
+
             // Fetch latest movie event to determine next steps
             const latestEvent = await movieRepo.getActiveEvent();
             if (!latestEvent || !latestEvent.movie) {
