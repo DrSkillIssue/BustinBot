@@ -35,7 +35,7 @@ const taskhelp: Command = {
                 {
                     name: "📷 Submitting Your Task",
                     value:
-                        "To verify your completion for a task, click **Submit Screenshot** under its post and follow the prompts in your DMs (which must be turned on). Each task will have specific instructions in its post for how many screenshots to take and what level of verification is required (XP tracker, keyword etc.).\nYour submission will be reviewed by the task admin team and either approved for a specific tier or rejected. You may resubmit for a task following the same steps."
+                        "To verify your completion for a task, click **Submit Screenshot(s)** under its post and follow the prompts in your DMs (which must be turned on). Each task will have specific instructions in its post for how many screenshots to take and what level of verification is required (XP tracker, keyword etc.).\nYour submission will be reviewed by the task admin team and either approved for a specific tier or rejected. You may resubmit for a task following the same steps."
                 },
                 {
                     name: "🏆 Prize Draws",

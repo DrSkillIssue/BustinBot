@@ -40,10 +40,10 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
 
     try {
         await interaction.user.send(
-            `Please upload your screenshot for **${taskName}** and include any notes/comments in the same message.`
+            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`
         );
         await interaction.editReply({
-            content: `Check your DMs to submit your screenshot for **${taskName}**!`,
+            content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
         });
     } catch {
         services.tasks.consumePendingTask(userId);

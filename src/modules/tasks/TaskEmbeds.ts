@@ -43,7 +43,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     const embed = new EmbedBuilder()
         .setTitle(`${category} Task`)
         .setDescription(
-            `**${taskTitle}**\n\n${tierDisplay}\n\n${completionLine}\n\n**Submission Instructions:**\n${instructionText}\n\nClick **Submit Screenshot** below to make your submission.`
+            `**${taskTitle}**\n\n${tierDisplay}\n\n${completionLine}\n\n**Submission Instructions:**\n${instructionText}\n\nClick **Submit Screenshot(s)** below to make your submission.`
         )
         .setColor(0xa60000)
         .setFooter({ text: `Ends ${event.endTime.toUTCString()} • ${event.id}` })
@@ -52,7 +52,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
             .setCustomId(`task-submit-${event.id}`)
-            .setLabel('📤 Submit Screenshot')
+            .setLabel('📤 Submit Screenshot(s)')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId(`task-feedback|up|${event.task.id}|${event.id}`)
