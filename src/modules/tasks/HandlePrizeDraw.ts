@@ -189,8 +189,16 @@ export async function announcePrizeDrawWinner(
         console.warn('[PrizeDraw] Task user role not configured or not found.');
     }
 
+    let winnerUsername = 'Unknown User';
+    try {
+        const winnerUser = await client.users.fetch(snapshot.winnerId);
+        winnerUsername = winnerUser.username;
+    } catch (err) {
+        console.warn(`[PrizeDraw] Failed to fetch winner username for ${snapshot.winnerId}:`, err);
+    }
+
     const embedData = buildPrizeDrawEmbed(
-        snapshot.winnerId,
+        winnerUsername,
         snapshot.totalEntries,
         Object.keys(snapshot.participants).length,
         snapshot.start,
