@@ -47,12 +47,17 @@ const reportbug: Command = {
                 return;
             }
 
+            // Bug report functionality is simple and self-contained - were this to be made more robust, highly recommend defining Bug as a type and storing in DB
+            const bugId = `BUG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            const timestamp = new Date().toISOString();
             const channelName = interaction.channel && 'name' in interaction.channel
                 ? `#${interaction.channel.name}`
                 : 'Unknown channel';
             const channelId = interaction.channel?.id ?? 'unknown';
             const reportContent = [
                 '🐞 **New Bug Report** 🐞',
+                `**Bug ID:** \`${bugId}\``,
+                `**Timestamp:** ${timestamp}`,
                 `**Reporter:** ${interaction.user.tag} (*${interaction.user.id}*)`,
                 `**Server:** ${interaction.guild?.name} (*${interaction.guild?.id}*)`,
                 `**Channel:** ${channelName} (*${channelId}*)`,
