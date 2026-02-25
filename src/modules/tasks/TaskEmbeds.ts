@@ -14,15 +14,17 @@ const categoryIcons: Record<TaskCategory, string> = {
 };
 
 export function getTaskDisplayName(task: Task, selectedAmount?: number): string {
-    if (selectedAmount !== undefined && task.taskName.includes("{amount}")) {
-        return task.taskName.replace(/\{amount\}/g, String(selectedAmount));
+    let displayName = task.taskName;
+    
+    if (selectedAmount !== undefined && displayName.includes("{amount}")) {
+        displayName = displayName.replace(/\{amount\}/g, String(selectedAmount));
     }
 
-    if (task.wildernessReq) {
-        task.taskName += " ☠️";
+    if (task.wildernessReq && !displayName.includes("☠️")) {
+        displayName += " ☠️";
     }
 
-    return task.taskName;
+    return displayName;
 }
 
 // Embed shown for each task event post
