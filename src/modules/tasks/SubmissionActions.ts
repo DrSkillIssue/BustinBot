@@ -72,7 +72,7 @@ export async function postToAdminChannel(client: Client, submission: TaskSubmiss
     }
 }
 
-export async function notifyUser(client: Client, submission: TaskSubmission) {
+export async function notifyUser(client: Client, submission: TaskSubmission, streakLine?: string) {
     const user = await client.users.fetch(submission.userId);
     if (!user) return;
 
@@ -92,7 +92,7 @@ export async function notifyUser(client: Client, submission: TaskSubmission) {
         const plural = rollCount === 1 ? '' : 's';
 
         await user.send(
-            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier** (${rollCount} prize roll${plural})!`
+            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier** (${rollCount} prize roll${plural})!${streakLine ?? ""}`
         );
     } else if (submission.status === SubmissionStatus.Rejected) {
         const reason = submission.rejectionReason ?? 'No reason provided.';

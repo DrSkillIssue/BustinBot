@@ -7,6 +7,7 @@ import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
+import { calculateTaskStreakSummary } from './TaskStreaks.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -62,6 +63,7 @@ export class TaskService {
         if (!submission) return null;
 
         submission.screenshotUrls = screenshotUrls.slice(0, MAX_SCREENSHOTS);
+        submission.submittedAt = new Date();
 
         if (notes !== undefined) {
             submission.notes = notes;
@@ -156,7 +158,7 @@ export class TaskService {
         tier: 'bronze' | 'silver' | 'gold',
         reviewedBy: string,
         services: ServiceContainer
-    ): Promise<TaskSubmission | null> {
+    ): Promise<(TaskSubmission & { streakLine?: string }) | null> {
         const TIER_MAP = {
             bronze: { status: SubmissionStatus.Bronze, rolls: 1 },
             silver: { status: SubmissionStatus.Silver, rolls: 2 },
@@ -197,9 +199,26 @@ export class TaskService {
 
         await this.syncCompletedUsers(submission.taskEventId, submission.userId, true);
 
+        let streakLine: string | undefined;
+        try {
+            const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
+            streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
+
+            if (services.repos.userRepo) {
+                await services.repos.userRepo.updateUser(submission.userId, {
+                    taskStreak: streakSummary.currentStreak,
+                    longestTaskStreak: streakSummary.longestStreak,
+                });
+            } else {
+                console.warn(`[TaskService] UserRepo unavailable; skipping streak stat update for ${submission.userId}.`);
+            }
+        } catch (err) {
+            console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
+        }
+
         // Notify, archive, and update counters
         try {
-            await notifyUser(client, submission);
+            await notifyUser(client, submission, streakLine);
         } catch (err) {
             console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
         }
@@ -239,6 +258,9 @@ export class TaskService {
             }
         }
 
+        if (streakLine) {
+            return { ...submission, streakLine };
+        }
         return submission;
     }
 

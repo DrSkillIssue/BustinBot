@@ -117,7 +117,11 @@ describe('Task submission lifecycle', () => {
                 expect.objectContaining({ status: SubmissionStatus.Bronze }),
                 services
             );
-            expect(mockedNotifyUser).toHaveBeenCalledWith(client, expect.objectContaining({ status: SubmissionStatus.Bronze }));
+            expect(mockedNotifyUser).toHaveBeenCalledWith(
+                client,
+                expect.objectContaining({ status: SubmissionStatus.Bronze }),
+                expect.any(String)
+            );
             expect(mockedUpdateTaskCounter).toHaveBeenCalledWith(client, submission.taskEventId, submission.userId, repo, SubmissionStatus.Bronze);
             expect(adminChannel.send).toHaveBeenCalledWith(expect.stringContaining('approved'));
             expect(client.channels.fetch).toHaveBeenCalledWith('task-verification-channel-id');

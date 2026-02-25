@@ -35,6 +35,9 @@ export interface TaskSubmission {
     // Timestamp when the submission was created
     createdAt: Date;
 
+    // Timestamp when the user actually submitted screenshots/notes
+    submittedAt?: Date;
+
     // Timestamp when the submission was reviewed
     reviewedAt?: Date;
 

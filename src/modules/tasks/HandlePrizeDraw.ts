@@ -189,10 +189,11 @@ export async function announcePrizeDrawWinner(
         console.warn('[PrizeDraw] Task user role not configured or not found.');
     }
 
-    let winnerUsername = 'Unknown User';
+    const fallbackWinner = snapshot.winnerId || 'Unknown User';
+    let winnerUsername = fallbackWinner;
     try {
         const winnerUser = await client.users.fetch(snapshot.winnerId);
-        winnerUsername = winnerUser.username;
+        winnerUsername = winnerUser?.username ?? fallbackWinner;
     } catch (err) {
         console.warn(`[PrizeDraw] Failed to fetch winner username for ${snapshot.winnerId}:`, err);
     }

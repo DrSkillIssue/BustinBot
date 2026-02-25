@@ -78,6 +78,8 @@ const stats: Command = {
                         `🥉 Bronze Tasks: **${stats.tasksCompletedBronze ?? 0}**`,
                         `🥈 Silver Tasks: **${stats.tasksCompletedSilver ?? 0}**`,
                         `🥇 Gold Tasks: **${stats.tasksCompletedGold ?? 0}**`,
+                        `🔥 Current Task Streak: **${stats.taskStreak ?? 0}**`,
+                        `🏅 Longest Task Streak: **${stats.longestTaskStreak ?? 0}**`,
                         `🏆 Prizes Won: **${stats.taskPrizesWon ?? 0}**`,
                         `🗳️ Task Polls Voted: **${stats.taskPollsVoted ?? 0}**`,
                     ].join("\n"),
