@@ -30,7 +30,7 @@ const taskhelp: Command = {
                 {
                     name: "📊 Task Events",
                     value:
-                        "New tasks are posted every **Monday at 00:00 UTC**. Each task includes three tiers of completion corresponding to progressively higher requirements for completion:\n🥉 **Bronze (1 roll)** 🥈 **Silver (2 rolls)** 🥇 **Gold (3 rolls)**\nEach tier awards more prize rolls in the next draw - the higher the tier, the better your odds!"
+                        "New tasks are posted every **Monday at 00:00 UTC**. Each task includes three tiers of completion corresponding to progressively higher requirements for completion:\n🥉 **Bronze** 🥈 **Silver** 🥇 **Gold**\nTiers are for leaderboard points and bragging rights."
                 },
                 {
                     name: "📷 Submitting Your Task",
@@ -40,7 +40,7 @@ const taskhelp: Command = {
                 {
                     name: "🏆 Prize Draws",
                     value:
-                        "Prize draws occur **every fortnight on Tuesday at 00:00 UTC**. Each prize roll counts as one entry so completing more tasks at higher tiers improve your odds of winning.\nWinners are announced in the task channel and will be contacted by a task admin to award them with a free bond!"
+                        "Prize draws occur **every fortnight on Tuesday at 00:00 UTC**. Each approved submission counts as **one entry** in the draw.\nWinners are announced in the task channel and will be contacted by a task admin to award them with a free bond!"
                 },
             ],
             footer: {
