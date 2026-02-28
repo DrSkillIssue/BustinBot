@@ -15,7 +15,7 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
         vi.clearAllMocks();
     });
 
-    it('User gets 3 rolls max per task when submitting Bronze -> Silver -> Gold', async () => {
+    it('User gets 1 roll per task when submitting Bronze -> Silver -> Gold', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
         };
@@ -27,8 +27,8 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
             getSubmissionsForTask: vi.fn().mockResolvedValue([
                 // User submitted 3 times for the SAME task, upgrading each time
                 { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Bronze, prizeRolls: 1 },
-                { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Silver, prizeRolls: 2 },
-                { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Silver, prizeRolls: 1 },
+                { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
             ]),
         };
 
@@ -39,12 +39,12 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
 
         const persistedSnapshot = prizeRepo.createPrizeDraw.mock.calls[0]?.[0];
         
-        // **Should** only count Gold submission (3 rolls), not 1+2+3=6
-        expect(persistedSnapshot?.participants).toEqual({ user1: 3 });
-        expect(persistedSnapshot?.totalEntries).toBe(3);
+        // **Should** only count the task once regardless of tier
+        expect(persistedSnapshot?.participants).toEqual({ user1: 1 });
+        expect(persistedSnapshot?.totalEntries).toBe(1);
     });
 
-    it('User gets 9 rolls total (3 per category) when submitting Bronze -> Silver -> Gold for each', async () => {
+    it('User gets 1 roll per category when submitting Bronze -> Silver -> Gold for each', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
         };
@@ -59,22 +59,22 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
                 if (eventId === 'pvm-event') {
                     return Promise.resolve([
                         { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Bronze, prizeRolls: 1 },
-                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Silver, prizeRolls: 2 },
-                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Silver, prizeRolls: 1 },
+                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 if (eventId === 'skilling-event') {
                     return Promise.resolve([
                         { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Bronze, prizeRolls: 1 },
-                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Silver, prizeRolls: 2 },
-                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Silver, prizeRolls: 1 },
+                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 if (eventId === 'minigame-event') {
                     return Promise.resolve([
                         { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Bronze, prizeRolls: 1 },
-                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Silver, prizeRolls: 2 },
-                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Silver, prizeRolls: 1 },
+                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 return Promise.resolve([]);
@@ -88,12 +88,12 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
 
         const persistedSnapshot = prizeRepo.createPrizeDraw.mock.calls[0]?.[0];
         
-        // *SHOULD* deduplicate and only count highest tier per task
-        expect(persistedSnapshot?.participants).toEqual({ user1: 9 });
-        expect(persistedSnapshot?.totalEntries).toBe(9);
+        // *SHOULD* deduplicate and count once per task
+        expect(persistedSnapshot?.participants).toEqual({ user1: 3 });
+        expect(persistedSnapshot?.totalEntries).toBe(3);
     });
 
-    it('User should only get 9 rolls max (3 per category) when submitting for all categories', async () => {
+    it('User should only get 3 rolls max (1 per category) when submitting for all categories', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
         };
@@ -108,17 +108,17 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
                 // This simulates what SHOULD happen - only ONE submission per user per task
                 if (eventId === 'pvm-event') {
                     return Promise.resolve([
-                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'pvm-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 if (eventId === 'skilling-event') {
                     return Promise.resolve([
-                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'skilling-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 if (eventId === 'minigame-event') {
                     return Promise.resolve([
-                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Gold, prizeRolls: 3 },
+                        { userId: 'user1', taskEventId: 'minigame-event', status: SubmissionStatus.Gold, prizeRolls: 1 },
                     ]);
                 }
                 return Promise.resolve([]);
@@ -132,7 +132,7 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
 
         const persistedSnapshot = prizeRepo.createPrizeDraw.mock.calls[0]?.[0];
         
-        expect(persistedSnapshot?.participants).toEqual({ user1: 9 });
-        expect(persistedSnapshot?.totalEntries).toBe(9);
+        expect(persistedSnapshot?.participants).toEqual({ user1: 3 });
+        expect(persistedSnapshot?.totalEntries).toBe(3);
     });
 });
