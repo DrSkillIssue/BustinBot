@@ -54,22 +54,23 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
             s.status === SubmissionStatus.Gold
     );
 
-    const TIER_ROLLS: Partial<Record<SubmissionStatus, number>> = {
+    const STATUS_RANK: Partial<Record<SubmissionStatus, number>> = {
         [SubmissionStatus.Approved]: 1,
         [SubmissionStatus.Bronze]: 1,
         [SubmissionStatus.Silver]: 2,
         [SubmissionStatus.Gold]: 3,
     };
+    const ROLLS_PER_SUBMISSION = 1;
 
     // Deduplicate submissions so a user only gets the highest tier per task
     const userBestSubmissions = new Map<string, typeof filtered[number]>();
     for (const submission of filtered) {
         const key = `${submission.userId}-${submission.taskEventId}`;
         const existing = userBestSubmissions.get(key);
-        const currentRolls = submission.prizeRolls ?? TIER_ROLLS[submission.status] ?? 0;
-        const existingRolls = existing ? (existing.prizeRolls ?? TIER_ROLLS[existing.status] ?? 0) : 0;
+        const currentRank = STATUS_RANK[submission.status] ?? 0;
+        const existingRank = existing ? STATUS_RANK[existing.status] ?? 0 : 0;
 
-        if (!existing || currentRolls >= existingRolls) {
+        if (!existing || currentRank >= existingRank) {
             userBestSubmissions.set(key, submission);
         }
     }
@@ -79,13 +80,8 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     const participants: Record<string, number> = {};
     const entries: string[] = [];
     for (const submission of deduplicatedSubmissions) {
-        const rolls = submission.prizeRolls ?? TIER_ROLLS[submission.status] ?? 0;
-        if (rolls <= 0) continue;
-
-        participants[submission.userId] = (participants[submission.userId] || 0) + rolls;
-        for (let i = 0; i < rolls; i++) {
-            entries.push(submission.userId);
-        }
+        participants[submission.userId] = (participants[submission.userId] || 0) + ROLLS_PER_SUBMISSION;
+        entries.push(submission.userId);
     }
 
     const tierCounts = {

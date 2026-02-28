@@ -36,7 +36,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     const instructionText =
         TaskInstructions[event.task.type] ?? "Include proof of completion showing progress or XP change.";
 
-    const tierDisplay = `Amounts required for each tier of completion (1, 2 and 3 prize rolls respectively):\n
+    const tierDisplay = `Amounts required for each tier of completion:\n
 🥉 **${event.amounts?.bronze ?? 0}**\u2003🥈 **${event.amounts?.silver ?? 0}**\u2003🥇 **${event.amounts?.gold ?? 0}**`;
 
     const counts = event.completionCounts ?? { bronze: 0, silver: 0, gold: 0 };
@@ -113,7 +113,14 @@ export function buildArchiveEmbed(submission: any, status: string, taskName: str
 }
 
 // Embed shown when a prize draw winner is announced
-export function buildPrizeDrawEmbed(winnerUsername: string, totalSubmissions: number, totalParticipants: number, start: string, end: string, tierCounts?: { bronze: number; silver: number; gold: number }) {
+export function buildPrizeDrawEmbed(
+    winnerUsername: string,
+    totalSubmissions: number,
+    totalParticipants: number,
+    start: string,
+    end: string,
+    tierCounts?: { bronze: number; silver: number; gold: number }
+) {
     const formattedStart = new Date(start).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
     const formattedEnd = new Date(end).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 
