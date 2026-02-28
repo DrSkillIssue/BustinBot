@@ -27,9 +27,9 @@ export interface UserStats {
 
     // Task module stats
     // Total number of tasks they've completed for each tier
-    tasksCompletedBronze: 0,
-    tasksCompletedSilver: 0,
-    tasksCompletedGold: 0,
+    tasksCompletedBronze: number;
+    tasksCompletedSilver: number;
+    tasksCompletedGold: number;
 
     // Current completion streak
     taskStreak: number;
@@ -42,6 +42,11 @@ export interface UserStats {
 
     // How many prizes they've won
     taskPrizesWon: number;
+
+    // Periodic leaderboard champion placements
+    taskChampionFirsts?: number;
+    taskChampionSeconds?: number;
+    taskChampionThirds?: number;
 
     // Completed task count from v1 task system
     legacyTasksCompleted: number;

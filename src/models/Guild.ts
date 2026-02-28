@@ -14,6 +14,9 @@ export interface GuildRoles {
     movieUser?: string;
     taskAdmin?: string;
     taskUser?: string;
+    taskChampionFirst?: string;
+    taskChampionSecond?: string;
+    taskChampionThird?: string;
 }
 
 export interface GuildSetupComplete {
@@ -22,16 +25,36 @@ export interface GuildSetupComplete {
     task?: boolean;
 }
 
+export interface TaskMilestoneRole {
+    id: string;
+    label: string;
+    roleId: string;
+    requiredSubmissions: number;
+    enabled: boolean;
+}
+
+export interface TaskSettings {
+    periodEvents?: number;
+    milestoneRoles?: TaskMilestoneRole[];
+    championRoles?: {
+        first?: boolean;
+        second?: boolean;
+        third?: boolean;
+    };
+}
+
 export interface Guild {
   id: string;
 
   toggles: {
     taskScheduler: boolean;
     leaguesEnabled: boolean;
+    taskLeaderboard?: boolean;
   };
 
   roles: GuildRoles;
   channels: GuildChannels;
+  taskSettings?: TaskSettings;
 
   setupComplete?: GuildSetupComplete;
   // In IANA format (e.g. 'Australia/Melbourne')
