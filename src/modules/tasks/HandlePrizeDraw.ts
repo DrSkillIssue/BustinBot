@@ -194,9 +194,12 @@ export async function announcePrizeDrawWinner(
         console.warn(`[PrizeDraw] Failed to fetch winner username for ${snapshot.winnerId}:`, err);
     }
 
+    // Use the count of unique task completions (deduplicated submissions)
+    const totalUniqueCompletions = Object.values(snapshot.participants).reduce((sum, count) => sum + count, 0);
+    
     const embedData = buildPrizeDrawEmbed(
         winnerUsername,
-        snapshot.totalEntries,
+        totalUniqueCompletions,
         Object.keys(snapshot.participants).length,
         snapshot.start,
         snapshot.end,
