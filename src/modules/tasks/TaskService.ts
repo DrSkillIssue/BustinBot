@@ -8,6 +8,7 @@ import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.j
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { calculateTaskStreakSummary } from './TaskStreaks.js';
+import { getStatusPoints } from './TaskLeaderboards.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -158,11 +159,11 @@ export class TaskService {
         tier: 'bronze' | 'silver' | 'gold',
         reviewedBy: string,
         services: ServiceContainer
-    ): Promise<(TaskSubmission & { streakLine?: string }) | null> {
+    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints?: number }) | null> {
         const TIER_MAP = {
-            bronze: { status: SubmissionStatus.Bronze, rolls: 1 },
-            silver: { status: SubmissionStatus.Silver, rolls: 2 },
-            gold: { status: SubmissionStatus.Gold, rolls: 3 },
+            bronze: { status: SubmissionStatus.Bronze },
+            silver: { status: SubmissionStatus.Silver },
+            gold: { status: SubmissionStatus.Gold },
         } as const;
 
         const tierInfo = TIER_MAP[tier];
@@ -174,15 +175,16 @@ export class TaskService {
         // Retrieve any previous submission by the same user for this task
         const existing = await this.repo.getSubmissionByUserAndTask(submission.userId, submission.taskEventId);
 
-        const previousRolls = existing?.prizeRolls ?? 0;
-        if (previousRolls >= tierInfo.rolls) {
+        const previousTierPoints = getStatusPoints(existing?.status);
+        const nextTierPoints = getStatusPoints(tierInfo.status);
+        if (previousTierPoints >= nextTierPoints) {
             // Already equal or higher tier
             return null;
         }
 
         // Update submission details
         submission.status = tierInfo.status;
-        submission.prizeRolls = tierInfo.rolls;
+        submission.prizeRolls = 1;
         submission.reviewedBy = reviewedBy;
         submission.reviewedAt = new Date();
 
@@ -259,9 +261,9 @@ export class TaskService {
         }
 
         if (streakLine) {
-            return { ...submission, streakLine };
+            return { ...submission, streakLine, previousTierPoints };
         }
-        return submission;
+        return { ...submission, previousTierPoints };
     }
 
     async getPendingSubmission(

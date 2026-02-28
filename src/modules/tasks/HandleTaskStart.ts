@@ -3,6 +3,7 @@ import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { TaskCategory } from '../../models/Task.js';
+import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 
 function generateTaskEventId(taskId: string): string {
     const now = new Date();
@@ -183,6 +184,12 @@ export async function startTaskEventForCategory(
     event.channelId = (channel as TextChannel).id;
 
     await taskEvents.storeTaskEvent(event);
+
+    try {
+        await registerPeriodicTaskEvent(services, taskEventId);
+    } catch (err) {
+        console.warn(`[TaskStart] Failed to register periodic leaderboard event ${taskEventId}:`, err);
+    }
 
     if (pollData.id) {
         await repos.taskRepo.closeTaskPoll(pollData.id);

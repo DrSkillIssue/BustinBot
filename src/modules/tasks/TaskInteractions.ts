@@ -3,6 +3,8 @@ import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import { handleUpdateTaskModal } from './HandleUpdateTaskModal.js';
+import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from './TaskLeaderboards.js';
+import { applyTaskMilestoneRoles } from './TaskMilestones.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -220,6 +222,17 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             } else {
                 console.warn("[Stats] UserRepo unavailable; skipping task completion increment.");
             }
+
+            const points = getTierPoints(tier);
+            const previousPoints = result.previousTierPoints ?? 0;
+            const deltaPoints = Math.max(0, points - previousPoints);
+
+            if (deltaPoints > 0) {
+                await incrementLifetimePoints(services, result.userId, deltaPoints);
+                await incrementPeriodicPoints(services, result.userId, deltaPoints, result.taskEventId, tier);
+            }
+
+            await applyTaskMilestoneRoles(interaction.client, services, result.userId);
 
             const channel = interaction.channel as TextChannel;
             const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
