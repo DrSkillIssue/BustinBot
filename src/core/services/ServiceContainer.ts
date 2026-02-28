@@ -9,6 +9,7 @@ import type { GuildService } from './GuildService.js';
 import type { IGuildRepository } from '../database/interfaces/IGuildRepo.js';
 import type { IKeywordRepository } from '../database/interfaces/IKeywordRepo.js';
 import type { IUserRepository } from '../database/interfaces/IUserRepo.js';
+import type { ITaskLeaderboardRepository } from '../database/interfaces/ITaskLeaderboardRepo.js';
 
 export interface ServiceContainer {
     guildId: string;
@@ -24,5 +25,6 @@ export interface ServiceContainer {
         movieRepo?: IMovieRepository;
         keywordRepo?: IKeywordRepository;
         userRepo?: IUserRepository;
+        taskLeaderboardRepo?: ITaskLeaderboardRepository;
     };
 }

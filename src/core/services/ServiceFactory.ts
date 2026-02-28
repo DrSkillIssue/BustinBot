@@ -11,6 +11,7 @@ import { GuildRepository } from "../database/GuildRepo.js";
 import { GuildService } from "./GuildService.js";
 import type { ServiceContainer } from "./ServiceContainer.js";
 import { UserRepository } from "../database/UserRepo.js";
+import { TaskLeaderboardRepository } from "../database/TaskLeaderboardRepo.js";
 
 export async function createServiceContainer(guildId: string): Promise<ServiceContainer> {
     const botRepo = new BotRepository();
@@ -20,6 +21,7 @@ export async function createServiceContainer(guildId: string): Promise<ServiceCo
     const keywordRepo = new KeywordRepository(guildId);
     const movieRepo = new MovieRepository(guildId);
     const userRepo = new UserRepository(guildId);
+    const taskLeaderboardRepo = new TaskLeaderboardRepository(guildId);
 
     const botStats = new BotStatsService(botRepo);
     await botStats.init();
@@ -36,7 +38,7 @@ export async function createServiceContainer(guildId: string): Promise<ServiceCo
         taskEvents,
         keywords,
         guilds,
-        repos: { taskRepo, prizeRepo, movieRepo, keywordRepo, guildRepo, userRepo },
+        repos: { taskRepo, prizeRepo, movieRepo, keywordRepo, guildRepo, userRepo, taskLeaderboardRepo },
     };
 
     return services;
