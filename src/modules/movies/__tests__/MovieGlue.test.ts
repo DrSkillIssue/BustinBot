@@ -39,6 +39,7 @@ const services: any = {
     repos: {
         movieRepo: {
             getActiveEvent: vi.fn(),
+            getAllEvents: vi.fn(),
             upsertMovie: vi.fn(),
             createMovieEvent: vi.fn(),
             getAllMovies: vi.fn(),
@@ -58,9 +59,10 @@ const showMovieManualPollMenuSpy = vi.spyOn(movieManualPoll, 'showMovieManualPol
 const { clearManualPollSession } = movieManualPoll;
 
 const movieLifecycle = await import('../MovieLifecycle.js');
-const { finishMovieNight, scheduleMovieAutoEnd } = movieLifecycle;
+const { finishMovieNight, scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } = movieLifecycle;
 const { handleMovieInteraction } = await import('../MovieInteractionHandler.js');
 const { showMovieManualPollMenu } = await import('../MovieManualPoll.js');
+const { pickRandomMovie } = await import('../MovieLocalSelector.js');
 
 const setupServiceModule = await import('../../../core/services/SetupService.js');
 const { setupService } = setupServiceModule;
@@ -69,6 +71,7 @@ const DateUtils = await import('../../../utils/DateUtils.js');
 vi.spyOn(DateUtils, 'normaliseFirestoreDates').mockImplementation((movie: any) => movie);
 
 beforeEach(() => {
+    clearScheduledMovieAutoEnd();
     updateManualPollSelectionSpy.mockClear();
     showMovieManualPollMenuSpy.mockClear();
     initAttendanceTracking.mockClear();
@@ -88,6 +91,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    clearScheduledMovieAutoEnd();
     setupService.clearSelections('movie', 'user-1');
 });
 
@@ -224,9 +228,23 @@ describe('MovieLifecycle.finishMovieNight', () => {
         };
 
         services.repos.movieRepo.getActiveEvent.mockResolvedValue({
+            id: 'event-1',
+            startTime: new Date(),
             movie: { title: 'Movie', addedBy: 'user-1' },
             channelId: 'channel-1',
+            completed: false,
+            hostedBy: 'moderator',
         });
+        services.repos.movieRepo.getAllEvents.mockResolvedValue([
+            {
+                id: 'event-1',
+                startTime: new Date(),
+                movie: { title: 'Movie', addedBy: 'user-1' },
+                channelId: 'channel-1',
+                completed: false,
+                hostedBy: 'moderator',
+            },
+        ]);
         services.repos.movieRepo.getAllMovies.mockResolvedValue([{ addedBy: 'user-1', watched: false }]);
         services.guilds.getAll.mockResolvedValue([{ id: 'guild-1' }]);
         services.guilds.get.mockResolvedValue({ channels: { movieNight: 'channel-1' } });
@@ -239,6 +257,45 @@ describe('MovieLifecycle.finishMovieNight', () => {
         expect(services.repos.movieRepo.upsertMovie).toHaveBeenCalled();
         expect(userSend).toHaveBeenCalledWith(expect.stringContaining('Movie'));
         expect(finaliseAttendance).toHaveBeenCalledWith(services);
+    });
+
+    it('archives the selected movie when active event still has a TBD placeholder', async () => {
+        const startTime = new Date('2026-03-04T10:00:00.000Z');
+        services.repos.movieRepo.getAllEvents.mockResolvedValue([
+            {
+                id: 'event-tbd',
+                startTime,
+                movie: { id: 'TBD', title: 'TBD', addedBy: 'host-1', addedAt: new Date(), watched: false },
+                channelId: 'channel-1',
+                completed: false,
+                hostedBy: 'host-1',
+            },
+        ]);
+        services.repos.movieRepo.getAllMovies.mockResolvedValue([
+            {
+                id: 'movie-real',
+                title: 'The Real Movie',
+                addedBy: 'user-1',
+                addedAt: new Date('2026-03-01T10:00:00.000Z'),
+                watched: false,
+                selectedAt: new Date('2026-03-04T09:55:00.000Z'),
+            },
+        ]);
+
+        const client: any = {
+            users: { fetch: vi.fn().mockResolvedValue({ send: vi.fn().mockResolvedValue(undefined) }) },
+            guilds: { fetch: vi.fn().mockResolvedValue({ name: 'Guild' }) },
+        };
+
+        const result = await finishMovieNight('moderator', services, client);
+        expect(result.success).toBe(true);
+        expect(result.finishedMovie?.id).toBe('movie-real');
+        expect(services.repos.movieRepo.upsertMovie).toHaveBeenCalledWith(
+            expect.objectContaining({
+                id: 'movie-real',
+                watched: true,
+            })
+        );
     });
 });
 
@@ -266,10 +323,25 @@ describe('MovieLifecycle.scheduleMovieAutoEnd', () => {
         };
 
         services.repos.movieRepo.getActiveEvent.mockResolvedValue({
+            id: 'event-1',
             channelId: 'channel-123',
             voiceChannelId: 'voice-123',
+            startTime: new Date(),
             movie: { title: 'Auto Movie', addedBy: 'user-1' },
+            completed: false,
+            hostedBy: 'host-1',
         });
+        services.repos.movieRepo.getAllEvents.mockResolvedValue([
+            {
+                id: 'event-1',
+                channelId: 'channel-123',
+                voiceChannelId: 'voice-123',
+                startTime: new Date(),
+                movie: { title: 'Auto Movie', addedBy: 'user-1' },
+                completed: false,
+                hostedBy: 'host-1',
+            },
+        ]);
         services.repos.movieRepo.getAllMovies.mockResolvedValue([
             { id: 'movie-1', title: 'Other Movie', addedBy: 'user-1', watched: false },
         ]);
@@ -300,9 +372,23 @@ describe('MovieLifecycle.scheduleMovieAutoEnd', () => {
     });
     it('falls back to guild-configured voice channel when event is missing voiceChannelId', async () => {
         services.repos.movieRepo.getActiveEvent.mockResolvedValue({
+            id: 'event-2',
             channelId: 'channel-abc',
+            startTime: new Date(),
             movie: { title: 'Fallback Movie', addedBy: 'user-2' },
+            completed: false,
+            hostedBy: 'host-1',
         });
+        services.repos.movieRepo.getAllEvents.mockResolvedValue([
+            {
+                id: 'event-2',
+                channelId: 'channel-abc',
+                startTime: new Date(),
+                movie: { title: 'Fallback Movie', addedBy: 'user-2' },
+                completed: false,
+                hostedBy: 'host-1',
+            },
+        ]);
         services.repos.movieRepo.getAllMovies.mockResolvedValue([
             { id: 'movie-2', title: 'Another Movie', addedBy: 'user-2', watched: false },
         ]);
@@ -328,6 +414,78 @@ describe('MovieLifecycle.scheduleMovieAutoEnd', () => {
             });
         } finally {
             setTimeoutSpy.mockRestore();
+        }
+    });
+
+    it('replaces timers per guild without touching other guild timers', async () => {
+        let timeoutId = 0;
+        const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation(((_cb: any) => {
+            timeoutId += 1;
+            return timeoutId as any;
+        }) as any);
+        const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout').mockImplementation((() => undefined) as any);
+
+        const client: any = { guilds: { fetch: vi.fn() } };
+        const startISO = new Date(Date.now() + 60_000).toISOString();
+
+        const guild1Services: any = {
+            guildId: 'guild-1',
+            repos: {
+                movieRepo: {
+                    getActiveEvent: vi.fn().mockResolvedValue({
+                        id: 'event-g1',
+                        channelId: 'channel-g1',
+                        voiceChannelId: 'voice-g1',
+                        startTime: new Date(),
+                        movie: { title: 'Guild 1 Movie', addedBy: 'user-1' },
+                        completed: false,
+                        hostedBy: 'host-1',
+                    }),
+                },
+            },
+            guilds: {
+                get: vi.fn().mockResolvedValue({ channels: { movieVC: 'voice-g1' } }),
+            },
+        };
+
+        const guild2Services: any = {
+            guildId: 'guild-2',
+            repos: {
+                movieRepo: {
+                    getActiveEvent: vi.fn().mockResolvedValue({
+                        id: 'event-g2',
+                        channelId: 'channel-g2',
+                        voiceChannelId: 'voice-g2',
+                        startTime: new Date(),
+                        movie: { title: 'Guild 2 Movie', addedBy: 'user-2' },
+                        completed: false,
+                        hostedBy: 'host-2',
+                    }),
+                },
+            },
+            guilds: {
+                get: vi.fn().mockResolvedValue({ channels: { movieVC: 'voice-g2' } }),
+            },
+        };
+
+        try {
+            await scheduleMovieAutoEnd(guild1Services, startISO, 0, client);
+            await scheduleMovieAutoEnd(guild2Services, startISO, 0, client);
+            await scheduleMovieAutoEnd(guild1Services, startISO, 0, client);
+
+            expect(setTimeoutSpy).toHaveBeenCalledTimes(3);
+            expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+
+            const firstGuild1Timer = setTimeoutSpy.mock.results[0]?.value;
+            const guild2Timer = setTimeoutSpy.mock.results[1]?.value;
+
+            expect(clearTimeoutSpy).toHaveBeenCalledWith(firstGuild1Timer);
+            expect(clearTimeoutSpy).not.toHaveBeenCalledWith(guild2Timer);
+        } finally {
+            setTimeoutSpy.mockRestore();
+            clearTimeoutSpy.mockRestore();
+            clearScheduledMovieAutoEnd('guild-1');
+            clearScheduledMovieAutoEnd('guild-2');
         }
     });
 });
@@ -368,6 +526,42 @@ describe('showMovieManualPollMenu', () => {
         await showMovieManualPollMenu(services, interaction);
         expect(editReply).toHaveBeenCalled();
         clearManualPollSession('user-1');
+    });
+
+    it('returns no-active-movies response when all entries are watched', async () => {
+        const interaction: any = {
+            user: { id: 'user-1' },
+            deferred: false,
+            replied: false,
+            followUp: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn().mockResolvedValue(undefined),
+        };
+
+        services.repos.movieRepo.getAllMovies.mockResolvedValue([
+            { id: 'watched-1', title: 'Old Movie', watched: true, addedAt: new Date('2024-01-01') },
+        ]);
+
+        await showMovieManualPollMenu(services, interaction);
+        expect(interaction.followUp).toHaveBeenCalledWith(expect.objectContaining({
+            content: 'No active movies found.',
+        }));
+    });
+});
+
+describe('pickRandomMovie', () => {
+    it('never returns watched movies', async () => {
+        const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+        services.repos.movieRepo.getAllMovies.mockResolvedValue([
+            { id: 'watched-1', title: 'Watched', watched: true, addedBy: 'user-1', addedAt: new Date() },
+            { id: 'active-1', title: 'Active', watched: false, addedBy: 'user-1', addedAt: new Date() },
+        ]);
+
+        try {
+            const movie = await pickRandomMovie(services);
+            expect(movie?.id).toBe('active-1');
+        } finally {
+            randomSpy.mockRestore();
+        }
     });
 });
 
