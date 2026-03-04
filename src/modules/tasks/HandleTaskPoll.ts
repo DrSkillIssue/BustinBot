@@ -1,33 +1,14 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel, Client, ButtonInteraction, ComponentType } from 'discord.js';
-import path from 'path';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Client, ButtonInteraction, ComponentType } from 'discord.js';
 import type { Task } from '../../models/Task.js';
 import type { TaskPoll } from '../../models/TaskPoll.js';
 import { TaskCategory } from '../../models/Task.js';
 import { selectTasksForCategory } from './TaskSelector.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-const assetIconDir = path.resolve(process.cwd(), 'assets/icons');
-const categoryIcons: Record<TaskCategory, string> = {
-    [TaskCategory.PvM]: path.join(assetIconDir, 'task_pvm.png'),
-    [TaskCategory.Skilling]: path.join(assetIconDir, 'task_skilling.png'),
-    [TaskCategory.MinigameMisc]: path.join(assetIconDir, 'task_minigame.png'),
-    [TaskCategory.Leagues]: path.join(assetIconDir, 'task_minigame.png'), // temp
-};
+import { buildTaskPollEmbed, getTaskPollIconFile } from './TaskEmbeds.js';
 
 const activeVotes = new Map<string, Map<string, number>>(); // messageId -> Map<taskId, voteCount>
 const activePollSelections = new Map<string, Task[]>(); // messageId -> Task options list
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
-
-function getVoteSummary(tasks: Task[], voteMap: Map<string, number>): string {
-    return tasks.map((task, i) => {
-        const taskId = task.id.toString();
-        const votes = voteMap.get(taskId) || 0;
-        const name = task.taskName;
-
-        const tierDisplay = `🥉 **${task.amtBronze}** 🥈 **${task.amtSilver}** 🥇 **${task.amtGold}**`;
-        const voteText = `**${votes} vote${votes !== 1 ? 's' : ''}**`;
-        return `${emojiNumbers[i]} ${name}\n${tierDisplay}\n${voteText}`;
-    }).join('\n\n');
-}
 
 export async function postAllTaskPolls(client: Client, services: ServiceContainer) {
     const { repos } = services;
@@ -152,24 +133,17 @@ export async function postTaskPollForCategory(
 
     const pollDuration = 24 * 60 * 60 * 1000; // 24 hours
     const endTime = Date.now() + pollDuration;
-    const timeString = `<t:${Math.floor(endTime / 1000)}:R>`
-    const footerText = `Click a button below to vote.`;
+    const endsAt = new Date(endTime);
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(taskButtons);
 
-    const iconPath = categoryIcons[category];
-
-    const embed = new EmbedBuilder()
-        .setTitle(`🗳️ ${category} Task Poll`)
-        .setDescription(`${getVoteSummary(selectedTasks, taskVotes)}\n\n Poll closes ${timeString}`)
-        .setFooter({ text: footerText })
-        .setColor(0x00ae86)
-        .setThumbnail('attachment://category_icon.png');
+    const embed = buildTaskPollEmbed(category, selectedTasks, taskVotes, { endsAt });
+    const files = getTaskPollIconFile(category);
 
     const message = await channel.send({
         embeds: [embed],
         components: [row],
-        files: [{ attachment: iconPath, name: 'category_icon.png' }],
+        ...(files.length ? { files } : {}),
     });
     activeVotes.set(message.id, taskVotes);
     activePollSelections.set(message.id, selectedTasks);
@@ -211,11 +185,9 @@ export async function postTaskPollForCategory(
         if (!currentVotes) return;
 
         let firstTime = false;
-        let updatedPoll = poll;
         try {
             const result = await repo.voteInPollOnce(poll.id, userId, voteId);
             firstTime = result.firstTime;
-            updatedPoll = result.updatedPoll;
         } catch (err) {
             console.error("[TaskPoll] Failed to record vote transaction:", err);
             await interaction.followUp({ content: "An error occurred while recording your vote.", flags: 1 << 6 });
@@ -247,8 +219,7 @@ export async function postTaskPollForCategory(
             }
         }
 
-        const updatedEmbed = EmbedBuilder.from(embed)
-            .setDescription(`${getVoteSummary(selectedTasks, currentVotes)}\n\n Poll closes ${timeString}`);
+        const updatedEmbed = buildTaskPollEmbed(category, selectedTasks, currentVotes, { endsAt });
 
         await interaction.editReply({ embeds: [updatedEmbed] });
 
@@ -260,9 +231,7 @@ export async function postTaskPollForCategory(
         const finalVotes = activeVotes.get(message.id);
         if (!finalVotes) return;
 
-        const updatedEmbed = EmbedBuilder.from(embed)
-            .setDescription(getVoteSummary(selectedTasks, finalVotes))
-            .setFooter({ text: 'Poll closed. Thanks for voting!' });
+        const updatedEmbed = buildTaskPollEmbed(category, selectedTasks, finalVotes, { isClosed: true });
 
         await message.edit({ embeds: [updatedEmbed], components: [] });
         activeVotes.delete(message.id);
@@ -322,7 +291,6 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
         activePollSelections.set(poll.messageId, options);
     }
     const category = poll.category as TaskCategory;
-    const iconPath = categoryIcons[category];
     const rawEndsAt = poll.endsAt as unknown;
     let endsAtDate: Date | null = null;
     if (rawEndsAt instanceof Date) {
@@ -335,9 +303,6 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
         const parsed = new Date(rawEndsAt);
         endsAtDate = Number.isNaN(parsed.getTime()) ? null : parsed;
     }
-
-    const timeString = endsAtDate ? `<t:${Math.floor(endsAtDate.getTime() / 1000)}:R>` : '';
-
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         options.map((task, i) =>
             new ButtonBuilder()
@@ -347,14 +312,11 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
         )
     );
 
-    const updatedEmbed = new EmbedBuilder()
-        .setTitle(`🗳️ ${category} Task Poll`)
-        .setDescription(`${getVoteSummary(options, voteMap)}${timeString ? `\n\n Poll closes ${timeString}` : ''}`)
-        .setFooter({ text: 'Click a button below to vote.' })
-        .setColor(0x00ae86)
-        .setThumbnail('attachment://category_icon.png');
-
-    const files = iconPath ? [{ attachment: iconPath, name: 'category_icon.png' }] : [];
+    const updatedEmbed = buildTaskPollEmbed(category, options, voteMap, {
+        endsAt: endsAtDate,
+        isClosed: !poll.isActive,
+    });
+    const files = getTaskPollIconFile(category);
 
     await message.edit({
         embeds: [updatedEmbed],

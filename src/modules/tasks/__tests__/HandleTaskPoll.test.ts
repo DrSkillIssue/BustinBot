@@ -21,9 +21,9 @@ describe('HandleTaskPoll collector behaviour', () => {
                 taskName: 'Task One {amount}',
                 category: TaskCategory.PvM,
                 type: TaskType.KC,
-                amtBronze: 1,
-                amtSilver: 2,
-                amtGold: 3,
+                amtBronze: 120000,
+                amtSilver: 23000,
+                amtGold: 9000,
             },
             {
                 id: 'task-2',
@@ -133,6 +133,9 @@ describe('HandleTaskPoll collector behaviour', () => {
         const firstUpdateDescription =
             interaction.editReply.mock.calls[0]?.[0]?.embeds?.[0]?.data?.description;
         expect(firstUpdateDescription).toContain('**1 vote**');
+        expect(firstUpdateDescription).toContain('🥉 **120k**');
+        expect(firstUpdateDescription).toContain('🥈 **23k**');
+        expect(firstUpdateDescription).toContain('🥇 **9000**');
 
         interaction.customId = `vote_${TaskCategory.PvM}_task-2`;
 

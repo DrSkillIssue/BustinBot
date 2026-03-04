@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, embedLength } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import path from 'path';
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { Task } from "../../models/Task.js";
@@ -12,12 +12,63 @@ const categoryIcons: Record<TaskCategory, string> = {
     [TaskCategory.MinigameMisc]: path.join(assetIconDir, 'task_minigame.png'),
     [TaskCategory.Leagues]: path.join(assetIconDir, 'task_minigame.png'), // temp
 };
+const pollNumberEmojis = ['1️⃣', '2️⃣', '3️⃣'];
+
+// Helper method to shorten amounts 5 digits or more (e.g. 120,000 -> 120k) and replace amounts in embeds
+function shortenAmount(amount: number): string {
+    if (amount >= 10000) {
+        return `${Math.floor(amount / 1000)}k`;
+    }
+    return String(amount);
+}
+
+function getTaskPollVoteSummary(tasks: Task[], voteMap: Map<string, number>): string {
+    return tasks.map((task, i) => {
+        const taskId = task.id.toString();
+        const votes = voteMap.get(taskId) || 0;
+        const name = getTaskDisplayName(task);
+        const tierDisplay =
+            `🥉 **${shortenAmount(task.amtBronze)}** ` +
+            `🥈 **${shortenAmount(task.amtSilver)}** ` +
+            `🥇 **${shortenAmount(task.amtGold)}**`;
+        const voteText = `**${votes} vote${votes !== 1 ? 's' : ''}**`;
+        return `${pollNumberEmojis[i]} ${name}\n${tierDisplay}\n${voteText}`;
+    }).join('\n\n');
+}
+
+export function getTaskPollIconFile(category: TaskCategory): Array<{ attachment: string; name: string }> {
+    const iconPath = categoryIcons[category];
+    return iconPath ? [{ attachment: iconPath, name: 'category_icon.png' }] : [];
+}
+
+export function buildTaskPollEmbed(
+    category: TaskCategory,
+    tasks: Task[],
+    voteMap: Map<string, number>,
+    options?: { endsAt?: Date | null; isClosed?: boolean }
+) {
+    const endsAt = options?.endsAt ?? null;
+    const isClosed = options?.isClosed ?? false;
+    const timeString = endsAt ? `<t:${Math.floor(endsAt.getTime() / 1000)}:R>` : '';
+    const description =
+        `${getTaskPollVoteSummary(tasks, voteMap)}` +
+        (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : '');
+
+    return new EmbedBuilder()
+        .setTitle(`🗳️ ${category} Task Poll`)
+        .setDescription(description)
+        .setFooter({
+            text: isClosed ? 'Poll closed. Thanks for voting!' : 'Click a button below to vote.',
+        })
+        .setColor(0x00ae86)
+        .setThumbnail('attachment://category_icon.png');
+}
 
 export function getTaskDisplayName(task: Task, selectedAmount?: number): string {
     let displayName = task.taskName;
     
     if (selectedAmount !== undefined && displayName.includes("{amount}")) {
-        displayName = displayName.replace(/\{amount\}/g, String(selectedAmount));
+        displayName = displayName.replace(/\{amount\}/g, shortenAmount(selectedAmount));
     }
 
     if (task.wildernessReq && !displayName.includes("☠️")) {
@@ -37,7 +88,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
         TaskInstructions[event.task.type] ?? "Include proof of completion showing progress or XP change.";
 
     const tierDisplay = `Amounts required for each tier of completion:\n
-🥉 **${event.amounts?.bronze ?? 0}**\u2003🥈 **${event.amounts?.silver ?? 0}**\u2003🥇 **${event.amounts?.gold ?? 0}**`;
+🥉 **${shortenAmount(event.amounts?.bronze ?? 0)}**\u2003🥈 **${shortenAmount(event.amounts?.silver ?? 0)}**\u2003🥇 **${shortenAmount(event.amounts?.gold ?? 0)}**`;
 
     const counts = event.completionCounts ?? { bronze: 0, silver: 0, gold: 0 };
     const completionLine = `**Completions:** 🥉${counts.bronze} 🥈${counts.silver} 🥇${counts.gold}`;
@@ -81,7 +132,7 @@ export function buildSubmissionEmbed(submission: any, taskName: string, event: T
             { name: 'User', value: `<@${submission.userId}>`, inline: true },
             { name: 'Task', value: taskName, inline: true },
             { name: 'Message', value: submission.notes || "No message included" },
-            { name: 'Tier Amounts', value: `🥉 **${event.amounts?.bronze ?? 0}** 🥈 **${event.amounts?.silver ?? 0}** 🥇 **${event.amounts?.gold ?? 0}**`}
+            { name: 'Tier Amounts', value: `🥉 **${shortenAmount(event.amounts?.bronze ?? 0)}** 🥈 **${shortenAmount(event.amounts?.silver ?? 0)}** 🥇 **${shortenAmount(event.amounts?.gold ?? 0)}**`}
         )
         .setTimestamp();
 
