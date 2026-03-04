@@ -30,6 +30,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies())
         .map((movie) => normaliseFirestoreDates(movie))
+        .filter((movie) => !movie.watched)
         .sort((a, b) => {
             const aTime = a.addedAt instanceof Date ? a.addedAt.getTime() : 0;
             const bTime = b.addedAt instanceof Date ? b.addedAt.getTime() : 0;
@@ -37,7 +38,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
         });
     if (!allMovies.length) {
         await interaction.followUp({
-            content: "No movies found.",
+            content: "No active movies found.",
             flags: 1 << 6,
         });
         return;
@@ -165,7 +166,7 @@ export async function changeManualPollPage(
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) return;
 
-    const allMovies: Movie[] = await movieRepo.getAllMovies();
+    const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
     if (!allMovies.length) return;
 
     const session = sessions.get(userId);

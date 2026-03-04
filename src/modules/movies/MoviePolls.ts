@@ -26,6 +26,12 @@ async function createAndSendMoviePoll(
         return;
     }
 
+    const activeMovies = movies.filter((movie) => !movie.watched);
+    if (activeMovies.length < 2) {
+        await interaction.editReply("Need at least 2 unwatched movies to create a poll.");
+        return;
+    }
+
     const guildConfig = await services.guilds.requireConfig(interaction);
     if (!guildConfig) return;
 
@@ -65,7 +71,7 @@ async function createAndSendMoviePoll(
     const poll: MoviePoll = {
         id: pollId,
         type: "movie",
-        options: movies,
+        options: activeMovies,
         messageId: "",
         channelId: interaction.channelId,
         createdAt: now.toJSDate(),
@@ -74,7 +80,7 @@ async function createAndSendMoviePoll(
         votes: {},
     };
 
-    const embeds: EmbedBuilder[] = movies.map((movie, i) => {
+    const embeds: EmbedBuilder[] = activeMovies.map((movie, i) => {
         const embed = createLocalMoviePreviewEmbed(movie);
         const runtimeText = movie.runtime ? ` | ⏱️ ${movie.runtime} mins` : "";
         embed.setFooter({ text: `🗳️ 0 votes${runtimeText} | Option ${i + 1}` });
@@ -82,7 +88,7 @@ async function createAndSendMoviePoll(
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        movies.map((movie, i) => {
+        activeMovies.map((movie, i) => {
             const truncatedTitle = movie.title.length > 20 ? movie.title.slice(0, 17) + "…" : movie.title;
             const label = `${emojiNumbers[i]} ${truncatedTitle}`;
 
@@ -124,6 +130,7 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
 
     const client = interaction.client;
     let movies: Movie[] = await movieRepo.getAllMovies();
+    movies = movies.filter((movie) => !movie.watched);
     movies = injectMockUsers(movies);
 
     if (!movies.length) {
@@ -156,8 +163,9 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
 
 export async function pollMovieWithList(services: ServiceContainer, interaction: RepliableInteraction, selected: Movie[]) {
     const client = interaction.client;
+    const activeSelection = selected.filter((movie) => !movie.watched);
 
-    if (selected.length < 2 || selected.length > MAX_CHOICES) {
+    if (activeSelection.length < 2 || activeSelection.length > MAX_CHOICES) {
         const msg = "You must select between 2 and 5 movies.";
         if (interaction.replied || interaction.deferred)
             await interaction.editReply(msg);
@@ -166,7 +174,7 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
         return;
     }
 
-    const moviesWithUsers = injectMockUsers(selected);
+    const moviesWithUsers = injectMockUsers(activeSelection);
 
     if (!interaction.deferred && !interaction.replied) {
         if (interaction.isButton()) {

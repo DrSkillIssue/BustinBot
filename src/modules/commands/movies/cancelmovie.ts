@@ -3,6 +3,7 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
+import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
 
 const cancelmovie: Command = {
     name: 'cancelmovie',
@@ -55,6 +56,9 @@ const cancelmovie: Command = {
         let announcementHandled = false;
         let fallbackAnnouncementChannelId: string | undefined;
         const cancellationMessage = `❌ Movie night has been cancelled by <@${interaction.user.id}>.`;
+
+        clearScheduledMovieAutoEnd(services.guildId);
+        actions.push("Cleared movie auto-end timer");
 
         try {
             // Cancel active poll

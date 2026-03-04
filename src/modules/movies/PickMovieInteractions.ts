@@ -10,6 +10,34 @@ import { pollMovieRandom, pollMovieWithList } from "./MoviePolls.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { scheduleMovieAutoEnd } from "./MovieLifecycle.js";
+import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
+
+function toMillis(value: unknown): number {
+    if (value instanceof Date) return value.getTime();
+
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (maybeTimestamp && typeof maybeTimestamp.toDate === "function") {
+        return maybeTimestamp.toDate().getTime();
+    }
+
+    if (typeof value === "string") {
+        const parsed = Date.parse(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    if (typeof value === "number") {
+        return value;
+    }
+
+    return 0;
+}
+
+function getActiveMoviesSorted(movies: Movie[]): Movie[] {
+    return movies
+        .map((movie) => normaliseFirestoreDates(movie))
+        .filter((movie) => !movie.watched)
+        .sort((a, b) => toMillis(a.addedAt) - toMillis(b.addedAt));
+}
 
 export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string, client?: Client) {
     const movieRepo = services.repos.movieRepo;
@@ -17,6 +45,12 @@ export async function saveCurrentMovie(services: ServiceContainer, movie: Movie,
         console.error("[MovieStorage] Movie repository not found in services.");
         return;
     }
+
+    if (movie.watched) {
+        console.warn(`[MovieStorage] Refusing to select watched movie: ${movie.title} (${movie.id})`);
+        return;
+    }
+
     try {
         const { addedByDisplay, addedByDevId, ...movieData } = movie;
         const updatedMovie: Movie = {
@@ -82,7 +116,7 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     }
 
     const input = interaction.fields.getTextInputValue("movie_input").trim();
-    const movies: Movie[] = await movieRepo.getAllMovies();
+    const movies: Movie[] = getActiveMoviesSorted(await movieRepo.getAllMovies());
 
     if (!movies.length) {
         await interaction.editReply({ content: "Movie list is empty." });
@@ -132,9 +166,8 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     embed.setDescription(`${existingDescription}${addedByLine}`);
 
     const channel = interaction.channel as TextChannel;
-    await interaction.reply({
+    await interaction.editReply({
         content: `**${selectedMovie.title}** has been selected and posted!`,
-        flags: 1 << 6,
     });
 
     await channel.send({
@@ -172,10 +205,10 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     }
 
     const movies = await movieRepo.getAllMovies();
-    const selectedMovie = movies.find((m) => m.id === movieId);
+    const selectedMovie = movies.find((m) => m.id === movieId && !m.watched);
     if (!selectedMovie) {
         await interaction.editReply({
-            content: "Could not find the selected movie in list."
+            content: "Could not find the selected movie in the active movie list."
         });
         return;
     }
@@ -197,7 +230,6 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
         components: [],
     });
 
-    await interaction.deferUpdate();
     try {
         await interaction.editReply({
             content: "Movie selected and posted!",
@@ -340,7 +372,7 @@ export async function handleManualPollInteraction(services: ServiceContainer, in
                 return;
             }
 
-            const allMovies: Movie[] = await movieRepo.getAllMovies();
+            const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
             const selectedMovieIds = Array.from(session.selected);
             const selectedMovies = allMovies.filter(m => selectedMovieIds.includes(m.id));
 
