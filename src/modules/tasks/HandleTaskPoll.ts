@@ -5,6 +5,7 @@ import { TaskCategory } from '../../models/Task.js';
 import { selectTasksForCategory } from './TaskSelector.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { buildTaskPollEmbed, getTaskPollIconFile } from './TaskEmbeds.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const activeVotes = new Map<string, Map<string, number>>(); // messageId -> Map<taskId, voteCount>
 const activePollSelections = new Map<string, Task[]>(); // messageId -> Task options list
@@ -50,12 +51,18 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
 
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? guild.roles.cache.get(roleId) : null;
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
 
     const mention = role ? `<@&${role.id}>` : '';
     if (!role) {
         console.warn(`[TaskPoll] Task user role not configured or not found.`);
     }
-    await (channel as TextChannel).send(`${mention} **New task polls are live!** Cast your votes for each category below:`);
+    await (channel as TextChannel).send(
+        withSuppressedMentions(
+            { content: `${mention} **New task polls are live!** Cast your votes for each category below:` },
+            suppressMentions
+        )
+    );
 
     for (const category of categories) {
         await postTaskPollForCategory(client, services, category, channel as TextChannel);

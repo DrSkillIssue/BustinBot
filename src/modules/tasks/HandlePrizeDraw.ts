@@ -9,6 +9,7 @@ import { Client, TextChannel } from 'discord.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const DEFAULT_PERIOD_DAYS = parseInt(process.env.PRIZE_PERIOD_DAYS ?? '14');
 
@@ -177,6 +178,7 @@ export async function announcePrizeDrawWinner(
     let mention = '';
     const guild = await client.guilds.fetch(guildId);
     const guildName = guild.name;
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? guild.roles.cache.get(roleId) : null;
     if (role) {
@@ -226,7 +228,11 @@ export async function announcePrizeDrawWinner(
         return false;
     }
 
-    await channel.send(`${mention}`);
+    if (suppressMentions) {
+        await channel.send(withSuppressedMentions({ content: `${mention}` }, true));
+    } else {
+        await channel.send(`${mention}`);
+    }
     await channel.send({ ...embedData });
     console.log(`[PrizeDraw] Winner embed sent to #${channel.name}`);
 

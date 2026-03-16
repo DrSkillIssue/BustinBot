@@ -15,6 +15,7 @@ import {
     shouldFinalizePeriodicLeaderboard,
 } from "./TaskLeaderboards.js";
 import type { TaskLeaderboard, TaskLeaderboardEntry, TaskTierCounts } from "../../models/TaskLeaderboard.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveTaskChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
     const guildId = services.guildId;
@@ -49,12 +50,15 @@ async function resolveTaskUserMention(client: Client, services: ServiceContainer
 }
 
 async function sendLeaderboardEmbed(
+    services: ServiceContainer,
     channel: TextChannel,
     embed: EmbedBuilder,
     mention?: string | null
 ): Promise<void> {
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+
     if (mention) {
-        await channel.send({ content: mention, embeds: [embed] });
+        await channel.send(withSuppressedMentions({ content: mention, embeds: [embed] }, suppressMentions));
         return;
     }
 
@@ -407,7 +411,7 @@ export async function postFinalLeaderboardSnapshot(
             }
         );
         const mention = await resolveTaskUserMention(client, services);
-        await sendLeaderboardEmbed(channel, finalEmbed, mention);
+        await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
         return;
     }
 
@@ -426,7 +430,7 @@ export async function postFinalLeaderboardSnapshot(
         tierCounts: leaderboard.tierCounts ?? {},
     });
     const mention = await resolveTaskUserMention(client, services);
-    await sendLeaderboardEmbed(channel, finalEmbed, mention);
+    await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
 }
 
 export async function postPeriodicLeaderboardUpdate(
@@ -487,7 +491,7 @@ export async function postPeriodicLeaderboardUpdate(
             tierCounts: latest.tierCounts ?? {},
         });
         const mention = await resolveTaskUserMention(client, services);
-        await sendLeaderboardEmbed(channel, finalEmbed, mention);
+        await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
 
         await notifyChampionWinners(client, services, placements);
         await finalizePeriodicLeaderboard(services, latest, placements.winners);
@@ -574,8 +578,9 @@ export async function warnPendingLeaderboardFinalization(
 
     const adminRoleId = guildConfig.roles?.taskAdmin;
     const mention = adminRoleId ? `<@&${adminRoleId}>` : "Task Admins";
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
 
-    await (channel as TextChannel).send(
-        `${mention} There are ${pendingTotal} pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`
-    );
+    await (channel as TextChannel).send(withSuppressedMentions({
+        content: `${mention} There are ${pendingTotal} pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`
+    }, suppressMentions));
 }

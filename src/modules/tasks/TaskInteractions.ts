@@ -5,6 +5,7 @@ import { getTaskDisplayName } from './TaskEmbeds.js';
 import { handleUpdateTaskModal } from './HandleUpdateTaskModal.js';
 import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from './TaskLeaderboards.js';
 import { applyTaskMilestoneRoles } from './TaskMilestones.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -236,9 +237,13 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
 
             const channel = interaction.channel as TextChannel;
             const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
-            await channel.send(
-                `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}).`
-            );
+            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+            const approvalMessage = `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}).`;
+            if (suppressMentions) {
+                await channel.send(withSuppressedMentions({ content: approvalMessage }, true));
+            } else {
+                await channel.send(approvalMessage);
+            }
 
             await interaction.editReply({
                 content: `✅ Submission approved for **${formattedTier} tier** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}) and archived.`
@@ -286,9 +291,13 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
         try {
             const adminChannel = await interaction.client.channels.fetch(verificationChannelId);
             if (adminChannel && adminChannel.isTextBased()) {
-                await (adminChannel as TextChannel).send(
-                    `❌ <@${reviewerId}> rejected submission for **${updated?.taskName ?? `Task ${updated?.taskEventId}`}** by <@${updated?.userId}>. Reason: ${reason || "No reason provided"}. Submission moved to archive channel.`
-                );
+                const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+                const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${updated?.taskName ?? `Task ${updated?.taskEventId}`}** by <@${updated?.userId}>. Reason: ${reason || "No reason provided"}. Submission moved to archive channel.`;
+                if (suppressMentions) {
+                    await (adminChannel as TextChannel).send(withSuppressedMentions({ content: rejectionMessage }, true));
+                } else {
+                    await (adminChannel as TextChannel).send(rejectionMessage);
+                }
             }
         } catch (err) {
             console.warn(`[TaskInteractions] Failed to notify task admins in channel ${verificationChannelId}:`, err);

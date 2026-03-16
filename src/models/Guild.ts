@@ -57,6 +57,7 @@ export interface Guild {
   taskSettings?: TaskSettings;
 
   setupComplete?: GuildSetupComplete;
+  mentionSuppressedUntilMs?: number;
   // In IANA format (e.g. 'Australia/Melbourne')
   timezone?: string;
   updatedBy?: string;

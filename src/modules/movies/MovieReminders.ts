@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import type { Reminder } from "../../models/Reminder.js";
 import type { Client, TextChannel } from 'discord.js';
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 const reminderTimers = new Map<string, NodeJS.Timeout>();
 
@@ -79,6 +80,7 @@ export async function scheduleMovieReminders(services: ServiceContainer, movieSt
 
     const role = movieRoleId ? guild.roles.cache.get(movieRoleId) : null;
     const mention = role ? `<@&${role.id}>` : "";
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
 
     if (!channel) {
         console.warn("[MovieReminders] Could not find movie-night channel.");
@@ -151,7 +153,11 @@ export async function scheduleMovieReminders(services: ServiceContainer, movieSt
                         ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
                         : `${mention} Movie night starts in **${timeString}** (at ${absoluteTime})! ${stateLine}`;
 
-                await channel.send(msg);
+                if (suppressMentions) {
+                    await channel.send(withSuppressedMentions({ content: msg }, true));
+                } else {
+                    await channel.send(msg);
+                }
                 console.log(
                     `[MovieReminders] Sent "${label}" reminder at ${sendAt.toISO()}`
                 );

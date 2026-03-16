@@ -10,6 +10,7 @@ import { DateTime } from "luxon";
 import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 const MAX_CHOICES = 5;
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
@@ -107,7 +108,14 @@ async function createAndSendMoviePoll(
     }
 
     const pollCloseUnix = Math.floor(endsAt.toSeconds());
-    if (mention) await channel.send(mention);
+    const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+    if (mention) {
+        if (suppressMentions) {
+            await channel.send(withSuppressedMentions({ content: mention }, true));
+        } else {
+            await channel.send(mention);
+        }
+    }
     const message = (await channel.send({
         content: `📊 **Vote for the next movie night pick!**\nPoll ends <t:${pollCloseUnix}:R> (<t:${pollCloseUnix}:F>).`,
         embeds,

@@ -8,6 +8,7 @@ import { scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } from "./MovieLifecyc
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import { registerVoiceListeners } from "./MovieAttendance.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
     if (!guildId) return "UTC";
@@ -170,6 +171,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const voiceChannelId = guildConfig.channels?.movieVC;
     const role = movieRoleId ? guild.roles.cache.get(movieRoleId) : null;
     const mention = role ? `<@&${role.id}>` : '';
+    const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
     // A newly scheduled movie night supersedes any prior auto-end timer.
     clearScheduledMovieAutoEnd(services.guildId);
@@ -211,7 +213,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     let announcementMessageId: string | undefined;
     let announcementChannelId = baseEvent.channelId;
     if (movieChannel) {
-        const sent = await movieChannel.send({ content: mention, embeds: [embed] });
+        const sent = await movieChannel.send(withSuppressedMentions({ content: mention, embeds: [embed] }, suppressMentions));
         announcementMessageId = sent.id;
         announcementChannelId = sent.channelId;
     }

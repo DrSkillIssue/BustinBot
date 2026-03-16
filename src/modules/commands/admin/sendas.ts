@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, Message 
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../../utils/MentionUtils.js';
 
 const sendas: Command = {
     name: 'sendas',
@@ -65,7 +66,10 @@ const sendas: Command = {
         }
 
         try {
-            await (channel as TextChannel).send(messageText || '');
+            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+            await (channel as TextChannel).send(withSuppressedMentions({
+                content: messageText || ''
+            }, suppressMentions));
             await interaction.reply({ content: `Message sent in ${channel}.`, flags: 1 << 6 });
         } catch (error) {
             console.error('Error sending message:', error);

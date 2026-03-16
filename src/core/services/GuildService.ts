@@ -90,6 +90,9 @@ export class GuildService {
                 },
             },
             timezone: data.timezone ?? existing?.timezone ?? "UTC",
+            mentionSuppressedUntilMs:
+                data.mentionSuppressedUntilMs ??
+                existing?.mentionSuppressedUntilMs,
         };
 
         const meta: Partial<Pick<Guild, "updatedBy" | "updatedAt">> = {};
@@ -154,6 +157,7 @@ export class GuildService {
                 },
             },
             setupComplete: existing?.setupComplete ?? { core: false, movie: false, task: false },
+            mentionSuppressedUntilMs: existing?.mentionSuppressedUntilMs,
             updatedBy: userId,
             updatedAt: new Date() as any,
         };
