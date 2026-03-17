@@ -71,6 +71,17 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         await this.pollsCollection.doc(poll.id).set(poll);
     }
 
+    async getTaskPollById(pollId: string): Promise<TaskPoll | null> {
+        const doc = await this.pollsCollection.doc(pollId).get();
+        if (!doc.exists) return null;
+
+        const data = doc.data() as unknown as TaskPoll;
+        return {
+            ...data,
+            id: doc.id,
+        };
+    }
+
     async getActiveTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null> {
         const snapshot = await this.pollsCollection
             .where('category', '==', category)

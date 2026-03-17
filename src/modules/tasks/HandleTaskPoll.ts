@@ -11,6 +11,79 @@ const activeVotes = new Map<string, Map<string, number>>(); // messageId -> Map<
 const activePollSelections = new Map<string, Task[]>(); // messageId -> Task options list
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
 
+export function hasActiveTaskPollCollector(messageId: string): boolean {
+    return activeVotes.has(messageId);
+}
+
+export async function handleTaskPollVoteInteraction(
+    interaction: ButtonInteraction,
+    services: ServiceContainer
+) {
+    const [, categoryRaw, voteId] = interaction.customId.split('_');
+    const category = categoryRaw as TaskCategory | undefined;
+    if (!category || !voteId) {
+        await interaction.reply({ content: "Invalid poll vote option.", flags: 1 << 6 });
+        return;
+    }
+
+    const taskRepo = services.repos.taskRepo;
+    if (!taskRepo) {
+        await interaction.reply({ content: "Task repository unavailable.", flags: 1 << 6 });
+        return;
+    }
+
+    await interaction.deferReply({ flags: 1 << 6 });
+
+    const poll = await taskRepo.getTaskPollById(interaction.message.id);
+    if (!poll?.isActive) {
+        await interaction.editReply({ content: "This poll is no longer active." });
+        return;
+    }
+
+    if ((poll.category as TaskCategory | undefined) !== category) {
+        await interaction.editReply({ content: "This poll message is outdated." });
+        return;
+    }
+
+    if (poll.messageId !== interaction.message.id) {
+        await interaction.editReply({ content: "This poll message is outdated." });
+        return;
+    }
+
+    if (!poll.options.some((option) => option.id === voteId)) {
+        await interaction.editReply({ content: "Invalid vote option." });
+        return;
+    }
+
+    let firstTime = false;
+    let updatedPoll = poll;
+    try {
+        const result = await taskRepo.voteInPollOnce(poll.id, interaction.user.id, voteId);
+        firstTime = result.firstTime;
+        updatedPoll = result.updatedPoll;
+    } catch (err) {
+        console.error("[TaskPoll] Failed to record vote transaction:", err);
+        await interaction.editReply({ content: "An error occurred while recording your vote." });
+        return;
+    }
+
+    if (firstTime) {
+        const userRepo = services.repos.userRepo;
+        if (userRepo) {
+            try {
+                await userRepo.incrementStat(interaction.user.id, "taskPollsVoted", 1);
+            } catch (err) {
+                console.warn(`[Stats] Failed to increment taskPollsVoted for ${interaction.user.username}:`, err);
+            }
+        } else {
+            console.warn("[Stats] UserRepo unavailable; skipping taskPollsVoted increment.");
+        }
+    }
+
+    await refreshTaskPollMessage(interaction.client, updatedPoll);
+    await interaction.editReply({ content: "Thank you for your vote!" });
+}
+
 export async function postAllTaskPolls(client: Client, services: ServiceContainer) {
     const { repos } = services;
     const guildId = services.guildId;
@@ -229,6 +302,7 @@ export async function postTaskPollForCategory(
         const updatedEmbed = buildTaskPollEmbed(category, selectedTasks, currentVotes, { endsAt });
 
         await interaction.editReply({ embeds: [updatedEmbed] });
+        await interaction.followUp({ content: "Thank you for your vote!", flags: 1 << 6 });
 
         poll.votes[userId] = voteId;
         await repo.createTaskPoll(poll);

@@ -6,6 +6,8 @@ const handleAdminButton = vi.fn().mockResolvedValue(undefined);
 const handleTaskSelect = vi.fn().mockResolvedValue(undefined);
 const handleRejectionModal = vi.fn().mockResolvedValue(undefined);
 const handleUpdateTaskModal = vi.fn().mockResolvedValue(undefined);
+const hasActiveTaskPollCollector = vi.fn();
+const handleTaskPollVoteInteraction = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../HandleTaskFeedback', () => ({ handleTaskFeedback }));
 vi.mock('../TaskInteractions', () => ({
@@ -16,6 +18,10 @@ vi.mock('../TaskInteractions', () => ({
 }));
 vi.mock('../HandleUpdateTaskModal', () => ({
     handleUpdateTaskModal,
+}));
+vi.mock('../HandleTaskPoll.js', () => ({
+    hasActiveTaskPollCollector,
+    handleTaskPollVoteInteraction,
 }));
 
 const persist = vi.fn().mockResolvedValue(undefined);
@@ -154,5 +160,21 @@ describe('handleTaskInteraction', () => {
 
         expect(setSelection).toHaveBeenCalledWith('task', 'user-1', 'taskChannel', 'channel-1');
         expect(interaction.deferUpdate).toHaveBeenCalled();
+    });
+
+    it('routes vote buttons to persisted poll handler when no collector is active', async () => {
+        hasActiveTaskPollCollector.mockReturnValue(false);
+
+        const interaction: any = {
+            ...baseInteraction(),
+            isButton: () => true,
+            customId: 'vote_PvM_task-1',
+            message: { id: 'poll-message-1' },
+        };
+
+        await handleTaskInteraction(interaction, {} as any, services);
+
+        expect(hasActiveTaskPollCollector).toHaveBeenCalledWith('poll-message-1');
+        expect(handleTaskPollVoteInteraction).toHaveBeenCalledWith(interaction, services);
     });
 });
