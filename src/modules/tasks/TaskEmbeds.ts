@@ -126,6 +126,8 @@ export function buildTaskEventEmbed(event: TaskEvent) {
 
 // Embed shown in task verification channel when a submission is received
 export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent) {
+    const submissionTime = new Date();
+
     const embed = new EmbedBuilder()
         .setTitle('Task Submission')
         .addFields(
@@ -138,8 +140,15 @@ export function buildSubmissionEmbed(submission: any, taskName: string, event: T
 
     if (submission.alreadyApproved) {
         embed.addFields({
-            name: '⚠️ Warning',
+            name: '⚠️ WARNING',
             value: 'This user already has an **approved submission** for this task.'
+        });
+    }
+
+    if (submissionTime.getTime() > event.endTime.getTime()) {
+        embed.addFields({
+            name: '⚠️ WARNING',
+            value: `This submission was made after the task event ended (${event.endTime.toUTCString()}).`,
         });
     }
 
