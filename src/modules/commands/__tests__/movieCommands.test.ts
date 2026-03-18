@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../../movies/MovieService', () => ({
     addMovieWithStats: vi.fn(),
@@ -16,9 +16,14 @@ vi.mock('../../movies/MovieSelector', () => ({
     presentMovieSelection: vi.fn(),
 }));
 
+vi.mock('node:crypto', () => ({
+    randomUUID: vi.fn(() => '123e4567-e89b-12d3-a456-426614174000'),
+}));
+
 const { addMovieWithStats, fetchMovieDetailsById } = vi.mocked(await import('../../movies/MovieService.js'));
 const { createMovieEmbed } = vi.mocked(await import('../../movies/MovieEmbeds.js'));
 const { presentMovieSelection } = vi.mocked(await import('../../movies/MovieSelector.js'));
+const { randomUUID } = vi.mocked(await import('node:crypto'));
 
 const { default: addmovie } = await import('../movies/addmovie.js');
 const { default: moviesetup } = await import('../movies/moviesetup.js');
@@ -86,8 +91,6 @@ const baseInteraction = () => {
     return { interaction, reply, editReply, deferReply };
 };
 
-let randomUUIDSpy: ReturnType<typeof vi.spyOn> | undefined;
-
 beforeEach(() => {
     vi.clearAllMocks();
     mockGuilds.requireConfig.mockReset();
@@ -98,22 +101,7 @@ beforeEach(() => {
     fetchMovieDetailsById.mockReset();
     createMovieEmbed.mockReset();
     presentMovieSelection.mockReset();
-
-    if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
-        randomUUIDSpy = vi
-            .spyOn(globalThis.crypto, 'randomUUID')
-            .mockReturnValue('uuid-1234' as unknown as `${string}-${string}-${string}-${string}-${string}`);
-    } else {
-        (globalThis as any).crypto = {
-            randomUUID: vi.fn().mockReturnValue('uuid-1234' as unknown as `${string}-${string}-${string}-${string}-${string}`),
-        } as unknown as Crypto;
-        randomUUIDSpy = undefined;
-    }
-});
-
-afterEach(() => {
-    randomUUIDSpy?.mockRestore();
-    randomUUIDSpy = undefined;
+    randomUUID.mockReturnValue('123e4567-e89b-12d3-a456-426614174000');
 });
 
 describe('addmovie command', () => {
@@ -169,11 +157,11 @@ describe('addmovie command', () => {
         await addmovie.execute({ interaction, services: services as any });
 
         expect(interaction.deferReply).toHaveBeenCalled();
-        expect(presentMovieSelection).toHaveBeenCalledWith(interaction, 'The Matrix', 1999);
+        expect(presentMovieSelection).toHaveBeenCalledWith(interaction, 'The Matrix', 1999, 3, expect.any(Function));
         expect(fetchMovieDetailsById).toHaveBeenCalledWith(123);
         expect(addMovieWithStats).toHaveBeenCalledWith(
             expect.objectContaining({
-                id: 'uuid-1234',
+                id: '123e4567-e89b-12d3-a456-426614174000',
                 tmdbId: 123,
                 addedBy: 'user-1',
                 watched: false,
@@ -185,6 +173,99 @@ describe('addmovie command', () => {
             components: [],
         });
         expect(createMovieEmbed).toHaveBeenCalled();
+    });
+
+    it('rejects duplicate tmdb candidates in selector validation callback', async () => {
+        const services = {
+            ...baseServices,
+        };
+        const { interaction } = baseInteraction();
+        interaction.options.getString.mockReturnValue('The Matrix');
+        interaction.options.getInteger.mockReturnValue(1999);
+
+        mockGuilds.requireConfig.mockResolvedValue({
+            roles: {},
+            channels: {},
+        });
+
+        services.repos.movieRepo.getAllMovies.mockResolvedValue([
+            {
+                id: 'existing-movie-id',
+                tmdbId: 123,
+                title: 'The Matrix',
+                addedBy: 'user-2',
+                watched: false,
+                addedAt: new Date(),
+            },
+        ] as any);
+
+        presentMovieSelection.mockImplementation(async (_interaction, _query, _year, _maxResults, validateSelection) => {
+            const duplicateResult = await validateSelection?.({ id: 123, title: 'The Matrix' });
+            expect(duplicateResult).toMatchObject({
+                isValid: false,
+                message: expect.stringContaining('already in the movie list'),
+            });
+
+            const uniqueResult = await validateSelection?.({ id: 999, title: 'The Matrix Reloaded' });
+            expect(uniqueResult).toEqual({ isValid: true });
+
+            return { id: 999, title: 'The Matrix Reloaded' };
+        });
+
+        fetchMovieDetailsById.mockResolvedValue({
+            tmdbId: 999,
+            title: 'The Matrix Reloaded',
+            overview: 'Neo returns.',
+        });
+        addMovieWithStats.mockResolvedValue(undefined);
+
+        await addmovie.execute({ interaction, services: services as any });
+
+        expect(fetchMovieDetailsById).toHaveBeenCalledWith(999);
+        expect(addMovieWithStats).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows re-adding movie when previous entry is watched', async () => {
+        const services = {
+            ...baseServices,
+        };
+        const { interaction } = baseInteraction();
+        interaction.options.getString.mockReturnValue('The Matrix');
+        interaction.options.getInteger.mockReturnValue(1999);
+
+        mockGuilds.requireConfig.mockResolvedValue({
+            roles: {},
+            channels: {},
+        });
+
+        services.repos.movieRepo.getAllMovies.mockResolvedValue([
+            {
+                id: 'watched-movie-id',
+                tmdbId: 123,
+                title: 'The Matrix',
+                addedBy: 'user-2',
+                watched: true,
+                addedAt: new Date(),
+            },
+        ] as any);
+
+        presentMovieSelection.mockImplementation(async (_interaction, _query, _year, _maxResults, validateSelection) => {
+            const validation = await validateSelection?.({ id: 123, title: 'The Matrix' });
+            expect(validation).toEqual({ isValid: true });
+            return { id: 123, title: 'The Matrix' };
+        });
+
+        fetchMovieDetailsById.mockResolvedValue({
+            tmdbId: 123,
+            title: 'The Matrix',
+            overview: 'A hacker discovers reality.',
+        });
+        addMovieWithStats.mockResolvedValue(undefined);
+
+        await addmovie.execute({ interaction, services: services as any });
+
+        expect(fetchMovieDetailsById).toHaveBeenCalledWith(123);
+        expect(addMovieWithStats).toHaveBeenCalledTimes(1);
     });
 });
 
