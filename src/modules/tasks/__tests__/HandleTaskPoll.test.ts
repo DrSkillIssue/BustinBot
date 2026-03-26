@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const selectTasksForCategoryMock = vi.hoisted(() => vi.fn());
 
@@ -10,11 +10,26 @@ import { handleTaskPollVoteInteraction, postTaskPollForCategory } from '../Handl
 import { TaskCategory, TaskType } from '../../../models/Task.js';
 
 describe('HandleTaskPoll collector behaviour', () => {
+    const originalBotMode = process.env.BOT_MODE;
+
     beforeEach(() => {
         selectTasksForCategoryMock.mockReset();
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+        if (originalBotMode === undefined) {
+            delete process.env.BOT_MODE;
+        } else {
+            process.env.BOT_MODE = originalBotMode;
+        }
+    });
+
     it('tracks vote changes, persists updates, and closes cleanly', async () => {
+        process.env.BOT_MODE = 'production';
+        const fixedNow = 1760000000000;
+        vi.spyOn(Date, 'now').mockReturnValue(fixedNow);
+
         const tasks = [
             {
                 id: 'task-1',
@@ -104,6 +119,10 @@ describe('HandleTaskPoll collector behaviour', () => {
         expect(taskRepo.getAllTasks).toHaveBeenCalled();
         expect(taskRepo.createTaskPoll).toHaveBeenCalledTimes(1);
         expect(storedPoll).toBeDefined();
+        expect(message.createMessageComponentCollector).toHaveBeenCalledWith(
+            expect.objectContaining({ time: 24 * 60 * 60 * 1000 })
+        );
+        expect(storedPoll.endsAt.getTime()).toBe(fixedNow + (24 * 60 * 60 * 1000));
 
         const collectHandler = collectors['collect'];
         const endHandler = collectors['end'];
@@ -156,6 +175,88 @@ describe('HandleTaskPoll collector behaviour', () => {
 
         expect(message.edit).toHaveBeenCalled();
         expect(taskRepo.closeTaskPoll).toHaveBeenCalledWith(storedPoll.id);
+    });
+
+    it('uses 5 minute poll duration in dev mode', async () => {
+        process.env.BOT_MODE = 'dev';
+        const fixedNow = 1765000000000;
+        vi.spyOn(Date, 'now').mockReturnValue(fixedNow);
+
+        const tasks = [
+            {
+                id: 'task-1',
+                taskName: 'Task One {amount}',
+                category: TaskCategory.PvM,
+                type: TaskType.KC,
+                amtBronze: 1,
+                amtSilver: 2,
+                amtGold: 3,
+            },
+            {
+                id: 'task-2',
+                taskName: 'Task Two {amount}',
+                category: TaskCategory.PvM,
+                type: TaskType.KC,
+                amtBronze: 4,
+                amtSilver: 5,
+                amtGold: 6,
+            },
+            {
+                id: 'task-3',
+                taskName: 'Task Three {amount}',
+                category: TaskCategory.PvM,
+                type: TaskType.KC,
+                amtBronze: 7,
+                amtSilver: 8,
+                amtGold: 9,
+            },
+        ];
+
+        selectTasksForCategoryMock.mockReturnValue(tasks);
+
+        let storedPoll: any;
+        const taskRepo = {
+            getAllTasks: vi.fn().mockResolvedValue(tasks),
+            createTaskPoll: vi.fn().mockImplementation(async (poll) => {
+                storedPoll = poll;
+            }),
+            voteInPollOnce: vi.fn(),
+            closeTaskPoll: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const services = {
+            guildId: 'guild-1',
+            guilds: {
+                get: vi.fn().mockResolvedValue({
+                    channels: { taskChannel: 'channel-1' },
+                    roles: {},
+                }),
+            },
+            repos: {
+                taskRepo,
+                userRepo: { incrementStat: vi.fn().mockResolvedValue(undefined) },
+            },
+        };
+
+        const message = {
+            id: 'message-2',
+            edit: vi.fn().mockResolvedValue(undefined),
+            createMessageComponentCollector: vi.fn().mockReturnValue({
+                on: vi.fn(),
+            }),
+        };
+
+        const channel = {
+            id: 'channel-override',
+            send: vi.fn().mockResolvedValue(message),
+        };
+
+        await postTaskPollForCategory({} as any, services as any, TaskCategory.PvM, channel as any);
+
+        expect(message.createMessageComponentCollector).toHaveBeenCalledWith(
+            expect.objectContaining({ time: 5 * 60 * 1000 })
+        );
+        expect(storedPoll.endsAt.getTime()).toBe(fixedNow + (5 * 60 * 1000));
     });
 
     it('handles persisted vote by matching poll message id after restart', async () => {

@@ -10,6 +10,12 @@ import { isMentionSuppressed, withSuppressedMentions } from '../../utils/Mention
 const activeVotes = new Map<string, Map<string, number>>(); // messageId -> Map<taskId, voteCount>
 const activePollSelections = new Map<string, Task[]>(); // messageId -> Task options list
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
+const PROD_TASK_POLL_DURATION_MS = 24 * 60 * 60 * 1000;
+const DEV_TASK_POLL_DURATION_MS = 5 * 60 * 1000;
+
+function getTaskPollDurationMs(): number {
+    return process.env.BOT_MODE === 'dev' ? DEV_TASK_POLL_DURATION_MS : PROD_TASK_POLL_DURATION_MS;
+}
 
 export function hasActiveTaskPollCollector(messageId: string): boolean {
     return activeVotes.has(messageId);
@@ -211,7 +217,7 @@ export async function postTaskPollForCategory(
             .setStyle(ButtonStyle.Secondary);
     });
 
-    const pollDuration = 24 * 60 * 60 * 1000; // 24 hours
+    const pollDuration = getTaskPollDurationMs();
     const endTime = Date.now() + pollDuration;
     const endsAt = new Date(endTime);
 
