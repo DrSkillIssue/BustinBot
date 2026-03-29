@@ -46,6 +46,10 @@ const help: Command = {
                         "**/stats** — View your BustinBot stats for this server.",
                         "**/support** — Learn how to contribute to BustinBot.",
                     ].join("\n"),
+                },
+                {
+                    name: "❓ More Questions?",
+                    value: "Click here to view the BustinBot FAQ: https://github.com/dossyb/BustinBot/wiki",
                 }
             )
             .setFooter({
