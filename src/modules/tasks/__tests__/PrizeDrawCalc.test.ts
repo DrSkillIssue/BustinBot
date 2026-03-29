@@ -18,6 +18,7 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
     it('User gets 1 roll per task when submitting Bronze -> Silver -> Gold', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {
@@ -47,6 +48,7 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
     it('User gets 1 roll per category when submitting Bronze -> Silver -> Gold for each', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {
@@ -96,6 +98,7 @@ describe('Prize Roll - Ensure Correct Roll Counts', () => {
     it('User should only get 3 rolls max (1 per category) when submitting for all categories', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {

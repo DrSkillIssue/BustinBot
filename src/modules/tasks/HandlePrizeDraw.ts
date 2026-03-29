@@ -3,6 +3,7 @@ import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.j
 import type { PrizeDraw } from '../../models/PrizeDraw.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import { TaskCategory } from '../../models/Task.js';
+import type { TaskSubmission } from '../../models/TaskSubmission.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import { buildPrizeDrawEmbed } from './TaskEmbeds.js';
 import { Client, TextChannel } from 'discord.js';
@@ -20,6 +21,77 @@ function getPeriodRange(endDate: Date, days: number): [Date, Date] {
     start.setUTCDate(end.getUTCDate() - days + 1);
     start.setUTCHours(0, 0, 0, 0);
     return [start, end];
+}
+
+function isSubmissionApprovedLike(status: SubmissionStatus): boolean {
+    return (
+        status === SubmissionStatus.Approved ||
+        status === SubmissionStatus.Bronze ||
+        status === SubmissionStatus.Silver ||
+        status === SubmissionStatus.Gold
+    );
+}
+
+function parseDateInput(value: unknown): Date | null {
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+}
+
+function getMostRecentRolledDrawBeforeWindow(draws: PrizeDraw[], windowStart: Date): PrizeDraw | null {
+    const candidates = draws
+        .filter((draw) => !!draw.rolledAt)
+        .filter((draw) => {
+            const drawEnd = parseDateInput(draw.end);
+            return !!drawEnd && drawEnd.getTime() < windowStart.getTime();
+        })
+        .sort((a, b) => {
+            const aRolled = parseDateInput(a.rolledAt ?? null)?.getTime() ?? 0;
+            const bRolled = parseDateInput(b.rolledAt ?? null)?.getTime() ?? 0;
+            return bRolled - aRolled;
+        });
+
+    return candidates[0] ?? null;
+}
+
+async function getCarryOverSubmissions(
+    prizeRepo: IPrizeDrawRepository,
+    taskRepo: ITaskRepository,
+    currentWindowStart: Date
+): Promise<TaskSubmission[]> {
+    const draws = await prizeRepo.getAllPrizeDraws();
+    const previousDraw = getMostRecentRolledDrawBeforeWindow(draws, currentWindowStart);
+    if (!previousDraw) return [];
+
+    const previousDrawEnd = parseDateInput(previousDraw.end);
+    const previousDrawRolledAt = parseDateInput(previousDraw.rolledAt ?? null);
+    if (!previousDrawEnd || !previousDrawRolledAt) return [];
+
+    const previousEventIds = previousDraw.taskEventIds ?? [];
+    if (!previousEventIds.length) return [];
+
+    const previousEventSubmissions = await Promise.all(
+        previousEventIds.map((eventId) => taskRepo.getSubmissionsForTask(eventId))
+    );
+
+    return previousEventSubmissions
+        .flat()
+        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission))
+        .filter((submission) => isSubmissionApprovedLike(submission.status))
+        .filter((submission) => {
+            const submittedAt = parseDateInput(submission.submittedAt ?? null);
+            const reviewedAt = parseDateInput(submission.reviewedAt ?? null);
+
+            if (!submittedAt || !reviewedAt) return false;
+
+            const submittedBeforeOrAtPreviousWindowEnd = submittedAt.getTime() <= previousDrawEnd.getTime();
+            const reviewedAfterPreviousRoll = reviewedAt.getTime() > previousDrawRolledAt.getTime();
+
+            return submittedBeforeOrAtPreviousWindowEnd && reviewedAfterPreviousRoll;
+        });
 }
 
 export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository, taskRepo: ITaskRepository): Promise<PrizeDraw> {
@@ -45,14 +117,13 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         qualifyingEvents.map((event) => taskRepo.getSubmissionsForTask(event.id))
     );
 
-    const allSubmissions = submissionsPerEvent.flat();
+    const currentSubmissions = submissionsPerEvent
+        .flat()
+        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission));
+    const carryOverSubmissions = await getCarryOverSubmissions(prizeRepo, taskRepo, start);
 
-    const filtered = allSubmissions.filter(
-        (s) =>
-            s.status === SubmissionStatus.Approved ||
-            s.status === SubmissionStatus.Bronze ||
-            s.status === SubmissionStatus.Silver ||
-            s.status === SubmissionStatus.Gold
+    const filtered = [...currentSubmissions, ...carryOverSubmissions].filter((submission) =>
+        isSubmissionApprovedLike(submission.status)
     );
 
     const STATUS_RANK: Partial<Record<SubmissionStatus, number>> = {
@@ -77,6 +148,14 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     }
 
     const deduplicatedSubmissions = Array.from(userBestSubmissions.values());
+    const deduplicatedEventIds = Array.from(
+        new Set(
+            deduplicatedSubmissions
+                .map((submission) => submission.taskEventId)
+                .filter((eventId): eventId is string => typeof eventId === 'string' && eventId.length > 0)
+        )
+    );
+    const qualifyingEventIds = qualifyingEvents.map((event) => event.id);
 
     const participants: Record<string, number> = {};
     const entries: string[] = [];
@@ -98,7 +177,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         start: start.toISOString(),
         end: end.toISOString(),
         snapshotTakenAt: new Date().toISOString(),
-        taskEventIds: Array.from(new Set(qualifyingEvents.map(event => event.id))),
+        taskEventIds: Array.from(new Set([...qualifyingEventIds, ...deduplicatedEventIds])),
         participants,
         entries,
         totalEntries,

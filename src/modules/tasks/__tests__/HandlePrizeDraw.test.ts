@@ -34,6 +34,7 @@ describe('HandlePrizeDraw.generatePrizeDrawSnapshot', () => {
     it('filters qualifying submissions, tallies tier counts and persists snapshot', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {
@@ -95,6 +96,7 @@ describe('HandlePrizeDraw.generatePrizeDrawSnapshot', () => {
     it('ignores submissions from events that have not ended yet', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {
@@ -132,6 +134,7 @@ describe('HandlePrizeDraw.generatePrizeDrawSnapshot', () => {
     it('treats all approved submissions as a single roll', async () => {
         const prizeRepo = {
             createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([]),
         };
 
         const taskRepo = {
@@ -152,6 +155,135 @@ describe('HandlePrizeDraw.generatePrizeDrawSnapshot', () => {
         expect(persistedSnapshot?.participants).toEqual({ max: 1 });
         expect(persistedSnapshot?.totalEntries).toBe(1);
         expect(snapshot.entries).toEqual(['max']);
+    });
+
+    it('carries over late approvals from the immediately previous rolled draw', async () => {
+        const prizeRepo = {
+            createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([
+                {
+                    id: '2025-11-06_to_2025-11-10',
+                    start: '2025-10-28T00:00:00.000Z',
+                    end: '2025-11-01T23:59:59.999Z',
+                    rolledAt: '2025-11-02T00:00:00.000Z',
+                    taskEventIds: ['evt-prev'],
+                },
+            ]),
+        };
+
+        const taskRepo = {
+            getTaskEventsBetween: vi.fn().mockResolvedValue([
+                { id: 'evt-current', endTime: new Date('2025-11-13T00:00:00Z') },
+            ]),
+            getSubmissionsForTask: vi.fn().mockImplementation((eventId: string) => {
+                if (eventId === 'evt-current') {
+                    return Promise.resolve([
+                        { userId: 'alice', taskEventId: 'evt-current', status: SubmissionStatus.Gold },
+                    ]);
+                }
+
+                if (eventId === 'evt-prev') {
+                    return Promise.resolve([
+                        {
+                            userId: 'bob',
+                            taskEventId: 'evt-prev',
+                            status: SubmissionStatus.Silver,
+                            submittedAt: new Date('2025-11-01T20:00:00Z'),
+                            reviewedAt: new Date('2025-11-03T01:00:00Z'),
+                        },
+                        {
+                            userId: 'carol',
+                            taskEventId: 'evt-prev',
+                            status: SubmissionStatus.Gold,
+                            submittedAt: new Date('2025-11-01T18:00:00Z'),
+                            reviewedAt: new Date('2025-11-01T22:00:00Z'),
+                        },
+                        {
+                            userId: 'dave',
+                            taskEventId: 'evt-prev',
+                            status: SubmissionStatus.Bronze,
+                            submittedAt: new Date('2025-11-12T12:00:00Z'),
+                            reviewedAt: new Date('2025-11-12T13:00:00Z'),
+                        },
+                    ]);
+                }
+
+                return Promise.resolve([]);
+            }),
+        };
+
+        const snapshot = await generatePrizeDrawSnapshot(prizeRepo as any, taskRepo as any);
+        const persistedSnapshot = prizeRepo.createPrizeDraw.mock.calls[0]?.[0];
+
+        expect(taskRepo.getSubmissionsForTask).toHaveBeenCalledWith('evt-prev');
+        expect(persistedSnapshot?.participants).toEqual({ alice: 1, bob: 1 });
+        expect(persistedSnapshot?.taskEventIds).toEqual(expect.arrayContaining(['evt-current', 'evt-prev']));
+        expect(snapshot.totalEntries).toBe(2);
+    });
+
+    it('only carries over from the latest previous rolled draw', async () => {
+        const prizeRepo = {
+            createPrizeDraw: vi.fn().mockResolvedValue(undefined),
+            getAllPrizeDraws: vi.fn().mockResolvedValue([
+                {
+                    id: 'older-draw',
+                    start: '2025-10-20T00:00:00.000Z',
+                    end: '2025-10-24T23:59:59.999Z',
+                    rolledAt: '2025-10-25T00:00:00.000Z',
+                    taskEventIds: ['evt-older'],
+                },
+                {
+                    id: 'latest-prev-draw',
+                    start: '2025-10-28T00:00:00.000Z',
+                    end: '2025-11-01T23:59:59.999Z',
+                    rolledAt: '2025-11-02T00:00:00.000Z',
+                    taskEventIds: ['evt-prev'],
+                },
+            ]),
+        };
+
+        const taskRepo = {
+            getTaskEventsBetween: vi.fn().mockResolvedValue([
+                { id: 'evt-current', endTime: new Date('2025-11-13T00:00:00Z') },
+            ]),
+            getSubmissionsForTask: vi.fn().mockImplementation((eventId: string) => {
+                if (eventId === 'evt-current') {
+                    return Promise.resolve([]);
+                }
+
+                if (eventId === 'evt-prev') {
+                    return Promise.resolve([
+                        {
+                            userId: 'latest-user',
+                            taskEventId: 'evt-prev',
+                            status: SubmissionStatus.Bronze,
+                            submittedAt: new Date('2025-11-01T20:00:00Z'),
+                            reviewedAt: new Date('2025-11-03T01:00:00Z'),
+                        },
+                    ]);
+                }
+
+                if (eventId === 'evt-older') {
+                    return Promise.resolve([
+                        {
+                            userId: 'older-user',
+                            taskEventId: 'evt-older',
+                            status: SubmissionStatus.Bronze,
+                            submittedAt: new Date('2025-10-24T20:00:00Z'),
+                            reviewedAt: new Date('2025-10-26T01:00:00Z'),
+                        },
+                    ]);
+                }
+
+                return Promise.resolve([]);
+            }),
+        };
+
+        const snapshot = await generatePrizeDrawSnapshot(prizeRepo as any, taskRepo as any);
+
+        expect(taskRepo.getSubmissionsForTask).toHaveBeenCalledWith('evt-prev');
+        expect(taskRepo.getSubmissionsForTask).not.toHaveBeenCalledWith('evt-older');
+        expect(snapshot.participants).toEqual({ 'latest-user': 1 });
     });
 });
 
