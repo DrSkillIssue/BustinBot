@@ -14,6 +14,27 @@ const categoryIcons: Record<TaskCategory, string> = {
 };
 const pollNumberEmojis = ['1️⃣', '2️⃣', '3️⃣'];
 
+function toDate(value: unknown): Date | null {
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    if (typeof value === 'object' && value) {
+        const maybeTimestamp = value as { toDate?: () => Date };
+        if (typeof maybeTimestamp.toDate === 'function') {
+            const parsed = maybeTimestamp.toDate();
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+    }
+
+    return null;
+}
+
 // Helper method to shorten amounts 5 digits or more (e.g. 120,000 -> 120k) and replace amounts in embeds
 function shortenAmount(amount: number): string {
     if (amount >= 10000) {
@@ -152,6 +173,7 @@ export function buildTaskInfoEmbed(task: Task) {
 // Embed shown in task verification channel when a submission is received
 export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent) {
     const submissionTime = new Date();
+    const eventEndTime = toDate(event.endTime);
 
     const embed = new EmbedBuilder()
         .setTitle('Task Submission')
@@ -170,10 +192,10 @@ export function buildSubmissionEmbed(submission: any, taskName: string, event: T
         });
     }
 
-    if (submissionTime.getTime() > event.endTime.getTime()) {
+    if (eventEndTime && submissionTime.getTime() > eventEndTime.getTime()) {
         embed.addFields({
             name: '⚠️ WARNING',
-            value: `This submission was made after the task event ended (${event.endTime.toUTCString()}).`,
+            value: `This submission was made after the task event ended (${eventEndTime.toUTCString()}).`,
         });
     }
 
