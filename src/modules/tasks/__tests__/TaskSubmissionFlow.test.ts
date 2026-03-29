@@ -100,8 +100,6 @@ describe('Task submission lifecycle', () => {
                 customId: `approve_bronze_${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
-                editReply: vi.fn().mockResolvedValue(undefined),
                 reply: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
                 message: {
@@ -110,6 +108,23 @@ describe('Task submission lifecycle', () => {
             };
 
             await handleAdminButton(interaction, services);
+
+            expect(interaction.reply).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    content: expect.stringContaining('approve this submission for **Bronze** tier'),
+                })
+            );
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
 
             expect(repo.updateSubmissionStatus).toHaveBeenCalledWith(submission.id, SubmissionStatus.Bronze, 'admin-1');
             expect(mockedArchiveSubmission).toHaveBeenCalledWith(
@@ -143,8 +158,6 @@ describe('Task submission lifecycle', () => {
                 customId: `approve_bronze_${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
-                editReply: vi.fn().mockResolvedValue(undefined),
                 reply: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
                 message: {
@@ -154,14 +167,125 @@ describe('Task submission lifecycle', () => {
 
             await expect(handleAdminButton(interaction, services)).resolves.not.toThrow();
 
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await expect(handleAdminButton(confirmInteraction, services)).resolves.not.toThrow();
+
             expect(repo.updateSubmissionStatus).toHaveBeenCalledWith(submission.id, SubmissionStatus.Bronze, 'admin-1');
             expect(mockedArchiveSubmission).toHaveBeenCalled();
             expect(mockedUpdateTaskCounter).toHaveBeenCalledWith(client, submission.taskEventId, submission.userId, repo, SubmissionStatus.Bronze);
-            expect(interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('approved') }));
+            expect(confirmInteraction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('approved') }));
         });
     });
 
     describe('Admin rejection flow', () => {
+        it('prompts for rejection confirmation before opening the reason modal', async () => {
+            const { services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const interaction: any = {
+                customId: 'reject_12345',
+                user: { id: 'admin-1' },
+                client,
+                reply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(interaction, services);
+
+            expect(interaction.reply).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    content: expect.stringContaining('Are you sure you want to reject this submission?'),
+                    flags: 1 << 6,
+                })
+            );
+        });
+
+        it('opens rejection reason modal only after reject confirmation', async () => {
+            const { services } = createTaskServiceHarness();
+            const { client } = createAdminClientMock();
+
+            const interaction: any = {
+                customId: 'review-confirm|reject||12345',
+                user: { id: 'admin-1' },
+                client,
+                showModal: vi.fn().mockResolvedValue(undefined),
+            };
+
+            await handleAdminButton(interaction, services);
+
+            expect(interaction.showModal).toHaveBeenCalledTimes(1);
+            const modalArg = interaction.showModal.mock.calls[0]?.[0];
+            expect(modalArg?.data?.custom_id).toBe('reject_reason_12345');
+        });
+
+        it('cancels confirmation without changing submission state', async () => {
+            const { services, repo } = createTaskServiceHarness();
+            const { client } = createAdminClientMock();
+
+            const interaction: any = {
+                customId: 'review-cancel|12345',
+                user: { id: 'admin-1' },
+                client,
+                update: vi.fn().mockResolvedValue(undefined),
+            };
+
+            await handleAdminButton(interaction, services);
+
+            expect(interaction.update).toHaveBeenCalledWith({
+                content: 'Review action cancelled. No changes were made.',
+                components: [],
+            });
+            expect(repo.updateSubmissionStatus).not.toHaveBeenCalled();
+        });
+
+        it('rejects invalid confirmation payloads', async () => {
+            const { services, repo } = createTaskServiceHarness();
+            const { client } = createAdminClientMock();
+
+            const interaction: any = {
+                customId: 'review-confirm||',
+                user: { id: 'admin-1' },
+                client,
+                update: vi.fn().mockResolvedValue(undefined),
+            };
+
+            await handleAdminButton(interaction, services);
+
+            expect(interaction.update).toHaveBeenCalledWith({
+                content: 'Invalid confirmation payload. Please try again.',
+                components: [],
+            });
+            expect(repo.updateSubmissionStatus).not.toHaveBeenCalled();
+        });
+
+        it('rejects invalid approval tier in confirmation payload', async () => {
+            const { services, repo } = createTaskServiceHarness();
+            const { client } = createAdminClientMock();
+
+            const interaction: any = {
+                customId: 'review-confirm|approve|platinum|12345',
+                user: { id: 'admin-1' },
+                client,
+                update: vi.fn().mockResolvedValue(undefined),
+            };
+
+            await handleAdminButton(interaction, services);
+
+            expect(interaction.update).toHaveBeenCalledWith({
+                content: 'Invalid tier selected for approval.',
+                components: [],
+            });
+            expect(repo.updateSubmissionStatus).not.toHaveBeenCalled();
+        });
+
         it('records rejection, archives, and notifies with reason', async () => {
             const { service, repo, services } = createTaskServiceHarness();
             const { client, adminChannel } = createAdminClientMock();

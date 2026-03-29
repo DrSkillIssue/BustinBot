@@ -59,7 +59,9 @@ export async function handleTaskInteraction(
             await handleSubmitButton(interaction, services);
         } else if (
             interaction.customId.startsWith("approve_") ||
-            interaction.customId.startsWith("reject_")
+            interaction.customId.startsWith("reject_") ||
+            interaction.customId.startsWith("review-confirm|") ||
+            interaction.customId.startsWith("review-cancel|")
         ) {
             await handleAdminButton(interaction, services);
         }

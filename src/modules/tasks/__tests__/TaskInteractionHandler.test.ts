@@ -177,4 +177,28 @@ describe('handleTaskInteraction', () => {
         expect(hasActiveTaskPollCollector).toHaveBeenCalledWith('poll-message-1');
         expect(handleTaskPollVoteInteraction).toHaveBeenCalledWith(interaction, services);
     });
+
+    it('routes review-confirm buttons to admin handler', async () => {
+        const interaction: any = {
+            ...baseInteraction(),
+            isButton: () => true,
+            customId: 'review-confirm|approve|bronze|submission-1',
+        };
+
+        await handleTaskInteraction(interaction, {} as any, services);
+
+        expect(handleAdminButton).toHaveBeenCalledWith(interaction, services);
+    });
+
+    it('routes review-cancel buttons to admin handler', async () => {
+        const interaction: any = {
+            ...baseInteraction(),
+            isButton: () => true,
+            customId: 'review-cancel|submission-1',
+        };
+
+        await handleTaskInteraction(interaction, {} as any, services);
+
+        expect(handleAdminButton).toHaveBeenCalledWith(interaction, services);
+    });
 });

@@ -1,4 +1,4 @@
-import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, ActionRowBuilder } from 'discord.js';
+import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
@@ -139,54 +139,62 @@ export async function handleDirectMessage(message: Message, client: Client, serv
 // STEP 4: Admin clicks Approve/Reject
 export async function handleAdminButton(interaction: ButtonInteraction, services: ServiceContainer) {
     const customId = interaction.customId;
-    let action: string | undefined;
-    let submissionId: string | undefined;
-    let maybeTier: string | undefined;
 
-    if (customId.startsWith('reject_')) {
-        action = 'reject';
-        submissionId = customId.slice('reject_'.length).trim();
-    } else if (customId.startsWith('approve_')) {
-        action = 'approve';
-        const parts = customId.split('_');
-        maybeTier = parts[1];
-        submissionId = parts.slice(2).join('_').trim();
-    }
-
-    if (!submissionId) {
-        await interaction.reply({ content: "Submission ID missing from interaction.", flags: 1 << 6 });
-        return;
-    }
-    if (!action) {
-        await interaction.reply({ content: "Unknown task action.", flags: 1 << 6 });
+    // Second-step cancel action from confirmation prompt
+    if (customId.startsWith('review-cancel|')) {
+        await interaction.update({
+            content: 'Review action cancelled. No changes were made.',
+            components: [],
+        });
         return;
     }
 
-    const reviewerId = interaction.user.id;
+    // Second-step confirm action from confirmation prompt
+    if (customId.startsWith('review-confirm|')) {
+        const parts = customId.split('|');
+        const confirmAction = parts[1];
+        const maybeTier = parts[2];
+        const submissionId = parts.slice(3).join('|').trim();
 
-    if (action === 'reject') {
-        const modal = new ModalBuilder()
-            .setCustomId(`reject_reason_${submissionId}`)
-            .setTitle('Reject Submission')
-            .addComponents(
-                new ActionRowBuilder<TextInputBuilder>().addComponents(
-                    new TextInputBuilder()
-                        .setCustomId('reason')
-                        .setLabel('Rejection Reason')
-                        .setStyle(TextInputStyle.Paragraph)
-                        .setRequired(false)
-                )
-            );
-        await interaction.showModal(modal);
-        return;
-    }
+        if (!confirmAction || !submissionId) {
+            await interaction.update({
+                content: 'Invalid confirmation payload. Please try again.',
+                components: [],
+            });
+            return;
+        }
 
-    // Handle tier approvals
-    const tier = maybeTier as 'bronze' | 'silver' | 'gold';
-    const validTiers = ['bronze', 'silver', 'gold'];
+        if (confirmAction === 'reject') {
+            const modal = new ModalBuilder()
+                .setCustomId(`reject_reason_${submissionId}`)
+                .setTitle('Reject Submission')
+                .addComponents(
+                    new ActionRowBuilder<TextInputBuilder>().addComponents(
+                        new TextInputBuilder()
+                            .setCustomId('reason')
+                            .setLabel('Rejection Reason')
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setRequired(false)
+                    )
+                );
+            await interaction.showModal(modal);
+            return;
+        }
 
-    if (action === 'approve' && validTiers.includes(tier)) {
+        const tier = maybeTier as 'bronze' | 'silver' | 'gold';
+        const validTiers = ['bronze', 'silver', 'gold'];
+
+        if (!validTiers.includes(tier)) {
+            await interaction.update({
+                content: 'Invalid tier selected for approval.',
+                components: [],
+            });
+            return;
+        }
+
         await interaction.deferReply({ flags: 1 << 6 });
+
+        const reviewerId = interaction.user.id;
 
         try {
             const result = await services.tasks.updateSubmissionTier(
@@ -252,6 +260,77 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             console.error('[TaskInteractions] Tier approval failed:', err);
             await interaction.editReply({ content: "❌ Failed to process tier approval. Check logs for details." });
         }
+
+        return;
+    }
+
+    let action: string | undefined;
+    let submissionId: string | undefined;
+    let maybeTier: string | undefined;
+
+    if (customId.startsWith('reject_')) {
+        action = 'reject';
+        submissionId = customId.slice('reject_'.length).trim();
+    } else if (customId.startsWith('approve_')) {
+        action = 'approve';
+        const parts = customId.split('_');
+        maybeTier = parts[1];
+        submissionId = parts.slice(2).join('_').trim();
+    }
+
+    if (!submissionId) {
+        await interaction.reply({ content: "Submission ID missing from interaction.", flags: 1 << 6 });
+        return;
+    }
+    if (!action) {
+        await interaction.reply({ content: "Unknown task action.", flags: 1 << 6 });
+        return;
+    }
+
+    const reviewerId = interaction.user.id;
+
+    if (action === 'reject') {
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`review-confirm|reject||${submissionId}`)
+                .setLabel('Confirm Reject')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`review-cancel|${submissionId}`)
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({
+            content: 'Are you sure you want to reject this submission?',
+            components: [row],
+            flags: 1 << 6,
+        });
+        return;
+    }
+
+    // Handle tier approvals
+    const tier = maybeTier as 'bronze' | 'silver' | 'gold';
+    const validTiers = ['bronze', 'silver', 'gold'];
+
+    if (action === 'approve' && validTiers.includes(tier)) {
+        const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`review-confirm|approve|${tier}|${submissionId}`)
+                .setLabel(`Confirm ${formattedTier}`)
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`review-cancel|${submissionId}`)
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({
+            content: `Are you sure you want to approve this submission for **${formattedTier}** tier?`,
+            components: [row],
+            flags: 1 << 6,
+        });
 
         return;
     }
