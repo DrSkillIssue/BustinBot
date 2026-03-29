@@ -42,6 +42,14 @@ const taskhelp: Command = {
                     value:
                         "Prize draws occur **every fortnight on Tuesday at 00:00 UTC**. Each approved submission counts as **one entry** in the draw.\nWinners are announced in the task channel and will be contacted by a task admin to award them with a free bond!"
                 },
+                {
+                    name: "🧰 Helpful Commands",
+                    value: [
+                        "**/leaderboard** - View current leaderboard standings.",
+                        "**/listtasks** - Browse the full task list with optional category filtering.",
+                        "**/viewtask** - View detailed information for a specific task by ID or name.",
+                    ].join("\n")
+                },
             ],
             footer: {
                 text: `BustinBot ${packageVersion} • Developed by dossyb`
