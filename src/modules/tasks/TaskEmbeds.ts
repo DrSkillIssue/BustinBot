@@ -124,6 +124,31 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     };
 }
 
+// Embed shown for informational task lookup (not tied to an active event)
+export function buildTaskInfoEmbed(task: Task) {
+    const taskTitle = getTaskDisplayName(task);
+    const category = task.category;
+    const iconPath = categoryIcons[category];
+    const instructionText =
+        TaskInstructions[task.type] ?? "Include proof of completion showing progress or XP change.";
+
+    const tierDisplay = `Amounts required for each tier of completion:\n\n🥉 **${shortenAmount(task.amtBronze)}**\u2003🥈 **${shortenAmount(task.amtSilver)}**\u2003🥇 **${shortenAmount(task.amtGold)}**`;
+
+    const embed = new EmbedBuilder()
+        .setTitle(`${category} Task`)
+        .setDescription(
+            `**${taskTitle}**\n\n${tierDisplay}\n\n**Submission Instructions:**\n${instructionText}`
+        )
+        .setColor(0xa60000)
+        .setFooter({ text: task.id })
+        .setThumbnail("attachment://category_icon.png");
+
+    return {
+        embeds: [embed],
+        files: [{ attachment: iconPath, name: "category_icon.png" }],
+    };
+}
+
 // Embed shown in task verification channel when a submission is received
 export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent) {
     const submissionTime = new Date();
