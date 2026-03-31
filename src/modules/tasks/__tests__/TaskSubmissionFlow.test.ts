@@ -183,6 +183,156 @@ describe('Task submission lifecycle', () => {
             expect(mockedUpdateTaskCounter).toHaveBeenCalledWith(client, submission.taskEventId, submission.userId, repo, SubmissionStatus.Bronze);
             expect(confirmInteraction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('approved') }));
         });
+
+        it('prevents race condition when two admins approve concurrently (admin-1 finishes first)', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Admin-1 sends initial approval button
+            const admin1Button: any = {
+                customId: `approve_bronze_${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                reply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+                message: {
+                    embeds: [{ fields: [{ value: '<@user-1>' }, { value: submission.taskName }] }],
+                },
+            };
+
+            await handleAdminButton(admin1Button, services);
+            expect(admin1Button.reply).toHaveBeenCalled();
+
+            // Admin-1 confirms approval -> submission becomes Bronze
+            const admin1Confirm: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(admin1Confirm, services);
+
+            // Now simulate Admin-2 trying to approve the same submission
+            // They click the button at nearly the same time as Admin-1
+            const admin2Confirm: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-2' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            // Simulate the race: when Admin-2's confirmation comes in,
+            // the submission is already Bronze status (Admin-1 just finished)
+            repo.getSubmissionById.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Bronze,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            await handleAdminButton(admin2Confirm, services);
+
+            // Admin-2 should be rejected with a helpful message
+            expect(admin2Confirm.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    content: expect.stringContaining('already approved at bronze tier or higher'),
+                    components: [],
+                })
+            );
+
+            // Critically: the stats increment should only be called once (for Admin-1)
+            expect(repo.updateSubmissionStatus).toHaveBeenCalledTimes(1);
+        });
+
+        it('prevents race condition when admin tries to upgrade submission (bronze -> silver)', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Original submission already at Bronze tier
+            repo.getSubmissionById.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Bronze,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            // Admin tries to upgrade to Silver
+            const admin1Confirm: any = {
+                customId: `review-confirm|approve|silver|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(admin1Confirm, services);
+
+            // Should allow upgrade since Silver (tier 2) > Bronze (tier 1)
+            expect(admin1Confirm.deferReply).toHaveBeenCalled();
+            expect(repo.updateSubmissionStatus).toHaveBeenCalled();
+        });
+
+        it('rejects downgrade attempts (cannot approve at lower tier)', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Original submission already at Gold tier
+            repo.getSubmissionById.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Gold,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            // Admin tries to approve at Bronze (lower tier)
+            const admin1Confirm: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(admin1Confirm, services);
+
+            // Should reject downgrade
+            expect(admin1Confirm.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    content: expect.stringContaining('already approved at gold tier or higher'),
+                    components: [],
+                })
+            );
+
+            // Should not defer or update status
+            expect(admin1Confirm.deferReply).not.toHaveBeenCalled();
+            expect(repo.updateSubmissionStatus).not.toHaveBeenCalled();
+        });
     });
 
     describe('Admin rejection flow', () => {
