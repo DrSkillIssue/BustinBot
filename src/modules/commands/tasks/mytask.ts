@@ -1,10 +1,10 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import type { Command } from "models/Command.js";
-import { CommandModule, CommandRole } from "models/Command.js";
-import { SubmissionStatus } from "models/TaskSubmission.js";
+import type { Command } from "../../../models/Command.js";
+import { CommandModule, CommandRole } from "../../../models/Command.js";
+import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { ServiceContainer } from "core/services/ServiceContainer.js";
-import type { TaskEvent } from "models/TaskEvent.js";
-import { TaskCategory } from "models/Task.js";
+import type { TaskEvent } from "../../../models/TaskEvent.js";
+import { TaskCategory } from "../../../models/Task.js";
 import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
 
 const mytask: Command = {
