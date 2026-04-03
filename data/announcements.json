@@ -17,5 +17,24 @@
             }
         ],
         "footer": "Developed by dossyb • BustinBot v2.0.0"
+    },
+    "2.1.0": {
+        "title": "@everyone\n# BustinBot v2.1 is here!",
+        "intro": "BustinBot v2.1 has arrived, bringing some important bug fixes and feature updates!",
+        "sections": [
+            {
+                "name": "## 🏆 Task Leaderboards Are Live",
+                "value": "- Task leaderboards are now live, tracking completions by tier with both periodic and all-time standings.\n- Leaderboard updates will automatically be posted every Wednesday 00:00 UTC or can be checked at any time using `/leaderboard`.\n- Discord roles are now automatically awarded for reaching task completion milestones and for podium placements on the periodic leaderboards.\n- Task streaks are now tracked and are retroactively applied to all previous task completions dating back to the launch of 2.0. Use `/taskstreak` to check your current streak!"
+            },
+            {
+                "name": "## 📋 Better Task Visibility",
+                "value": "- New commands have been added for easier task tracking: `/listtasks` to see the full task list, `/viewtask` to view a specific task, and `/mytask` to view your active task submissions."
+            },
+            {
+                "name": "## 🎬 Movie Module Quality Fixes",
+                "value": "- `/addmovie` now blocks duplicate entries of the same movie.\n- Additional movie lifecycle and watched-state fixes have been implemented to improve reliability."
+            }
+        ],
+        "footer": "Developed by dossyb • BustinBot v2.1.0"
     }
 }
