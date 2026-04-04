@@ -3,6 +3,7 @@ import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 import { generatePrizeDrawSnapshot, rollWinnerForSnapshot, announcePrizeDrawWinner } from '../../tasks/HandlePrizeDraw.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../../utils/MentionUtils.js';
 
 const taskdraw: Command = {
     name: 'taskdraw',
@@ -44,6 +45,7 @@ const taskdraw: Command = {
 
         const action = interaction.options.getString('action', true);
         const snapshotId = interaction.options.getString('snapshot_id') ?? '';
+        const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -63,7 +65,7 @@ const taskdraw: Command = {
                 }
                 const winner = await rollWinnerForSnapshot(prizeRepo, snapshotId, services);
                 if (winner) {
-                    await interaction.editReply(`Winner rolled for **${snapshotId}**: <@${winner}>`);
+                    await interaction.editReply(withSuppressedMentions({ content: `Winner rolled for **${snapshotId}**: <@${winner}>` }, suppressMentions));
                 } else {
                     await interaction.editReply(`No eligible entries found for **${snapshotId}**.`);
                 }

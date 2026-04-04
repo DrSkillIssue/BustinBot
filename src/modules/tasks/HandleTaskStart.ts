@@ -3,6 +3,8 @@ import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { TaskCategory } from '../../models/Task.js';
+import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 function generateTaskEventId(taskId: string): string {
     const now = new Date();
@@ -57,15 +59,17 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? guild.roles.cache.get(roleId) : null;
     const mention = role ? `<@&${role.id}>` : '';
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
 
     if (!role) {
         console.warn(`[TaskStart] Task user role not configured or not found.`);
     }
 
-    await channel.send(
-        `${mention} **The new tasks are live!**\n` +
-        `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`
-    );
+    await channel.send(withSuppressedMentions({
+        content:
+            `${mention} **The new tasks are live!**\n` +
+            `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`
+    }, suppressMentions));
 
     for (const category of categories) {
         await startTaskEventForCategory(client, services, category, sharedKeyword, channel as TextChannel);
@@ -183,6 +187,12 @@ export async function startTaskEventForCategory(
     event.channelId = (channel as TextChannel).id;
 
     await taskEvents.storeTaskEvent(event);
+
+    try {
+        await registerPeriodicTaskEvent(services, taskEventId);
+    } catch (err) {
+        console.warn(`[TaskStart] Failed to register periodic leaderboard event ${taskEventId}:`, err);
+    }
 
     if (pollData.id) {
         await repos.taskRepo.closeTaskPoll(pollData.id);

@@ -10,6 +10,7 @@ import { DateTime } from "luxon";
 import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 const MAX_CHOICES = 5;
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
@@ -23,6 +24,12 @@ async function createAndSendMoviePoll(
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
         console.error("[MoviePoll] Movie repository not found in services.");
+        return;
+    }
+
+    const activeMovies = movies.filter((movie) => !movie.watched);
+    if (activeMovies.length < 2) {
+        await interaction.editReply("Need at least 2 unwatched movies to create a poll.");
         return;
     }
 
@@ -65,7 +72,7 @@ async function createAndSendMoviePoll(
     const poll: MoviePoll = {
         id: pollId,
         type: "movie",
-        options: movies,
+        options: activeMovies,
         messageId: "",
         channelId: interaction.channelId,
         createdAt: now.toJSDate(),
@@ -74,7 +81,7 @@ async function createAndSendMoviePoll(
         votes: {},
     };
 
-    const embeds: EmbedBuilder[] = movies.map((movie, i) => {
+    const embeds: EmbedBuilder[] = activeMovies.map((movie, i) => {
         const embed = createLocalMoviePreviewEmbed(movie);
         const runtimeText = movie.runtime ? ` | ⏱️ ${movie.runtime} mins` : "";
         embed.setFooter({ text: `🗳️ 0 votes${runtimeText} | Option ${i + 1}` });
@@ -82,7 +89,7 @@ async function createAndSendMoviePoll(
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        movies.map((movie, i) => {
+        activeMovies.map((movie, i) => {
             const truncatedTitle = movie.title.length > 20 ? movie.title.slice(0, 17) + "…" : movie.title;
             const label = `${emojiNumbers[i]} ${truncatedTitle}`;
 
@@ -101,7 +108,14 @@ async function createAndSendMoviePoll(
     }
 
     const pollCloseUnix = Math.floor(endsAt.toSeconds());
-    if (mention) await channel.send(mention);
+    const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+    if (mention) {
+        if (suppressMentions) {
+            await channel.send(withSuppressedMentions({ content: mention }, true));
+        } else {
+            await channel.send(mention);
+        }
+    }
     const message = (await channel.send({
         content: `📊 **Vote for the next movie night pick!**\nPoll ends <t:${pollCloseUnix}:R> (<t:${pollCloseUnix}:F>).`,
         embeds,
@@ -124,6 +138,7 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
 
     const client = interaction.client;
     let movies: Movie[] = await movieRepo.getAllMovies();
+    movies = movies.filter((movie) => !movie.watched);
     movies = injectMockUsers(movies);
 
     if (!movies.length) {
@@ -156,8 +171,9 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
 
 export async function pollMovieWithList(services: ServiceContainer, interaction: RepliableInteraction, selected: Movie[]) {
     const client = interaction.client;
+    const activeSelection = selected.filter((movie) => !movie.watched);
 
-    if (selected.length < 2 || selected.length > MAX_CHOICES) {
+    if (activeSelection.length < 2 || activeSelection.length > MAX_CHOICES) {
         const msg = "You must select between 2 and 5 movies.";
         if (interaction.replied || interaction.deferred)
             await interaction.editReply(msg);
@@ -166,7 +182,7 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
         return;
     }
 
-    const moviesWithUsers = injectMockUsers(selected);
+    const moviesWithUsers = injectMockUsers(activeSelection);
 
     if (!interaction.deferred && !interaction.replied) {
         if (interaction.isButton()) {

@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from "discord.js";
+import { randomUUID } from "node:crypto";
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { addMovieWithStats, fetchMovieDetailsById } from "../../movies/MovieService.js";
@@ -62,9 +63,11 @@ const addmovie: Command = {
             isBotAdmin ||
             isMovieAdmin;
 
+        let allMovies: Movie[] = [];
+
         try {
-            const movies = await movieRepo.getAllMovies();
-            const activeMoviesByUser = movies.filter(
+            allMovies = await movieRepo.getAllMovies();
+            const activeMoviesByUser = allMovies.filter(
                 (movie) => movie.addedBy === interaction.user.id && !movie.watched
             );
 
@@ -86,7 +89,21 @@ const addmovie: Command = {
 
         try {
             // Present top search results from TMDb and let user choose one
-            const selected = await presentMovieSelection(interaction, query, year);
+            const selected = await presentMovieSelection(interaction, query, year, 3, (candidate) => {
+                const existingMovie = allMovies.find(
+                    (movie) => movie.tmdbId !== undefined && movie.tmdbId === candidate.id && !movie.watched
+                );
+
+                if (!existingMovie) {
+                    return { isValid: true };
+                }
+
+                const addedBy = existingMovie.addedByDisplay ?? `<@${existingMovie.addedBy}>`;
+                return {
+                    isValid: false,
+                    message: `**${existingMovie.title}** is already in the movie list (added by ${addedBy}). Please choose a different result.`,
+                };
+            });
             if (!selected) return;
 
             // Fetch full metadata from TMDb
@@ -98,7 +115,7 @@ const addmovie: Command = {
 
             // Build movie object
             const newMovie: Movie = {
-                id: crypto.randomUUID(),
+                id: randomUUID(),
                 tmdbId: movieMetadata.tmdbId,
                 title: movieMetadata.title ?? selected.title,
                 releaseDate: movieMetadata.releaseDate,

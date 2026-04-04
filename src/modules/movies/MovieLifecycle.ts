@@ -1,12 +1,107 @@
 import type { Movie } from '../../models/Movie.js';
+import type { MovieEvent } from '../../models/MovieEvent.js';
 import { DateTime } from 'luxon';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { Client } from 'discord.js';
 import { initAttendanceTracking, finaliseAttendance, getActiveVoiceMemberIds } from './MovieAttendance.js';
 import { SchedulerStatusReporter } from '../../core/services/SchedulerStatusReporter.js';
 import { resolveGuildContext } from './MovieLocalSelector.js';
+import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
 
-let autoEndTimeout: NodeJS.Timeout | null = null;
+const autoEndTimeouts = new Map<string, NodeJS.Timeout>();
+
+function getAutoEndTimerKey(guildId: string | null | undefined): string {
+    return guildId && guildId.trim() ? guildId : 'global';
+}
+
+function getDateValue(value: unknown): Date | null {
+    if (value instanceof Date) return value;
+    if (!value) return null;
+
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (typeof maybeTimestamp.toDate === 'function') {
+        return maybeTimestamp.toDate();
+    }
+
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    return null;
+}
+
+function getStartMillis(event: MovieEvent): number {
+    const start = getDateValue(event.startTime);
+    return start ? start.getTime() : 0;
+}
+
+function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
+    if (!movie) return true;
+    const id = (movie.id || '').trim().toLowerCase();
+    const title = (movie.title || '').trim().toLowerCase();
+    if (title && title !== 'tbd') return false;
+    if (id && id !== 'tbd') return false;
+    return title === '' || title === 'tbd' || id === 'tbd';
+}
+
+function getMostRecentlySelectedUnwatchedMovie(movies: Movie[]): Movie | null {
+    const selectedUnwatched = movies
+        .filter((movie) => !movie.watched && movie.selectedAt)
+        .map((movie) => {
+            const selectedAt = getDateValue(movie.selectedAt);
+            return selectedAt ? { movie, selectedAt } : null;
+        })
+        .filter((entry): entry is { movie: Movie; selectedAt: Date } => entry !== null)
+        .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
+
+    return selectedUnwatched[0]?.movie ?? null;
+}
+
+async function resolveEventToFinish(
+    services: ServiceContainer,
+    targetEventId?: string
+): Promise<MovieEvent | null> {
+    const movieRepo = services.repos.movieRepo;
+    if (!movieRepo) return null;
+
+    if (typeof movieRepo.getAllEvents !== 'function') {
+        return movieRepo.getActiveEvent();
+    }
+
+    const allEvents = await movieRepo.getAllEvents();
+    const activeEvents = allEvents.filter((event) => !event.completed);
+    if (!activeEvents.length) return null;
+
+    if (targetEventId) {
+        const matched = activeEvents.find((event) => event.id === targetEventId);
+        if (matched) return matched;
+    }
+
+    const now = Date.now();
+    const startedEvents = activeEvents.filter((event) => getStartMillis(event) <= now);
+    const candidates = startedEvents.length ? startedEvents : activeEvents;
+
+    candidates.sort((a, b) => getStartMillis(b) - getStartMillis(a));
+    return candidates[0] ?? null;
+}
+
+export function clearScheduledMovieAutoEnd(guildId?: string): void {
+    if (!guildId) {
+        for (const timeout of autoEndTimeouts.values()) {
+            clearTimeout(timeout);
+        }
+        autoEndTimeouts.clear();
+        return;
+    }
+
+    const key = getAutoEndTimerKey(guildId);
+    const timeout = autoEndTimeouts.get(key);
+    if (timeout) {
+        clearTimeout(timeout);
+        autoEndTimeouts.delete(key);
+    }
+}
 
 async function notifySubmitterMovieEnded(client: Client, addedBy: string, finishedMovie: Movie, remainingSlots: number, services: ServiceContainer) {
     try {
@@ -27,7 +122,12 @@ async function notifySubmitterMovieEnded(client: Client, addedBy: string, finish
 }
 
 // Marks the current movie night as completed and archives it
-export async function finishMovieNight(endedBy: string, services: ServiceContainer, client: Client): Promise<{ success: boolean; message: string; finishedMovie?: Movie }> {
+export async function finishMovieNight(
+    endedBy: string,
+    services: ServiceContainer,
+    client: Client,
+    targetEventId?: string
+): Promise<{ success: boolean; message: string; finishedMovie?: Movie }> {
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
         console.error('[MovieLifecycle] Movie repository not found.');
@@ -35,40 +135,51 @@ export async function finishMovieNight(endedBy: string, services: ServiceContain
     }
 
     try {
-        // Retrieve latest active event
-        const latestEvent = await movieRepo.getActiveEvent();
+        clearScheduledMovieAutoEnd(services.guildId);
+
+        const latestEvent = await resolveEventToFinish(services, targetEventId);
         if (!latestEvent) {
             return { success: false, message: 'No active movie event found to end.' };
         }
 
-        const currentMovie = latestEvent.movie;
-        if (!currentMovie) {
-            return { success: false, message: 'No movie is currently active.' };
+        const allMovies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
+        const eventMovie = latestEvent.movie ? normaliseFirestoreDates(latestEvent.movie) : null;
+        const movieFromDb =
+            eventMovie?.id
+                ? allMovies.find((movie) => movie.id === eventMovie.id) ?? null
+                : null;
+        const selectedMovie = getMostRecentlySelectedUnwatchedMovie(allMovies);
+        const resolvedMovie = movieFromDb ?? selectedMovie ?? (!isPlaceholderMovie(eventMovie) ? eventMovie : null);
+
+        let finishedMovie: Movie | undefined;
+        if (resolvedMovie) {
+            finishedMovie = {
+                ...resolvedMovie,
+                watched: true,
+                watchedAt: new Date(),
+                selectedAt: undefined,
+                selectedBy: undefined,
+            };
+            await movieRepo.upsertMovie(finishedMovie);
+            console.log(`[MovieLifecycle] Movie night ended by ${endedBy}: ${finishedMovie.title}`);
+        } else {
+            console.warn(
+                `[MovieLifecycle] Movie night ended by ${endedBy}, but no selected movie record could be resolved for event ${latestEvent.id}.`
+            );
         }
 
-        // Mark movie as watched in Firestore
-        const finishedMovie: Movie = {
-            ...currentMovie,
-            watched: true,
-            watchedAt: new Date(),
-        };
-        await movieRepo.upsertMovie(finishedMovie);
-
-        // Update event as completed
         await movieRepo.createMovieEvent({
             ...latestEvent,
             completed: true,
             completedAt: new Date(),
             hostedBy: latestEvent.hostedBy,
-            movie: finishedMovie,
+            movie: finishedMovie ?? latestEvent.movie,
         });
 
-        console.log(`[MovieLifecycle] Movie night ended by ${endedBy}: ${finishedMovie.title}`);
-
-        if (finishedMovie.addedBy) {
+        if (finishedMovie?.addedBy) {
             try {
-                const allMovies = await movieRepo.getAllMovies();
-                const userMovies = allMovies.filter(m => m.addedBy === finishedMovie.addedBy && !m.watched);
+                const refreshedMovies = await movieRepo.getAllMovies();
+                const userMovies = refreshedMovies.filter(m => m.addedBy === finishedMovie.addedBy && !m.watched);
                 const remainingSlots = Math.max(0, 3 - userMovies.length);
 
                 await notifySubmitterMovieEnded(client, finishedMovie.addedBy, finishedMovie, remainingSlots, services);
@@ -80,10 +191,21 @@ export async function finishMovieNight(endedBy: string, services: ServiceContain
         const attendees = await finaliseAttendance(services);
         console.log(`[MovieLifecycle] Attendance tracking complete: ${attendees.length} attendees.`);
 
+        const message = finishedMovie
+            ? `The movie night for **${finishedMovie.title}** has ended and been archived.`
+            : 'The movie night has ended, but no selected movie was found to archive.';
+
+        if (finishedMovie) {
+            return {
+                success: true,
+                message,
+                finishedMovie,
+            };
+        }
+
         return {
             success: true,
-            message: `The movie night for **${finishedMovie.title}** has ended.`,
-            finishedMovie,
+            message,
         };
     } catch (error) {
         console.error('[MovieLifecycle] Failed to finish movie night:', error);
@@ -100,6 +222,7 @@ export async function scheduleMovieAutoEnd(services: ServiceContainer, startTime
 
     const startDateTime = DateTime.fromISO(startTimeISO);
     const latestEvent = await movieRepo.getActiveEvent();
+    const scheduledEventId = latestEvent?.id;
     if (!latestEvent) {
         console.warn("[MovieLifecycle] No active movie event found; skipping attendance tracking init.");
     } else {
@@ -123,19 +246,22 @@ export async function scheduleMovieAutoEnd(services: ServiceContainer, startTime
     const endTime = startDateTime.plus({ minutes: runtimeMinutes + bufferMinutes });
     const now = DateTime.utc();
     const msUntilEnd = endTime.diff(now).as('milliseconds');
+    const timerKey = getAutoEndTimerKey(services.guildId);
 
     if (msUntilEnd <= 0) {
         console.warn("[MovieLifecycle] Movie auto-end time is in the past. Skipping.");
         return;
     }
 
-    if (autoEndTimeout) {
-        clearTimeout(autoEndTimeout)
+    const existingTimeout = autoEndTimeouts.get(timerKey);
+    if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        autoEndTimeouts.delete(timerKey);
     }
 
-    autoEndTimeout = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
         console.log("[MovieLifecycle] Auto-ending movie night based on runtime.");
-        const result = await finishMovieNight('auto', services, client);
+        const result = await finishMovieNight('auto', services, client, scheduledEventId);
 
         if (result.success && result.finishedMovie) {
             try {
@@ -153,9 +279,9 @@ export async function scheduleMovieAutoEnd(services: ServiceContainer, startTime
                     const channel = await guildObj.channels.fetch(movieChannelId);
                     if (channel?.isTextBased()) {
                         await channel.send({
-                            content: `🎞️ **${result.finishedMovie.title}** has finished and has now been removed from the list. Thanks for watching!`
+                            content: `🎞️ **${result.finishedMovie.title}** has finished and has now been archived from the active list. Thanks for watching!`
                         });
-                        console.log(`[MovieLifecycle] Sent end-of-night message for ${result.finishedMovie}`);
+                        console.log(`[MovieLifecycle] Sent end-of-night message for ${result.finishedMovie.title}`);
                     } else {
                         console.warn(`[MovieLifecycle] Configured movie night channel is not text-based: ${movieChannelId}`);
                     }
@@ -166,7 +292,10 @@ export async function scheduleMovieAutoEnd(services: ServiceContainer, startTime
                 console.warn("[MovieLifecycle] Failed to send end-of-night message:", err);
             }
         }
+
+        autoEndTimeouts.delete(timerKey);
     }, msUntilEnd);
+    autoEndTimeouts.set(timerKey, timeout);
 
     console.log(`[MovieLifecycle] Auto-end scheduled in ${Math.round(msUntilEnd / 1000)}s at ${endTime.toISO()}`);
     SchedulerStatusReporter.onNewTrigger('Movie Auto-End', endTime.toJSDate());

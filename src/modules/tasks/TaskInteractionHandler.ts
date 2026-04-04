@@ -9,6 +9,8 @@ import {
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { setupService } from "../../core/services/SetupService.js";
+import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
+import { hasActiveTaskPollCollector, handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -16,15 +18,50 @@ export async function handleTaskInteraction(
     services: ServiceContainer
 ) {
     if (interaction.isButton()) {
+        if (interaction.customId.startsWith("vote_")) {
+            // Live polls use in-memory collectors. Persisted fallback handles post-restart votes.
+            if (hasActiveTaskPollCollector(interaction.message.id)) {
+                return;
+            }
+
+            await handleTaskPollVoteInteraction(interaction, services);
+            return;
+        }
+
         if (interaction.customId.startsWith("task-feedback|")) {
             return handleTaskFeedback(interaction, services.tasks.repository);
+        }
+
+        if (interaction.customId.startsWith("task-leaderboard|")) {
+            const [, view] = interaction.customId.split("|");
+            const targetView = view === "periodic" ? "periodic" : "lifetime";
+            try {
+                await interaction.deferUpdate();
+                const payload = await buildLeaderboardMessage(services, targetView, interaction.user.id, {
+                    client: interaction.client,
+                    guild: interaction.guild,
+                });
+                await interaction.editReply(payload);
+            } catch (err) {
+                try {
+                    await interaction.editReply({
+                        content: "Leaderboard initialisation failed. Please use /reportbug if it continues.",
+                        components: [],
+                    });
+                } catch (updateErr) {
+                    console.warn("[TaskInteractions] Failed to update leaderboard interaction:", updateErr);
+                }
+            }
+            return;
         }
 
         if (interaction.customId.startsWith("task-submit-")) {
             await handleSubmitButton(interaction, services);
         } else if (
             interaction.customId.startsWith("approve_") ||
-            interaction.customId.startsWith("reject_")
+            interaction.customId.startsWith("reject_") ||
+            interaction.customId.startsWith("review-confirm|") ||
+            interaction.customId.startsWith("review-cancel|")
         ) {
             await handleAdminButton(interaction, services);
         }
@@ -65,6 +102,17 @@ export async function handleTaskInteraction(
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith("select-task-")) {
             await handleTaskSelect(interaction, services);
+            return;
+        }
+
+        if (interaction.customId === "tasksetup_period_events") {
+            const userId = interaction.user.id;
+            const selection = interaction.values[0];
+            if (selection) {
+                setupService.setSelection("task", userId, "taskPeriodEvents", selection);
+            }
+            await interaction.deferUpdate();
+            return;
         }
     }
 

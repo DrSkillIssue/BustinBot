@@ -11,6 +11,8 @@ function createBaseRepo() {
             task: { id: "task-1", taskName: "Defeat {amount} dragons" },
             selectedAmount: 10,
         }),
+        getLatestTaskEvent: vi.fn().mockResolvedValue(null),
+        getTaskEventsBetween: vi.fn().mockResolvedValue([]),
         createSubmission: vi.fn().mockResolvedValue(undefined),
         getSubmissionById: vi.fn(),
         getSubmissionByUserAndTask: vi.fn().mockResolvedValue(null),

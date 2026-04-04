@@ -13,6 +13,7 @@ import fs from "fs";
 import path from "path";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { packageVersion } from "../../../utils/version.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
 interface Announcement {
     title: string;
@@ -124,11 +125,15 @@ const announce: Command = {
             ...featureSections,
         ];
 
+        const suppressMentions = services
+            ? await isMentionSuppressed(services.guilds, interaction.guildId)
+            : false;
+
         // Send announcement
-        await channel.send({
-            flags: MessageFlags.IsComponentsV2,
+        await channel.send(withSuppressedMentions({
+            flags: MessageFlags.IsComponentsV2 as MessageFlags.IsComponentsV2,
             components,
-        });
+        }, suppressMentions));
 
         await interaction.editReply({
             content: `Announcement for **v${currentVersion}** posted in <#${channelId}>.`,

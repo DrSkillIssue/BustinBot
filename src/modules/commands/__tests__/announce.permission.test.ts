@@ -13,7 +13,7 @@ vi.mock('fs', async (importOriginal) => {
 vi.mock('../../../utils/version.js', () => ({ packageVersion: '2.0.0' }));
 
 const fs = await import('fs');
-const announce = (await import('../core/announce.js')).default;
+const announce = (await import('../admin/announce.js')).default;
 
 function createInteraction() {
   return {

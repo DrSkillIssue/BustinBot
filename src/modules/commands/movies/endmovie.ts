@@ -32,11 +32,11 @@ const endmovie: Command = {
 
         if (result.finishedMovie && channel) {
             await channel.send({
-                content: `🎞️ Movie night has ended! Thanks for watching!`,
+                content: `🎞️ Movie night has ended. Thanks for watching **${result.finishedMovie.title}**!`,
             });
         }
 
-        await interaction.editReply("Movie night successfully ended and archived.");
+        await interaction.editReply(result.message);
     }
 };
 

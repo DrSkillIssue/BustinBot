@@ -6,6 +6,7 @@ import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 async function resolveTextChannel(client: Client, channelId?: string | null): Promise<TextChannel | null> {
     if (!channelId) return null;
@@ -64,15 +65,16 @@ export async function postToAdminChannel(client: Client, submission: TaskSubmiss
     // Second message: screenshots as file uploads
     if (submission.screenshotUrls?.length > 0) {
         const filesToSend = submission.screenshotUrls.slice(0, 10);
+        const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
         const sentScreens = await channel.send({
-            content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:`,
+            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
             files: filesToSend
         });
         submission.screenshotMessage = sentScreens.id;
     }
 }
 
-export async function notifyUser(client: Client, submission: TaskSubmission) {
+export async function notifyUser(client: Client, submission: TaskSubmission, streakLine?: string) {
     const user = await client.users.fetch(submission.userId);
     if (!user) return;
 
@@ -92,7 +94,7 @@ export async function notifyUser(client: Client, submission: TaskSubmission) {
         const plural = rollCount === 1 ? '' : 's';
 
         await user.send(
-            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier** (${rollCount} prize roll${plural})!`
+            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier** (${rollCount} prize roll${plural})!${streakLine ?? ""}`
         );
     } else if (submission.status === SubmissionStatus.Rejected) {
         const reason = submission.rejectionReason ?? 'No reason provided.';
@@ -127,10 +129,11 @@ export async function archiveSubmission(client: Client, submission: TaskSubmissi
 
     if (submission.screenshotUrls?.length > 0) {
         const filesToArchive = submission.screenshotUrls.slice(0, 10);
-        await archive.send({
+        const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+        await archive.send(withSuppressedMentions({
             content: `Archived screenshots for <@${submission.userId}>:`,
             files: filesToArchive
-        });
+        }, suppressMentions));
     }
 }
 

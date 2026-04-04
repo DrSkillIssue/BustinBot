@@ -1,8 +1,11 @@
-import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, ActionRowBuilder } from 'discord.js';
+import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import { handleUpdateTaskModal } from './HandleUpdateTaskModal.js';
+import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from './TaskLeaderboards.js';
+import { applyTaskMilestoneRoles } from './TaskMilestones.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -40,10 +43,10 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
 
     try {
         await interaction.user.send(
-            `Please upload your screenshot for **${taskName}** and include any notes/comments in the same message.`
+            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`
         );
         await interaction.editReply({
-            content: `Check your DMs to submit your screenshot for **${taskName}**!`,
+            content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
         });
     } catch {
         services.tasks.consumePendingTask(userId);
@@ -136,54 +139,94 @@ export async function handleDirectMessage(message: Message, client: Client, serv
 // STEP 4: Admin clicks Approve/Reject
 export async function handleAdminButton(interaction: ButtonInteraction, services: ServiceContainer) {
     const customId = interaction.customId;
-    let action: string | undefined;
-    let submissionId: string | undefined;
-    let maybeTier: string | undefined;
 
-    if (customId.startsWith('reject_')) {
-        action = 'reject';
-        submissionId = customId.slice('reject_'.length).trim();
-    } else if (customId.startsWith('approve_')) {
-        action = 'approve';
-        const parts = customId.split('_');
-        maybeTier = parts[1];
-        submissionId = parts.slice(2).join('_').trim();
-    }
-
-    if (!submissionId) {
-        await interaction.reply({ content: "Submission ID missing from interaction.", flags: 1 << 6 });
-        return;
-    }
-    if (!action) {
-        await interaction.reply({ content: "Unknown task action.", flags: 1 << 6 });
+    // Second-step cancel action from confirmation prompt
+    if (customId.startsWith('review-cancel|')) {
+        await interaction.update({
+            content: 'Review action cancelled. No changes were made.',
+            components: [],
+        });
         return;
     }
 
-    const reviewerId = interaction.user.id;
+    // Second-step confirm action from confirmation prompt
+    if (customId.startsWith('review-confirm|')) {
+        const parts = customId.split('|');
+        const confirmAction = parts[1];
+        const maybeTier = parts[2];
+        const submissionId = parts.slice(3).join('|').trim();
 
-    if (action === 'reject') {
-        const modal = new ModalBuilder()
-            .setCustomId(`reject_reason_${submissionId}`)
-            .setTitle('Reject Submission')
-            .addComponents(
-                new ActionRowBuilder<TextInputBuilder>().addComponents(
-                    new TextInputBuilder()
-                        .setCustomId('reason')
-                        .setLabel('Rejection Reason')
-                        .setStyle(TextInputStyle.Paragraph)
-                        .setRequired(false)
-                )
-            );
-        await interaction.showModal(modal);
-        return;
-    }
+        if (!confirmAction || !submissionId) {
+            await interaction.update({
+                content: 'Invalid confirmation payload. Please try again.',
+                components: [],
+            });
+            return;
+        }
 
-    // Handle tier approvals
-    const tier = maybeTier as 'bronze' | 'silver' | 'gold';
-    const validTiers = ['bronze', 'silver', 'gold'];
+        if (confirmAction === 'reject') {
+            const modal = new ModalBuilder()
+                .setCustomId(`reject_reason_${submissionId}`)
+                .setTitle('Reject Submission')
+                .addComponents(
+                    new ActionRowBuilder<TextInputBuilder>().addComponents(
+                        new TextInputBuilder()
+                            .setCustomId('reason')
+                            .setLabel('Rejection Reason')
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setRequired(false)
+                    )
+                );
+            await interaction.showModal(modal);
+            return;
+        }
 
-    if (action === 'approve' && validTiers.includes(tier)) {
+        const tier = maybeTier as 'bronze' | 'silver' | 'gold';
+        const validTiers = ['bronze', 'silver', 'gold'];
+
+        if (!validTiers.includes(tier)) {
+            await interaction.update({
+                content: 'Invalid tier selected for approval.',
+                components: [],
+            });
+            return;
+        }
+
+        // Check current submission status to prevent race condition on concurrent approvals
+        const taskRepo = services.repos.taskRepo;
+        if (!taskRepo) {
+            await interaction.update({
+                content: 'Task repository unavailable.',
+                components: [],
+            });
+            return;
+        }
+
+        const currentSubmission = await taskRepo.getSubmissionById(submissionId);
+        if (!currentSubmission) {
+            await interaction.update({
+                content: 'Submission not found.',
+                components: [],
+            });
+            return;
+        }
+
+        // Race condition guard: reject if already approved at same or higher tier
+        const tierOrder = { bronze: 1, silver: 2, gold: 3 };
+        const currentTierLevel = tierOrder[currentSubmission.status as keyof typeof tierOrder] ?? 0;
+        const requestedTierLevel = tierOrder[tier];
+
+        if (currentTierLevel >= requestedTierLevel) {
+            await interaction.update({
+                content: `⚠️ This submission is already approved at ${currentSubmission.status === 'pending' ? 'pending' : currentSubmission.status} tier or higher. Another admin may have processed this.`,
+                components: [],
+            });
+            return;
+        }
+
         await interaction.deferReply({ flags: 1 << 6 });
+
+        const reviewerId = interaction.user.id;
 
         try {
             const result = await services.tasks.updateSubmissionTier(
@@ -221,11 +264,26 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
                 console.warn("[Stats] UserRepo unavailable; skipping task completion increment.");
             }
 
+            const points = getTierPoints(tier);
+            const previousPoints = result.previousTierPoints ?? 0;
+            const deltaPoints = Math.max(0, points - previousPoints);
+
+            if (deltaPoints > 0) {
+                await incrementLifetimePoints(services, result.userId, deltaPoints);
+                await incrementPeriodicPoints(services, result.userId, deltaPoints, result.taskEventId, tier);
+            }
+
+            await applyTaskMilestoneRoles(interaction.client, services, result.userId);
+
             const channel = interaction.channel as TextChannel;
             const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
-            await channel.send(
-                `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}).`
-            );
+            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+            const approvalMessage = `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}).`;
+            if (suppressMentions) {
+                await channel.send(withSuppressedMentions({ content: approvalMessage }, true));
+            } else {
+                await channel.send(approvalMessage);
+            }
 
             await interaction.editReply({
                 content: `✅ Submission approved for **${formattedTier} tier** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}) and archived.`
@@ -234,6 +292,77 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             console.error('[TaskInteractions] Tier approval failed:', err);
             await interaction.editReply({ content: "❌ Failed to process tier approval. Check logs for details." });
         }
+
+        return;
+    }
+
+    let action: string | undefined;
+    let submissionId: string | undefined;
+    let maybeTier: string | undefined;
+
+    if (customId.startsWith('reject_')) {
+        action = 'reject';
+        submissionId = customId.slice('reject_'.length).trim();
+    } else if (customId.startsWith('approve_')) {
+        action = 'approve';
+        const parts = customId.split('_');
+        maybeTier = parts[1];
+        submissionId = parts.slice(2).join('_').trim();
+    }
+
+    if (!submissionId) {
+        await interaction.reply({ content: "Submission ID missing from interaction.", flags: 1 << 6 });
+        return;
+    }
+    if (!action) {
+        await interaction.reply({ content: "Unknown task action.", flags: 1 << 6 });
+        return;
+    }
+
+    const reviewerId = interaction.user.id;
+
+    if (action === 'reject') {
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`review-confirm|reject||${submissionId}`)
+                .setLabel('Confirm Reject')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`review-cancel|${submissionId}`)
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({
+            content: 'Are you sure you want to reject this submission?',
+            components: [row],
+            flags: 1 << 6,
+        });
+        return;
+    }
+
+    // Handle tier approvals
+    const tier = maybeTier as 'bronze' | 'silver' | 'gold';
+    const validTiers = ['bronze', 'silver', 'gold'];
+
+    if (action === 'approve' && validTiers.includes(tier)) {
+        const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`review-confirm|approve|${tier}|${submissionId}`)
+                .setLabel(`Confirm ${formattedTier}`)
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`review-cancel|${submissionId}`)
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({
+            content: `Are you sure you want to approve this submission for **${formattedTier}** tier?`,
+            components: [row],
+            flags: 1 << 6,
+        });
 
         return;
     }
@@ -273,9 +402,13 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
         try {
             const adminChannel = await interaction.client.channels.fetch(verificationChannelId);
             if (adminChannel && adminChannel.isTextBased()) {
-                await (adminChannel as TextChannel).send(
-                    `❌ <@${reviewerId}> rejected submission for **${updated?.taskName ?? `Task ${updated?.taskEventId}`}** by <@${updated?.userId}>. Reason: ${reason || "No reason provided"}. Submission moved to archive channel.`
-                );
+                const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+                const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${updated?.taskName ?? `Task ${updated?.taskEventId}`}** by <@${updated?.userId}>. Reason: ${reason || "No reason provided"}. Submission moved to archive channel.`;
+                if (suppressMentions) {
+                    await (adminChannel as TextChannel).send(withSuppressedMentions({ content: rejectionMessage }, true));
+                } else {
+                    await (adminChannel as TextChannel).send(rejectionMessage);
+                }
             }
         } catch (err) {
             console.warn(`[TaskInteractions] Failed to notify task admins in channel ${verificationChannelId}:`, err);

@@ -1,21 +1,10 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { config } from 'dotenv';
 import path from 'path';
-import { handleMessage } from './core/events/onMessage.js';
-import { handleInteraction } from './core/events/onInteraction.js';
-import { handleDirectMessage } from './modules/tasks/TaskInteractions.js';
-import { handleTaskInteraction } from './modules/tasks/TaskInteractionHandler.js';
 import { loadCommands } from './core/services/CommandService.js';
-import { registerGuildCommands } from './utils/registerCommands.js';
-import { scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
-import { createServiceContainer } from './core/services/ServiceFactory.js';
-import { GuildRepository } from './core/database/GuildRepo.js';
-import { initTaskScheduler } from './modules/tasks/TaskScheduler.js';
-import { handleMovieInteraction } from './modules/movies/MovieInteractionHandler.js';
-import { initMovieScheduler } from './modules/movies/MovieScheduler.js';
-import { SchedulerStatusReporter } from './core/services/SchedulerStatusReporter.js';
 import { getDirname } from './utils/PathUtils.js';
 const dirname = getDirname(import.meta.url);
+const isDryRun = process.argv.includes('--dryrun') || process.argv.includes('--dry-run');
 
 // Load environment variables (only for global secrets)
 config();
@@ -39,6 +28,39 @@ const client = new Client({
     const commands = await loadCommands(path.join(dirname, 'modules', 'commands'));
     console.log(`Loaded ${commands.size} commands.`);
 
+    if (isDryRun) {
+        console.log('[DryRun] Startup preflight passed. Skipping Firestore and Discord login.');
+        return;
+    }
+
+    const [
+        { handleMessage },
+        { handleInteraction },
+        { handleDirectMessage },
+        { handleTaskInteraction },
+        { registerGuildCommands },
+        { scheduleActivePollClosure },
+        { createServiceContainer },
+        { GuildRepository },
+        { initTaskScheduler },
+        { handleMovieInteraction },
+        { initMovieScheduler },
+        { SchedulerStatusReporter },
+    ] = await Promise.all([
+        import('./core/events/onMessage.js'),
+        import('./core/events/onInteraction.js'),
+        import('./modules/tasks/TaskInteractions.js'),
+        import('./modules/tasks/TaskInteractionHandler.js'),
+        import('./utils/registerCommands.js'),
+        import('./modules/movies/MoviePollScheduler.js'),
+        import('./core/services/ServiceFactory.js'),
+        import('./core/database/GuildRepo.js'),
+        import('./modules/tasks/TaskScheduler.js'),
+        import('./modules/movies/MovieInteractionHandler.js'),
+        import('./modules/movies/MovieScheduler.js'),
+        import('./core/services/SchedulerStatusReporter.js'),
+    ]);
+
     const guildRepo = new GuildRepository();
     const guildConfigs = await guildRepo.getAllGuilds();
     console.log(`Found ${guildConfigs.length} guild(s) in Firestore.`);
@@ -52,7 +74,10 @@ const client = new Client({
         return servicesByGuild.get(guildId)!;
     };
 
-    const primaryGuildId = guildConfigs[0]?.id ?? process.env.DISCORD_GUILD_ID!;
+    const primaryGuildId = guildConfigs[0]?.id ?? process.env.DISCORD_GUILD_ID ?? null;
+    if (!primaryGuildId) {
+        throw new Error('No guild ID available. Set DISCORD_GUILD_ID or ensure at least one guild exists in Firestore.');
+    }
     const isDevMode = process.env.BOT_MODE === 'dev';
     const enableSync = process.env.ENABLE_GUILD_COMMAND_SYNC === 'true' || isDevMode;
 
@@ -155,5 +180,5 @@ const client = new Client({
         throw new Error('No Discord bot token available. Check DISCORD_TOKEN_LIVE / DISCORD_TOKEN_DEV.');
     }
 
-    client.login(loginToken);
+    await client.login(loginToken);
 })();

@@ -34,6 +34,7 @@ export async function pickRandomMovie(services: ServiceContainer): Promise<Movie
 
     try {
         let movies = await movieRepo.getAllMovies();
+        movies = movies.filter((movie) => !movie.watched);
         movies = injectMockUsers(movies);
         if (!movies.length) return null;
 

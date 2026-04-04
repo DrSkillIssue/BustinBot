@@ -45,6 +45,11 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
             taskChannel: selections.taskChannel ?? "",
             taskVerification: selections.taskVerification ?? "",
         },
+        taskSettings: selections.taskPeriodEvents
+            ? {
+                  periodEvents: Number(selections.taskPeriodEvents),
+              }
+            : undefined,
         setupComplete: {
             task: true,
         }

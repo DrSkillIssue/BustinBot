@@ -4,10 +4,11 @@ import { createMovieNightEmbed } from "./MovieEmbeds.js";
 import type { Movie } from "../../models/Movie.js";
 import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import { scheduleMovieReminders, getPendingReminders } from "./MovieReminders.js";
-import { scheduleMovieAutoEnd } from "./MovieLifecycle.js";
+import { scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } from "./MovieLifecycle.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import { registerVoiceListeners } from "./MovieAttendance.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
     if (!guildId) return "UTC";
@@ -170,9 +171,29 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const voiceChannelId = guildConfig.channels?.movieVC;
     const role = movieRoleId ? guild.roles.cache.get(movieRoleId) : null;
     const mention = role ? `<@&${role.id}>` : '';
+    const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+
+    // A newly scheduled movie night supersedes any prior auto-end timer.
+    clearScheduledMovieAutoEnd(services.guildId);
 
     if (!voiceChannelId) {
         console.warn("[MovieScheduler] No movie voice channel configured; attendance tracking will be disabled for this event.");
+    }
+
+    // Mark any previously active events as completed so lifecycle commands operate on a single active event.
+    const existingEvents = await movieRepo.getAllEvents();
+    const activeEvents = existingEvents.filter((event) => !event.completed);
+    if (activeEvents.length) {
+        const completedAt = new Date();
+        await Promise.all(
+            activeEvents.map((event) =>
+                movieRepo.createMovieEvent({
+                    ...event,
+                    completed: true,
+                    completedAt,
+                })
+            )
+        );
     }
 
     // Prepare movie event record; announcement details filled after send
@@ -192,7 +213,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     let announcementMessageId: string | undefined;
     let announcementChannelId = baseEvent.channelId;
     if (movieChannel) {
-        const sent = await movieChannel.send({ content: mention, embeds: [embed] });
+        const sent = await movieChannel.send(withSuppressedMentions({ content: mention, embeds: [embed] }, suppressMentions));
         announcementMessageId = sent.id;
         announcementChannelId = sent.channelId;
     }

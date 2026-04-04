@@ -2,6 +2,23 @@ import type { Guild } from "../../models/Guild.js";
 import type { IGuildRepository } from "../database/interfaces/IGuildRepo.js";
 import { ChatInputCommandInteraction, Message, type RepliableInteraction } from "discord.js";
 
+const DEFAULT_TASK_MILESTONE_ROLES = [
+    { id: "task-participant", label: "Task Participant", roleId: "", requiredSubmissions: 5, enabled: true },
+    { id: "task-enthusiast", label: "Task Enthusiast", roleId: "", requiredSubmissions: 25, enabled: true },
+    { id: "task-expert", label: "Task Expert", roleId: "", requiredSubmissions: 50, enabled: true },
+    { id: "task-master", label: "Task Master", roleId: "", requiredSubmissions: 100, enabled: true },
+];
+
+const DEFAULT_TASK_SETTINGS = {
+    periodEvents: 4,
+    milestoneRoles: DEFAULT_TASK_MILESTONE_ROLES,
+    championRoles: {
+        first: true,
+        second: true,
+        third: true,
+    },
+};
+
 export class GuildService {
     private cache = new Map<string, Guild>();
 
@@ -19,6 +36,9 @@ export class GuildService {
 
     async update(guildId: string, data: Partial<Guild>): Promise<void> {
         const existing = this.cache.get(guildId);
+        const mentionSuppressedUntilMs =
+            data.mentionSuppressedUntilMs ??
+            existing?.mentionSuppressedUntilMs;
 
         const defaultRoles = {
             admin: process.env.ADMIN_ROLE_NAME || "BustinBot Admin",
@@ -26,6 +46,9 @@ export class GuildService {
             movieUser: "",
             taskAdmin: "",
             taskUser: "",
+            taskChampionFirst: "",
+            taskChampionSecond: "",
+            taskChampionThird: "",
         };
         const defaultChannels = {
             announcements: "",
@@ -37,6 +60,7 @@ export class GuildService {
             movieVC: "",
         };
         const defaultSetup = { core: false, movie: false, task: false };
+        const defaultTaskSettings = DEFAULT_TASK_SETTINGS;
 
         // Build merged base from existing (or defaults), then overlay *incoming* data.*
         const mergedBase: Omit<Guild, "updatedBy" | "updatedAt"> = {
@@ -58,7 +82,20 @@ export class GuildService {
                 ...(existing?.setupComplete ?? defaultSetup),
                 ...(data.setupComplete ?? {}),
             },
+            taskSettings: {
+                ...defaultTaskSettings,
+                ...(existing?.taskSettings ?? {}),
+                ...(data.taskSettings ?? {}),
+                championRoles: {
+                    ...defaultTaskSettings.championRoles,
+                    ...(existing?.taskSettings?.championRoles ?? {}),
+                    ...(data.taskSettings?.championRoles ?? {}),
+                },
+            },
             timezone: data.timezone ?? existing?.timezone ?? "UTC",
+            ...(mentionSuppressedUntilMs !== undefined
+                ? { mentionSuppressedUntilMs }
+                : {}),
         };
 
         const meta: Partial<Pick<Guild, "updatedBy" | "updatedAt">> = {};
@@ -80,6 +117,8 @@ export class GuildService {
         await this.repo.updateToggle(guildId, key, enabled, userId);
 
         const existing = this.cache.get(guildId);
+        const defaultTaskSettings = DEFAULT_TASK_SETTINGS;
+        const mentionSuppressedUntilMs = existing?.mentionSuppressedUntilMs;
 
         const toggles = {
             ...(existing?.toggles ?? {}),
@@ -100,6 +139,9 @@ export class GuildService {
                 movieUser: "",
                 taskAdmin: "",
                 taskUser: "",
+                taskChampionFirst: "",
+                taskChampionSecond: "",
+                taskChampionThird: "",
             },
             channels: existing?.channels ?? {
                 announcements: "",
@@ -110,7 +152,18 @@ export class GuildService {
                 movieNight: "",
                 movieVC: "",
             },
+            taskSettings: {
+                ...defaultTaskSettings,
+                ...(existing?.taskSettings ?? {}),
+                championRoles: {
+                    ...defaultTaskSettings.championRoles,
+                    ...(existing?.taskSettings?.championRoles ?? {}),
+                },
+            },
             setupComplete: existing?.setupComplete ?? { core: false, movie: false, task: false },
+            ...(mentionSuppressedUntilMs !== undefined
+                ? { mentionSuppressedUntilMs }
+                : {}),
             updatedBy: userId,
             updatedAt: new Date() as any,
         };

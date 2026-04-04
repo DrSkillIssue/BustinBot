@@ -3,6 +3,8 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
+import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
 const cancelmovie: Command = {
     name: 'cancelmovie',
@@ -55,6 +57,10 @@ const cancelmovie: Command = {
         let announcementHandled = false;
         let fallbackAnnouncementChannelId: string | undefined;
         const cancellationMessage = `❌ Movie night has been cancelled by <@${interaction.user.id}>.`;
+        const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+
+        clearScheduledMovieAutoEnd(services.guildId);
+        actions.push("Cleared movie auto-end timer");
 
         try {
             // Cancel active poll
@@ -76,6 +82,7 @@ const cancelmovie: Command = {
                                 content: `❌ This movie poll was cancelled by <@${interaction.user.id}>.`,
                                 embeds: [],
                                 components: [],
+                                ...(suppressMentions ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } } : {}),
                             });
                             actions.push("Poll message updated to show cancellation");
                         } else {
@@ -112,6 +119,7 @@ const cancelmovie: Command = {
                                 content: cancellationMessage,
                                 embeds: [],
                                 components: [],
+                                ...(suppressMentions ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } } : {}),
                             });
                             actions.push("Movie night announcement updated to show cancellation");
                             announcementHandled = true;
@@ -169,7 +177,7 @@ const cancelmovie: Command = {
             }
 
             if (targetChannel) {
-                await targetChannel.send({ content: cancellationMessage });
+                await targetChannel.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
             } else {
                 console.warn("[CancelMovie] Could not find movie night channel for cancellation notice.");
             }

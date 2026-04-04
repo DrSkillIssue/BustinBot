@@ -32,7 +32,7 @@ if (!fs.existsSync(".git")) {
 
 // --- Install dependencies ---
 console.log("📦 Installing dependencies...");
-run("npm ci --omit=dev", true);
+run("npm ci");
 
 // --- Clean old build ---
 console.log("🧹 Removing old dist folder...");
@@ -40,11 +40,14 @@ fs.rmSync("dist", { recursive: true, force: true });
 
 // --- Build the bot ---
 console.log("🏗️ Building TypeScript...");
-run("npm run build", true);
+run("npm run build");
 
 // --- Verify data folders ---
 if (!fs.existsSync("data")) console.warn("⚠️ Missing /data folder!");
 if (!fs.existsSync("assets")) console.warn("⚠️ Missing /assets folder!");
+if (!fs.existsSync("dist/index.js")) {
+  throw new Error("Build completed but dist/index.js was not found.");
+}
 
 // --- Launch ---
 console.log("🚀 Launching compiled bot...");

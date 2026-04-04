@@ -38,7 +38,7 @@ const removemovie: Command = {
 
        try {
             // Fetch all movies
-            const movies: Movie[] = await movieRepo.getAllMovies();
+            const movies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
 
             if (!movies.length) {
                 await interaction.editReply("The movie list is currently empty.");

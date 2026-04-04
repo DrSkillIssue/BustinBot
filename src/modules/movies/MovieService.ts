@@ -130,6 +130,17 @@ export async function removeMovieWithStats(movie: Movie, services: ServiceContai
         throw new Error("[MovieService] Missing movie repository.");
     }
 
+    if (movie.watched) {
+        await movieRepo.upsertMovie({
+            ...movie,
+            watched: true,
+            watchedAt: movie.watchedAt ?? new Date(),
+            selectedAt: undefined,
+            selectedBy: undefined,
+        });
+        return;
+    }
+
     await movieRepo.deleteMovie(movie.id);
 
     if (!movie.watched && userRepo) {

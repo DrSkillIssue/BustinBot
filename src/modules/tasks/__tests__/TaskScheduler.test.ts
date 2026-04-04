@@ -44,12 +44,13 @@ describe('TaskScheduler production schedules', () => {
         const fakeGetChannel = vi.fn().mockResolvedValue({ send: vi.fn() });
         initTaskScheduler(mockClient, mockServices, fakeGetChannel);
 
-        expect(scheduledTasks.length).toBe(3);
-        const [pollJob, taskJob, prizeJob] = scheduledTasks.map((task: any) => task.expression);
+        expect(scheduledTasks.length).toBe(5);
+        const expressions = scheduledTasks.map((task: any) => task.expression);
 
-        expect(pollJob).toBe('0 0 * * 0');
-        expect(taskJob).toBe('0 0 * * 1');
-        expect(prizeJob).toBe('0 0 * * 2');
+        expect(expressions).toContain('0 0 * * 0');
+        expect(expressions).toContain('0 0 * * 1');
+        expect(expressions.filter((expr: string) => expr === '0 0 * * 2')).toHaveLength(2);
+        expect(expressions).toContain('0 0 * * 3');
     });
 
     it("should only run prize draw callback on even weeks", async () => {
@@ -62,9 +63,7 @@ describe('TaskScheduler production schedules', () => {
 
         initTaskScheduler(mockClient, mockServices, fakeGetChannel, fakeGetWeek);
 
-        const prizeTask = scheduledTasks.find(
-            (task: any) => task.expression === "0 0 * * 2"
-        );
+        const prizeTask = scheduledTasks[2];
         expect(prizeTask).toBeDefined();
 
         fakeGetWeek.mockReturnValue(2);

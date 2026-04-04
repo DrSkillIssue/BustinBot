@@ -7,6 +7,8 @@ import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
+import { calculateTaskStreakSummary } from './TaskStreaks.js';
+import { getStatusPoints } from './TaskLeaderboards.js';
 
 const MAX_SCREENSHOTS = 10;
 
@@ -62,6 +64,7 @@ export class TaskService {
         if (!submission) return null;
 
         submission.screenshotUrls = screenshotUrls.slice(0, MAX_SCREENSHOTS);
+        submission.submittedAt = new Date();
 
         if (notes !== undefined) {
             submission.notes = notes;
@@ -156,11 +159,11 @@ export class TaskService {
         tier: 'bronze' | 'silver' | 'gold',
         reviewedBy: string,
         services: ServiceContainer
-    ): Promise<TaskSubmission | null> {
+    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints?: number }) | null> {
         const TIER_MAP = {
-            bronze: { status: SubmissionStatus.Bronze, rolls: 1 },
-            silver: { status: SubmissionStatus.Silver, rolls: 2 },
-            gold: { status: SubmissionStatus.Gold, rolls: 3 },
+            bronze: { status: SubmissionStatus.Bronze },
+            silver: { status: SubmissionStatus.Silver },
+            gold: { status: SubmissionStatus.Gold },
         } as const;
 
         const tierInfo = TIER_MAP[tier];
@@ -172,15 +175,16 @@ export class TaskService {
         // Retrieve any previous submission by the same user for this task
         const existing = await this.repo.getSubmissionByUserAndTask(submission.userId, submission.taskEventId);
 
-        const previousRolls = existing?.prizeRolls ?? 0;
-        if (previousRolls >= tierInfo.rolls) {
+        const previousTierPoints = getStatusPoints(existing?.status);
+        const nextTierPoints = getStatusPoints(tierInfo.status);
+        if (previousTierPoints >= nextTierPoints) {
             // Already equal or higher tier
             return null;
         }
 
         // Update submission details
         submission.status = tierInfo.status;
-        submission.prizeRolls = tierInfo.rolls;
+        submission.prizeRolls = 1;
         submission.reviewedBy = reviewedBy;
         submission.reviewedAt = new Date();
 
@@ -197,9 +201,26 @@ export class TaskService {
 
         await this.syncCompletedUsers(submission.taskEventId, submission.userId, true);
 
+        let streakLine: string | undefined;
+        try {
+            const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
+            streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
+
+            if (services.repos.userRepo) {
+                await services.repos.userRepo.updateUser(submission.userId, {
+                    taskStreak: streakSummary.currentStreak,
+                    longestTaskStreak: streakSummary.longestStreak,
+                });
+            } else {
+                console.warn(`[TaskService] UserRepo unavailable; skipping streak stat update for ${submission.userId}.`);
+            }
+        } catch (err) {
+            console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
+        }
+
         // Notify, archive, and update counters
         try {
-            await notifyUser(client, submission);
+            await notifyUser(client, submission, streakLine);
         } catch (err) {
             console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
         }
@@ -239,7 +260,10 @@ export class TaskService {
             }
         }
 
-        return submission;
+        if (streakLine) {
+            return { ...submission, streakLine, previousTierPoints };
+        }
+        return { ...submission, previousTierPoints };
     }
 
     async getPendingSubmission(

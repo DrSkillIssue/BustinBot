@@ -153,7 +153,7 @@ describe('notifyUser', () => {
             userId: 'user-1',
             status: SubmissionStatus.Bronze,
             taskName: 'Task',
-            prizeRolls: 2,
+            prizeRolls: 1,
         } as any);
 
         expect(client.users.fetch).toHaveBeenCalledWith('user-1');

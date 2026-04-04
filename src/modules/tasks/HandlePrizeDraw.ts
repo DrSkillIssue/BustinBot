@@ -3,12 +3,14 @@ import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.j
 import type { PrizeDraw } from '../../models/PrizeDraw.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import { TaskCategory } from '../../models/Task.js';
+import type { TaskSubmission } from '../../models/TaskSubmission.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import { buildPrizeDrawEmbed } from './TaskEmbeds.js';
 import { Client, TextChannel } from 'discord.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
+import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const DEFAULT_PERIOD_DAYS = parseInt(process.env.PRIZE_PERIOD_DAYS ?? '14');
 
@@ -19,6 +21,77 @@ function getPeriodRange(endDate: Date, days: number): [Date, Date] {
     start.setUTCDate(end.getUTCDate() - days + 1);
     start.setUTCHours(0, 0, 0, 0);
     return [start, end];
+}
+
+function isSubmissionApprovedLike(status: SubmissionStatus): boolean {
+    return (
+        status === SubmissionStatus.Approved ||
+        status === SubmissionStatus.Bronze ||
+        status === SubmissionStatus.Silver ||
+        status === SubmissionStatus.Gold
+    );
+}
+
+function parseDateInput(value: unknown): Date | null {
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+}
+
+function getMostRecentRolledDrawBeforeWindow(draws: PrizeDraw[], windowStart: Date): PrizeDraw | null {
+    const candidates = draws
+        .filter((draw) => !!draw.rolledAt)
+        .filter((draw) => {
+            const drawEnd = parseDateInput(draw.end);
+            return !!drawEnd && drawEnd.getTime() < windowStart.getTime();
+        })
+        .sort((a, b) => {
+            const aRolled = parseDateInput(a.rolledAt ?? null)?.getTime() ?? 0;
+            const bRolled = parseDateInput(b.rolledAt ?? null)?.getTime() ?? 0;
+            return bRolled - aRolled;
+        });
+
+    return candidates[0] ?? null;
+}
+
+async function getCarryOverSubmissions(
+    prizeRepo: IPrizeDrawRepository,
+    taskRepo: ITaskRepository,
+    currentWindowStart: Date
+): Promise<TaskSubmission[]> {
+    const draws = await prizeRepo.getAllPrizeDraws();
+    const previousDraw = getMostRecentRolledDrawBeforeWindow(draws, currentWindowStart);
+    if (!previousDraw) return [];
+
+    const previousDrawEnd = parseDateInput(previousDraw.end);
+    const previousDrawRolledAt = parseDateInput(previousDraw.rolledAt ?? null);
+    if (!previousDrawEnd || !previousDrawRolledAt) return [];
+
+    const previousEventIds = previousDraw.taskEventIds ?? [];
+    if (!previousEventIds.length) return [];
+
+    const previousEventSubmissions = await Promise.all(
+        previousEventIds.map((eventId) => taskRepo.getSubmissionsForTask(eventId))
+    );
+
+    return previousEventSubmissions
+        .flat()
+        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission))
+        .filter((submission) => isSubmissionApprovedLike(submission.status))
+        .filter((submission) => {
+            const submittedAt = parseDateInput(submission.submittedAt ?? null);
+            const reviewedAt = parseDateInput(submission.reviewedAt ?? null);
+
+            if (!submittedAt || !reviewedAt) return false;
+
+            const submittedBeforeOrAtPreviousWindowEnd = submittedAt.getTime() <= previousDrawEnd.getTime();
+            const reviewedAfterPreviousRoll = reviewedAt.getTime() > previousDrawRolledAt.getTime();
+
+            return submittedBeforeOrAtPreviousWindowEnd && reviewedAfterPreviousRoll;
+        });
 }
 
 export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository, taskRepo: ITaskRepository): Promise<PrizeDraw> {
@@ -44,48 +117,51 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         qualifyingEvents.map((event) => taskRepo.getSubmissionsForTask(event.id))
     );
 
-    const allSubmissions = submissionsPerEvent.flat();
+    const currentSubmissions = submissionsPerEvent
+        .flat()
+        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission));
+    const carryOverSubmissions = await getCarryOverSubmissions(prizeRepo, taskRepo, start);
 
-    const filtered = allSubmissions.filter(
-        (s) =>
-            s.status === SubmissionStatus.Approved ||
-            s.status === SubmissionStatus.Bronze ||
-            s.status === SubmissionStatus.Silver ||
-            s.status === SubmissionStatus.Gold
+    const filtered = [...currentSubmissions, ...carryOverSubmissions].filter((submission) =>
+        isSubmissionApprovedLike(submission.status)
     );
 
-    const TIER_ROLLS: Partial<Record<SubmissionStatus, number>> = {
+    const STATUS_RANK: Partial<Record<SubmissionStatus, number>> = {
         [SubmissionStatus.Approved]: 1,
         [SubmissionStatus.Bronze]: 1,
         [SubmissionStatus.Silver]: 2,
         [SubmissionStatus.Gold]: 3,
     };
+    const ROLLS_PER_SUBMISSION = 1;
 
     // Deduplicate submissions so a user only gets the highest tier per task
     const userBestSubmissions = new Map<string, typeof filtered[number]>();
     for (const submission of filtered) {
         const key = `${submission.userId}-${submission.taskEventId}`;
         const existing = userBestSubmissions.get(key);
-        const currentRolls = submission.prizeRolls ?? TIER_ROLLS[submission.status] ?? 0;
-        const existingRolls = existing ? (existing.prizeRolls ?? TIER_ROLLS[existing.status] ?? 0) : 0;
+        const currentRank = STATUS_RANK[submission.status] ?? 0;
+        const existingRank = existing ? STATUS_RANK[existing.status] ?? 0 : 0;
 
-        if (!existing || currentRolls >= existingRolls) {
+        if (!existing || currentRank >= existingRank) {
             userBestSubmissions.set(key, submission);
         }
     }
 
     const deduplicatedSubmissions = Array.from(userBestSubmissions.values());
+    const deduplicatedEventIds = Array.from(
+        new Set(
+            deduplicatedSubmissions
+                .map((submission) => submission.taskEventId)
+                .filter((eventId): eventId is string => typeof eventId === 'string' && eventId.length > 0)
+        )
+    );
+    const qualifyingEventIds = qualifyingEvents.map((event) => event.id);
 
     const participants: Record<string, number> = {};
     const entries: string[] = [];
     for (const submission of deduplicatedSubmissions) {
-        const rolls = submission.prizeRolls ?? TIER_ROLLS[submission.status] ?? 0;
-        if (rolls <= 0) continue;
-
-        participants[submission.userId] = (participants[submission.userId] || 0) + rolls;
-        for (let i = 0; i < rolls; i++) {
-            entries.push(submission.userId);
-        }
+        participants[submission.userId] = (participants[submission.userId] || 0) + ROLLS_PER_SUBMISSION;
+        entries.push(submission.userId);
     }
 
     const tierCounts = {
@@ -101,7 +177,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         start: start.toISOString(),
         end: end.toISOString(),
         snapshotTakenAt: new Date().toISOString(),
-        taskEventIds: Array.from(new Set(qualifyingEvents.map(event => event.id))),
+        taskEventIds: Array.from(new Set([...qualifyingEventIds, ...deduplicatedEventIds])),
         participants,
         entries,
         totalEntries,
@@ -181,6 +257,7 @@ export async function announcePrizeDrawWinner(
     let mention = '';
     const guild = await client.guilds.fetch(guildId);
     const guildName = guild.name;
+    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? guild.roles.cache.get(roleId) : null;
     if (role) {
@@ -189,9 +266,21 @@ export async function announcePrizeDrawWinner(
         console.warn('[PrizeDraw] Task user role not configured or not found.');
     }
 
+    const fallbackWinner = snapshot.winnerId || 'Unknown User';
+    let winnerUsername = fallbackWinner;
+    try {
+        const winnerUser = await client.users.fetch(snapshot.winnerId);
+        winnerUsername = winnerUser?.username ?? fallbackWinner;
+    } catch (err) {
+        console.warn(`[PrizeDraw] Failed to fetch winner username for ${snapshot.winnerId}:`, err);
+    }
+
+    // Use the count of unique task completions (deduplicated submissions)
+    const totalUniqueCompletions = Object.values(snapshot.participants).reduce((sum, count) => sum + count, 0);
+    
     const embedData = buildPrizeDrawEmbed(
-        snapshot.winnerId,
-        snapshot.totalEntries,
+        winnerUsername,
+        totalUniqueCompletions,
         Object.keys(snapshot.participants).length,
         snapshot.start,
         snapshot.end,
@@ -218,7 +307,11 @@ export async function announcePrizeDrawWinner(
         return false;
     }
 
-    await channel.send(`${mention}`);
+    if (suppressMentions) {
+        await channel.send(withSuppressedMentions({ content: `${mention}` }, true));
+    } else {
+        await channel.send(`${mention}`);
+    }
     await channel.send({ ...embedData });
     console.log(`[PrizeDraw] Winner embed sent to #${channel.name}`);
 

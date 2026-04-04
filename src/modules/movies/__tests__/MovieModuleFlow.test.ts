@@ -96,6 +96,7 @@ describe("Movie module flows", () => {
         deferred: false,
         replied: false,
         isButton: () => false,
+        reply: vi.fn().mockResolvedValue(undefined),
         deferReply: vi.fn().mockResolvedValue(undefined),
         editReply: vi.fn().mockResolvedValue(undefined),
       };
@@ -218,6 +219,73 @@ describe("Movie module flows", () => {
       expect(message.edit).toHaveBeenCalled();
       expect(userRepo.incrementStat).not.toHaveBeenCalled();
       expect(interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining("Thank you") }));
+    });
+
+    it("rejects poll creation when watched filtering leaves fewer than two options", async () => {
+      const { interaction, send } = buildInteraction();
+
+      const selected = [
+        { id: "movie-watched", title: "Old Movie", addedBy: "user-1", addedAt: new Date(), watched: true },
+        { id: "movie-active", title: "New Movie", addedBy: "user-2", addedAt: new Date(), watched: false },
+      ];
+
+      const movieRepo = {
+        createPoll: vi.fn().mockResolvedValue(undefined),
+        getActiveEvent: vi.fn().mockResolvedValue(null),
+        getActivePoll: vi.fn().mockResolvedValue(null),
+      };
+      const services: any = {
+        guildId: "guild-1",
+        guilds: {
+          requireConfig: vi.fn().mockResolvedValue({
+            roles: { movieUser: "role-id" },
+            channels: { movieNight: "channel-123", movieVC: "voice-123" },
+          }),
+        },
+        repos: { movieRepo },
+      };
+
+      await pollMovieWithList(services, interaction, selected as any);
+
+      expect(interaction.reply).toHaveBeenCalledWith(
+        expect.objectContaining({ content: "You must select between 2 and 5 movies." })
+      );
+      expect(movieRepo.createPoll).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("excludes watched movies from persisted poll options", async () => {
+      const { interaction, send } = buildInteraction();
+
+      const selected = [
+        { id: "movie-1", title: "Movie 1", addedBy: "user-1", addedAt: new Date(), watched: false },
+        { id: "movie-2", title: "Movie 2", addedBy: "user-2", addedAt: new Date(), watched: false },
+        { id: "movie-3", title: "Movie 3", addedBy: "user-3", addedAt: new Date(), watched: true },
+      ];
+
+      const movieRepo = {
+        createPoll: vi.fn().mockResolvedValue(undefined),
+        getActiveEvent: vi.fn().mockResolvedValue(null),
+        getActivePoll: vi.fn().mockResolvedValue(null),
+      };
+      const services: any = {
+        guildId: "guild-1",
+        guilds: {
+          requireConfig: vi.fn().mockResolvedValue({
+            roles: { movieUser: "role-id" },
+            channels: { movieNight: "channel-123", movieVC: "voice-123" },
+          }),
+        },
+        repos: { movieRepo },
+      };
+
+      await pollMovieWithList(services, interaction, selected as any);
+
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(movieRepo.createPoll).toHaveBeenCalledTimes(1);
+      const pollRecord = movieRepo.createPoll.mock.calls[0]![0];
+      expect(pollRecord.options).toHaveLength(2);
+      expect(pollRecord.options.map((m: any) => m.id)).toEqual(["movie-1", "movie-2"]);
     });
   });
 
@@ -468,5 +536,33 @@ describe("saveCurrentMovie", () => {
 
     expect(movieRepo.upsertMovie).toHaveBeenCalled();
     expect(movieRepo.createMovieEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses to save a watched movie as current", async () => {
+    const movieRepo = {
+      getActiveEvent: vi.fn(),
+      createMovieEvent: vi.fn(),
+      upsertMovie: vi.fn(),
+    };
+
+    const services: any = {
+      guildId: "guild-1",
+      repos: { movieRepo },
+      guilds: { get: vi.fn() },
+    };
+
+    const movie = {
+      id: "movie-789",
+      title: "Already Watched",
+      addedBy: "user-1",
+      addedAt: new Date(),
+      watched: true,
+    };
+
+    await saveCurrentMovie(services, movie as any, "selector-1");
+
+    expect(movieRepo.upsertMovie).not.toHaveBeenCalled();
+    expect(movieRepo.createMovieEvent).not.toHaveBeenCalled();
+    expect(movieRepo.getActiveEvent).not.toHaveBeenCalled();
   });
 });

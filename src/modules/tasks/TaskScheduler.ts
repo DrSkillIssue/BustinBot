@@ -7,6 +7,7 @@ import { startAllTaskEvents } from './HandleTaskStart.js';
 import { generatePrizeDrawSnapshot, rollWinnerForSnapshot, announcePrizeDrawWinner } from './HandlePrizeDraw.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { SchedulerStatusReporter } from '../../core/services/SchedulerStatusReporter.js';
+import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from './HandleLeaderboardUpdate.js';
 
 // Store next trigger times for console log
 let nextPollTime: Date | null = null;
@@ -78,6 +79,8 @@ let pollJob: ScheduledTask;
 let taskStartJob: ScheduledTask;
 let prizeJob: ScheduledTask;
 let testJob: ScheduledTask;
+let leaderboardUpdateJob: ScheduledTask;
+let leaderboardWarnJob: ScheduledTask;
 
 function updateTestModeNextTimes(reference: Date = new Date()) {
     const base = new Date(reference);
@@ -264,6 +267,21 @@ export function initTaskScheduler(
             },
             { timezone: schedulerTimezone }
         );
+        leaderboardWarnJob = cron.schedule(
+            '0 0 * * 2',
+            async () => {
+                await warnPendingLeaderboardFinalization(client, services);
+            },
+            { timezone: schedulerTimezone }
+        );
+
+        leaderboardUpdateJob = cron.schedule(
+            '0 0 * * 3',
+            async () => {
+                await postPeriodicLeaderboardUpdate(client, services);
+            },
+            { timezone: schedulerTimezone }
+        );
         const pollExpr = `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`;
         nextPollTime = getNextRunDate(pollExpr);
         if (nextPollTime) SchedulerStatusReporter.onNewTrigger('Task Poll', nextPollTime);
@@ -282,5 +300,7 @@ export function stopTaskScheduler() {
     pollJob?.stop();
     taskStartJob?.stop();
     prizeJob?.stop();
+    leaderboardWarnJob?.stop();
+    leaderboardUpdateJob?.stop();
     console.log('[TaskScheduler] All jobs stopped.');
 }
