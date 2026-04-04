@@ -1,3 +1,44 @@
+# [2.1.0](https://github.com/dossyb/BustinBot/compare/v2.0.1...v2.1.0) (2026-04-04)
+
+
+### Bug Fixes
+
+* **movie:** fix movie Discord message handling ([aa1df33](https://github.com/dossyb/BustinBot/commit/aa1df330fac4873718bf23774e926584525d01ae))
+* **movie:** movie lifecycle handling and watched state bugs ([a76eed2](https://github.com/dossyb/BustinBot/commit/a76eed22db04adee85351e73a0a727b4358e2d21))
+* **task:** add dynamic poll duration based on bot environment ([c703e33](https://github.com/dossyb/BustinBot/commit/c703e33e6a059e72831c09563b8253b447016d7c))
+* **task:** fix name mutation for wilderness tasks ([a25b394](https://github.com/dossyb/BustinBot/commit/a25b3941e939f123e40ca12d76daa1c54b2ecead))
+* **task:** incorrect model import paths ([5f0601d](https://github.com/dossyb/BustinBot/commit/5f0601d521b2cbae6c35ab7c087d936800410b1b))
+* **task:** incorrect submission total in prize draw embed ([d8f3829](https://github.com/dossyb/BustinBot/commit/d8f3829d3887e6062a44d0713900d725c2f530dc))
+* **task:** prize draw edge case so submissions approved after a draw get carried over to the next ([56e49e2](https://github.com/dossyb/BustinBot/commit/56e49e234eb4c02906432e405a1f78852ce55f80))
+* **task:** task poll collector restoration upon bot restart ([2a99f56](https://github.com/dossyb/BustinBot/commit/2a99f566167b3781271876e513a21075a2d2b8ca))
+* **task:** task submission approval race condition ([c87a968](https://github.com/dossyb/BustinBot/commit/c87a96872bf25bf1e12f2bb13fc5ea843c7bae8b))
+* **task:** task submission runtime error ([1a8723c](https://github.com/dossyb/BustinBot/commit/1a8723c6eafb788d2e74c4e1ad4438e0a8a5c65e))
+* **task:** update task draw embed to avoid Discord mobile username display bug ([2ee428f](https://github.com/dossyb/BustinBot/commit/2ee428f9069d36101b1b6743ac331f588b10450b))
+
+
+### Features
+
+* **core:** add admin-only suppress command to temporarily disable bot pings ([e27a138](https://github.com/dossyb/BustinBot/commit/e27a1386c61449fbf93d3cd25e53e97de0aba6f1))
+* **core:** add basic bug report command ([35624e3](https://github.com/dossyb/BustinBot/commit/35624e3cc23ed2f70d701157cf5b345149f809d6))
+* **core:** add FAQ command ([66746b9](https://github.com/dossyb/BustinBot/commit/66746b9225628cd32bc74753cf21b7d282ecf115))
+* **core:** update bug report functionality with ID and timestamp ([e5f67cb](https://github.com/dossyb/BustinBot/commit/e5f67cb93149cc914fb428b5533de4a12878fc70))
+* **movie:** add validation to /addmovie to prevent duplicate entries ([631cd51](https://github.com/dossyb/BustinBot/commit/631cd5190b217cc2dafee8889d5b59895af1fcee))
+* **task:** add /listtasks command ([9ff66f3](https://github.com/dossyb/BustinBot/commit/9ff66f33fbade3a4a4d211b6e798c768d8079b15))
+* **task:** add /viewtask command ([edad459](https://github.com/dossyb/BustinBot/commit/edad4593ff5a6f603710a0b12e4c4b5311b3cf03))
+* **task:** add confirmation step to task submission approval flow ([78f4373](https://github.com/dossyb/BustinBot/commit/78f43733dd78755a2562b9962a705a766a65f4bc))
+* **task:** add leaderboard and scheduling management commands ([616c403](https://github.com/dossyb/BustinBot/commit/616c403bfe82503bba88d85fd02f654069f01d37))
+* **task:** add leaderboard schemas and repo interfaces ([3f6e2b3](https://github.com/dossyb/BustinBot/commit/3f6e2b3bcdee439e539a286f5132289a5886a027))
+* **task:** add milestone/champion role management ([ac54505](https://github.com/dossyb/BustinBot/commit/ac54505bdfaa0b7fed08bcad2354b9de35db7e54))
+* **task:** add mytask command to show submission status ([d9c4299](https://github.com/dossyb/BustinBot/commit/d9c42994ca2e9ea789387c31b0549341f2303632))
+* **task:** add periodic leaderboard scheduling ([485ad45](https://github.com/dossyb/BustinBot/commit/485ad4553a604db543d3938c52fe244f6aa85ecd))
+* **task:** add shortenAmount helper for values 5 or more digits ([73169a2](https://github.com/dossyb/BustinBot/commit/73169a278c5b49e21e9438bca29ac82ce70b9f9a))
+* **task:** add task streak functionality ([4269296](https://github.com/dossyb/BustinBot/commit/4269296b42b18ffbd8d8e658674797adc7af0846))
+* **task:** add warning to late submissions in task-admin channel ([cd1b080](https://github.com/dossyb/BustinBot/commit/cd1b080a861ed49fff376b731cc4dc79fa2b16c8))
+* **task:** core leaderboard tracking, tiers, and update logic ([4af1060](https://github.com/dossyb/BustinBot/commit/4af106019fc9ca732fc0cec71340c6acc989d5b6))
+* **task:** restore original prize draw logic (1 completion = 1 roll) ([aaeb4ea](https://github.com/dossyb/BustinBot/commit/aaeb4ea593c43c8acbf726968fec8550b9afbd04))
+
+
+
 ## [2.0.1](https://github.com/dossyb/BustinBot/compare/v2.0.0...v2.0.1) (2025-11-24)
 
 ### Bug Fixes
