@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DateTime } from "luxon";
+import type { Reminder } from "../../../models/Reminder.js";
 
 const createMovieNightEmbed = vi.fn(() => ({ id: "embed" }));
 vi.mock("../MovieEmbeds", () => ({
@@ -12,7 +13,7 @@ vi.mock("../MoviePollScheduler", () => ({
 }));
 
 const scheduleMovieReminders = vi.fn().mockResolvedValue(undefined);
-const getPendingReminders = vi.fn(() => []);
+const getPendingReminders = vi.fn((): Reminder[] => []);
 vi.mock("../MovieReminders", () => ({
     scheduleMovieReminders,
     getPendingReminders,

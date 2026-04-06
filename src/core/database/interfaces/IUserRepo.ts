@@ -5,6 +5,7 @@ export interface IUserRepository {
     getUserById(userId: string): Promise<UserStats | null>;
     createUser(user: UserStats): Promise<void>;
     incrementStat(userId: string, field: keyof UserStats, amount?: number): Promise<void>;
+    updateTierStat(userId: string, fromField: keyof UserStats, toField: keyof UserStats): Promise<void>;
     updateLastActive(userId: string): Promise<void>;
     updateUser(userId: string, data: Partial<UserStats>): Promise<void>;
     deleteUser(userId: string): Promise<void>;

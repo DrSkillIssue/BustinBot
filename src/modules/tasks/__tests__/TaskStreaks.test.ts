@@ -135,7 +135,6 @@ describe("Task streaks", () => {
         const createdLate = new Date(end.getTime() + 2 * 60 * 60 * 1000);
 
         const repo = buildRepo({
-            latestEventId: undefined,
             events: { "event-1": event },
             submissions: [
                 {

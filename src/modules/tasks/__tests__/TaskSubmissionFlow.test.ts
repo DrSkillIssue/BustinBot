@@ -119,7 +119,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|bronze|${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
             };
@@ -171,7 +171,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|bronze|${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
             };
@@ -214,7 +214,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|bronze|${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 update: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
@@ -228,7 +228,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|bronze|${submission.id}`,
                 user: { id: 'admin-2' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 update: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
@@ -278,7 +278,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|silver|${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 update: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
@@ -287,7 +287,7 @@ describe('Task submission lifecycle', () => {
             await handleAdminButton(admin1Confirm, services);
 
             // Should allow upgrade since Silver (tier 2) > Bronze (tier 1)
-            expect(admin1Confirm.deferReply).toHaveBeenCalled();
+            expect(admin1Confirm.deferUpdate).toHaveBeenCalled();
             expect(repo.updateSubmissionStatus).toHaveBeenCalled();
         });
 
@@ -313,7 +313,7 @@ describe('Task submission lifecycle', () => {
                 customId: `review-confirm|approve|bronze|${submission.id}`,
                 user: { id: 'admin-1' },
                 client,
-                deferReply: vi.fn().mockResolvedValue(undefined),
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
                 editReply: vi.fn().mockResolvedValue(undefined),
                 update: vi.fn().mockResolvedValue(undefined),
                 channel: adminChannel,
@@ -330,8 +330,384 @@ describe('Task submission lifecycle', () => {
             );
 
             // Should not defer or update status
-            expect(admin1Confirm.deferReply).not.toHaveBeenCalled();
+            expect(admin1Confirm.deferUpdate).not.toHaveBeenCalled();
             expect(repo.updateSubmissionStatus).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Tier upgrade stat handling', () => {
+        it('increments new tier stat on first-time approval', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.incrementStat).toHaveBeenCalledWith('user-1', 'tasksCompletedBronze', 1);
+            expect(userRepo.updateTierStat).not.toHaveBeenCalled();
+        });
+
+        it('increments silver stat on first-time silver approval', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|silver|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.incrementStat).toHaveBeenCalledWith('user-1', 'tasksCompletedSilver', 1);
+            expect(userRepo.updateTierStat).not.toHaveBeenCalled();
+        });
+
+        it('increments gold stat on first-time gold approval', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|gold|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.incrementStat).toHaveBeenCalledWith('user-1', 'tasksCompletedGold', 1);
+            expect(userRepo.updateTierStat).not.toHaveBeenCalled();
+        });
+
+        it('calls updateTierStat to atomically decrement previous and increment new tier on upgrade', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Simulate existing bronze submission for this user+task
+            repo.getSubmissionByUserAndTask.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Bronze,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|silver|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.updateTierStat).toHaveBeenCalledWith('user-1', 'tasksCompletedBronze', 'tasksCompletedSilver');
+            expect(userRepo.incrementStat).not.toHaveBeenCalled();
+        });
+
+        it('does not decrement or increment stats when approval is rejected (same or higher tier)', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Submission already at gold
+            repo.getSubmissionById.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Gold,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                update: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.incrementStat).not.toHaveBeenCalled();
+            expect(userRepo.updateTierStat).not.toHaveBeenCalled();
+        });
+
+        it('uses updateTierStat for bronze to gold upgrade (skipping silver)', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // Simulate existing bronze submission
+            repo.getSubmissionByUserAndTask.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Bronze,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|gold|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.updateTierStat).toHaveBeenCalledWith('user-1', 'tasksCompletedBronze', 'tasksCompletedGold');
+            expect(userRepo.incrementStat).not.toHaveBeenCalled();
+        });
+
+        it('uses updateTierStat for silver to gold upgrade', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            repo.getSubmissionByUserAndTask.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Silver,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|gold|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            expect(userRepo.updateTierStat).toHaveBeenCalledWith('user-1', 'tasksCompletedSilver', 'tasksCompletedGold');
+            expect(userRepo.incrementStat).not.toHaveBeenCalled();
+        });
+
+        it('finds bronze submission (not rejected) when user has bronze then rejection then silver upgrade', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // getSubmissionByUserAndTask filters to tier statuses only,
+            // so a rejected submission with a later reviewedAt is excluded
+            // and the bronze submission is returned instead
+            repo.getSubmissionByUserAndTask.mockResolvedValueOnce({
+                ...submission,
+                status: SubmissionStatus.Bronze,
+                screenshotUrls: ['https://cdn/img.png'],
+            });
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|silver|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            // Must decrement bronze and increment silver atomically
+            expect(userRepo.updateTierStat).toHaveBeenCalledWith('user-1', 'tasksCompletedBronze', 'tasksCompletedSilver');
+            expect(userRepo.incrementStat).not.toHaveBeenCalled();
+        });
+
+        it('treats no prior tier submission as first-time approval even if rejected submissions exist', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const userRepo = {
+                incrementStat: vi.fn().mockResolvedValue(undefined),
+                updateTierStat: vi.fn().mockResolvedValue(undefined),
+                getUserById: vi.fn().mockResolvedValue(null),
+                updateUser: vi.fn().mockResolvedValue(undefined),
+            };
+            (services.repos as any).userRepo = userRepo;
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            // getSubmissionByUserAndTask returns null because only rejected/pending
+            // submissions exist (filtered out by status in query)
+            repo.getSubmissionByUserAndTask.mockResolvedValueOnce(null);
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            // No prior tier — first-time approval, increment only
+            expect(userRepo.incrementStat).toHaveBeenCalledWith('user-1', 'tasksCompletedBronze', 1);
+            expect(userRepo.updateTierStat).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Confirmation prompt dismissal (regression)', () => {
+        it('updates the confirmation prompt in-place instead of creating a new ephemeral reply', async () => {
+            const { service, repo, services } = createTaskServiceHarness();
+            const { client, adminChannel } = createAdminClientMock();
+
+            const submission = await service.createSubmission('user-1', 'event-1');
+            const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };
+            repo.getSubmissionById.mockResolvedValue(stored);
+
+            await service.completeSubmission(client as any, submission.id, ['https://cdn/img.png'], services);
+
+            const confirmInteraction: any = {
+                customId: `review-confirm|approve|bronze|${submission.id}`,
+                user: { id: 'admin-1' },
+                client,
+                deferUpdate: vi.fn().mockResolvedValue(undefined),
+                deferReply: vi.fn().mockResolvedValue(undefined),
+                editReply: vi.fn().mockResolvedValue(undefined),
+                channel: adminChannel,
+            };
+
+            await handleAdminButton(confirmInteraction, services);
+
+            // Must update existing message, not create a new ephemeral reply
+            expect(confirmInteraction.deferUpdate).toHaveBeenCalledTimes(1);
+            expect(confirmInteraction.deferReply).not.toHaveBeenCalled();
+
+            // Must clear components so buttons can't be clicked again
+            expect(confirmInteraction.editReply).toHaveBeenCalledWith(
+                expect.objectContaining({ components: [] })
+            );
         });
     });
 
