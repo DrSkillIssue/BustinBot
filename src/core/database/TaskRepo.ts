@@ -3,7 +3,7 @@ import { GuildScopedRepository } from "./CoreRepo.js";
 import { db } from "./firestore.js";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
-import type { TaskSubmission } from "../../models/TaskSubmission.js";
+import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { TaskFeedback } from "../../models/TaskFeedback.js";
 import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
@@ -217,6 +217,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         const snapshot = await this.submissionsCollection
             .where('userId', '==', userId)
             .where('taskEventId', '==', taskEventId)
+            .where('status', 'in', [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold])
             .orderBy('reviewedAt', 'desc')
             .limit(1)
             .get();

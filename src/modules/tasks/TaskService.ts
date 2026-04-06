@@ -159,7 +159,7 @@ export class TaskService {
         tier: 'bronze' | 'silver' | 'gold',
         reviewedBy: string,
         services: ServiceContainer
-    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints?: number }) | null> {
+    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints: number; previousStatus?: SubmissionStatus }) | null> {
         const TIER_MAP = {
             bronze: { status: SubmissionStatus.Bronze },
             silver: { status: SubmissionStatus.Silver },
@@ -175,7 +175,8 @@ export class TaskService {
         // Retrieve any previous submission by the same user for this task
         const existing = await this.repo.getSubmissionByUserAndTask(submission.userId, submission.taskEventId);
 
-        const previousTierPoints = getStatusPoints(existing?.status);
+        const previousStatus = existing?.status;
+        const previousTierPoints = getStatusPoints(previousStatus);
         const nextTierPoints = getStatusPoints(tierInfo.status);
         if (previousTierPoints >= nextTierPoints) {
             // Already equal or higher tier
@@ -260,10 +261,13 @@ export class TaskService {
             }
         }
 
-        if (streakLine) {
-            return { ...submission, streakLine, previousTierPoints };
-        }
-        return { ...submission, previousTierPoints };
+        const result = {
+            ...submission,
+            previousTierPoints,
+            ...(streakLine && { streakLine }),
+            ...(previousStatus && { previousStatus }),
+        };
+        return result;
     }
 
     async getPendingSubmission(

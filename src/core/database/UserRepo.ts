@@ -86,6 +86,28 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         });
     }
 
+    async updateTierStat(
+        userId: string,
+        fromField: keyof UserStats,
+        toField: keyof UserStats
+    ): Promise<void> {
+        const docRef = this.collection.doc(userId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            const newStats = this.createDefaultUserStats(userId);
+            (newStats as any)[toField] = 1;
+            await docRef.set(newStats);
+            return;
+        }
+
+        await docRef.update({
+            [fromField]: FieldValue.increment(-1),
+            [toField]: FieldValue.increment(1),
+            lastActiveAt: new Date(),
+        });
+    }
+
     async updateLastActive(userId: string): Promise<void> {
         await this.collection.doc(userId).update({
             lastActiveAt: new Date(),

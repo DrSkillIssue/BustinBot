@@ -6,8 +6,15 @@ import { handleUpdateTaskModal } from './HandleUpdateTaskModal.js';
 import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from './TaskLeaderboards.js';
 import { applyTaskMilestoneRoles } from './TaskMilestones.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
+import type { UserStats } from '../../models/UserStats.js';
 
 const MAX_SCREENSHOTS = 10;
+
+const TIER_STAT_MAP: Record<string, keyof UserStats> = {
+    bronze: "tasksCompletedBronze",
+    silver: "tasksCompletedSilver",
+    gold: "tasksCompletedGold",
+};
 
 // STEP 1: "Submit Screenshot" button clicked on task embed
 export async function handleSubmitButton(interaction: ButtonInteraction, services: ServiceContainer) {
@@ -224,7 +231,11 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             return;
         }
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferUpdate();
+        await interaction.editReply({
+            content: `⏳ Processing approval...`,
+            components: [],
+        });
 
         const reviewerId = interaction.user.id;
 
@@ -238,27 +249,24 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             );
 
             if (!result) {
-                await interaction.editReply({ content: "⚠️ Could not update submission. It may already be at this or a higher tier." });
+                await interaction.editReply({ content: "⚠️ This submission has already been processed or the user already holds this tier." });
                 return;
             }
 
             const userRepo = services.repos.userRepo;
             if (userRepo) {
                 const { userId } = result;
+                const prevStat = result.previousStatus ? TIER_STAT_MAP[result.previousStatus] : undefined;
+                const newStat = TIER_STAT_MAP[tier];
+
                 try {
-                    switch (tier) {
-                        case 'bronze':
-                            await userRepo.incrementStat(userId, "tasksCompletedBronze", 1);
-                            break;
-                        case 'silver':
-                            await userRepo.incrementStat(userId, "tasksCompletedSilver", 1);
-                            break;
-                        case 'gold':
-                            await userRepo.incrementStat(userId, "tasksCompletedGold", 1);
-                            break;
+                    if (prevStat && newStat) {
+                        await userRepo.updateTierStat(userId, prevStat, newStat);
+                    } else if (newStat) {
+                        await userRepo.incrementStat(userId, newStat, 1);
                     }
                 } catch (err) {
-                    console.warn(`[Stats] Failed to increment ${tier} completion for ${result.userId}:`, err);
+                    console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
                 }
             } else {
                 console.warn("[Stats] UserRepo unavailable; skipping task completion increment.");
@@ -286,7 +294,8 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             }
 
             await interaction.editReply({
-                content: `✅ Submission approved for **${formattedTier} tier** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}) and archived.`
+                content: `✅ Submission approved for **${formattedTier} tier** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? 's' : ''}) and archived.`,
+                components: []
             });
         } catch (err) {
             console.error('[TaskInteractions] Tier approval failed:', err);
