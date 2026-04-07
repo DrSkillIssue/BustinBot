@@ -38,6 +38,13 @@ vi.mock("../../movies/MovieEmbeds", async (importOriginal: () => Promise<any>) =
   };
 });
 
+// --- Mock MovieService to avoid TMDB env dependency in command imports ---
+vi.mock("../../movies/MovieService.js", () => ({
+  removeMovieWithStats: vi.fn(async (movie: any, services: any) => {
+    await services.repos.movieRepo.deleteMovie(movie.id);
+  }),
+}));
+
 describe("Movie module flows", () => {
   beforeEach(async () => {
     vi.useFakeTimers();
