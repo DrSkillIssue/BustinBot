@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('../../movies/MovieService', () => ({
+vi.mock('../../movies/MovieService.js', () => ({
     addMovieWithStats: vi.fn(),
     fetchMovieDetailsById: vi.fn(),
+    removeMovieWithStats: vi.fn(),
 }));
 
 vi.mock('../../movies/MovieEmbeds', () => ({
