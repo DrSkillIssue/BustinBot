@@ -94,7 +94,7 @@ export async function notifyUser(client: Client, submission: TaskSubmission, str
         const plural = rollCount === 1 ? '' : 's';
 
         await user.send(
-            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier** (${rollCount} prize roll${plural})!${streakLine ?? ""}`
+            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`
         );
     } else if (submission.status === SubmissionStatus.Rejected) {
         const reason = submission.rejectionReason ?? 'No reason provided.';
