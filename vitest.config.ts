@@ -6,6 +6,9 @@ export default defineConfig({
         setupFiles: ["./src/tests/setup.ts"],
         // Tests never inherit the developer's shell or .env mode (dotenv does not override variables already set)
         env: { BOT_MODE: "test" },
+        // Every test starts from the real globals and environment, whatever an earlier test stubbed
+        unstubGlobals: true,
+        unstubEnvs: true,
         coverage: { provider: "v8", reporter: ["text", "html"] },
         projects: [
             {
