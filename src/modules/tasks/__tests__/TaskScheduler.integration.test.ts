@@ -69,14 +69,14 @@ describe("the task channel", () => {
     });
 
     test("is missing when none is configured", async ({ discord, services }) => {
-        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, taskChannel: "" } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
     });
 
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
         const category = "100000000000000098";
-        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, taskChannel: category } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
         discord.api
             .intercept({ path: `/api/v10/channels/${category}`, method: "GET" })
             .reply(200, { id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] }, { headers: { "content-type": "application/json" } });
@@ -86,7 +86,7 @@ describe("the task channel", () => {
 
     test("is reported missing when the configured channel no longer exists", async ({ discord, services }) => {
         const deleted = "100000000000000099";
-        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, taskChannel: deleted } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: deleted } });
         discord.api
             .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
             .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });

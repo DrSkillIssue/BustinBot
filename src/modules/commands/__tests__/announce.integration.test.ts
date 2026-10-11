@@ -3,7 +3,6 @@ import path from "node:path";
 import { ComponentType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { IDS, apiMember } from "../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../tests/fakes/builders.js";
 import { packageVersion } from "../../../utils/version.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -40,7 +39,7 @@ describe("/announce", () => {
     });
 
     test("tells the admin when no announcement channel is configured", async ({ discord, services, slash }) => {
-        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, announcements: "" } });
+        await services.guilds.update(IDS.guild, { channels: { announcements: "" } });
 
         const interaction = await slash("announce", [], admin);
 
@@ -51,7 +50,7 @@ describe("/announce", () => {
 
     test("tells the admin when the configured channel can't be reached", async ({ discord, services, slash }) => {
         const deleted = "100000000000000099";
-        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, announcements: deleted } });
+        await services.guilds.update(IDS.guild, { channels: { announcements: deleted } });
         discord.api
             .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
             .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
