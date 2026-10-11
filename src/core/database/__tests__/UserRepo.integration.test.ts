@@ -1,6 +1,7 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { UserRepository } from '../UserRepo.js';
 import { buildUserStats } from '../../../tests/fakes/builders.js';
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 
 const test = base.extend('repo', ({ db }) => new UserRepository(db, 'guild-1'));
 
@@ -30,6 +31,16 @@ describe('UserRepository', () => {
 
         expect(await repo.getUserById('user-1')).toMatchObject({ tasksCompletedBronze: 3, commandsRun: 0 });
     });
+
+    test('counts every increment when several arrive at once for a user with no stats yet', async ({ repo }) => {
+        await Promise.all([
+            repo.incrementStat('user-1', 'commandsRun', 1),
+            repo.incrementStat('user-1', 'commandsRun', 1),
+            repo.incrementStat('user-1', 'commandsRun', 1),
+        ]);
+
+        expect(await repo.getUserById('user-1')).toMatchObject({ commandsRun: 3 });
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('moves one completion between tiers on an existing user', async ({ repo }) => {
         await repo.incrementStat('user-1', 'tasksCompletedBronze', 1);

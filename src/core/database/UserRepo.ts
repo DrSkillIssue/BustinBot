@@ -69,19 +69,22 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         amount = 1
     ): Promise<void> {
         const docRef = this.collection.doc(userId);
-        const doc = await docRef.get();
 
-        if (!doc.exists) {
-            const newStats = this.createDefaultUserStats(userId);
-            (newStats as any)[field] = amount;
-            await docRef.set(newStats);
-            return;
-        }
+        // Read and write in one transaction, so increments arriving together for a user with no stats yet
+        // can't each create the document and overwrite one another
+        await this.db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(docRef);
 
-        // If exists, increment the field
-        await docRef.update({
-            [field]: FieldValue.increment(amount),
-            lastActiveAt: new Date(),
+            if (!doc.exists) {
+                transaction.set(docRef, { ...this.createDefaultUserStats(userId), [field]: amount });
+                return;
+            }
+
+            // If exists, increment the field
+            transaction.update(docRef, {
+                [field]: FieldValue.increment(amount),
+                lastActiveAt: new Date(),
+            });
         });
     }
 
