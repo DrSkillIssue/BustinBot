@@ -8,66 +8,21 @@ import {
     incrementPeriodicPoints,
     registerPeriodicTaskEvent,
 } from "../TaskLeaderboards.js";
-import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
-
-function createLeaderboardRepo(initial?: TaskLeaderboard) {
-    let leaderboard = initial;
-
-    const repo = {
-        getLeaderboard: vi.fn(async () => leaderboard ?? null),
-        createLeaderboard: vi.fn(async (data: TaskLeaderboard) => {
-            leaderboard = structuredClone(data);
-        }),
-        updateLeaderboard: vi.fn(async (_id: string, data: Partial<TaskLeaderboard>) => {
-            if (!leaderboard) return;
-            leaderboard = {
-                ...leaderboard,
-                ...structuredClone(data),
-                period: data.period ? structuredClone(data.period) : leaderboard.period,
-                completedPeriod: data.completedPeriod
-                    ? structuredClone(data.completedPeriod)
-                    : leaderboard.completedPeriod,
-                pendingPeriod: data.pendingPeriod !== undefined
-                    ? structuredClone(data.pendingPeriod)
-                    : leaderboard.pendingPeriod,
-                points: data.points ? structuredClone(data.points) : leaderboard.points,
-                tierCounts: data.tierCounts ? structuredClone(data.tierCounts) : leaderboard.tierCounts,
-            };
-        }),
-        incrementPoints: vi.fn(async (_id: string, userId: string, amount: number) => {
-            if (!leaderboard) return;
-            leaderboard.points[userId] = (leaderboard.points[userId] ?? 0) + amount;
-        }),
-        incrementTierCount: vi.fn(async (
-            _id: string,
-            userId: string,
-            tier: "bronze" | "silver" | "gold",
-            amount: number
-        ) => {
-            if (!leaderboard) return;
-            leaderboard.tierCounts ??= {};
-            leaderboard.tierCounts[userId] ??= { bronze: 0, silver: 0, gold: 0 };
-            leaderboard.tierCounts[userId][tier] += amount;
-        }),
-        current: () => leaderboard,
-    };
-
-    return repo;
-}
+import { InMemoryTaskLeaderboardRepository } from "../../../tests/fakes/InMemoryTaskLeaderboardRepository.js";
+import { buildTask, buildTaskEvent } from "../../../tests/fakes/builders.js";
 
 function createEvent(id: string, start: string, end: string): TaskEvent {
-    return {
+    return buildTaskEvent({
         id,
-        task: { name: id } as any,
+        task: buildTask({ id }),
+        keyword: id,
         startTime: new Date(start),
         endTime: new Date(end),
-        keyword: id,
-        completedUserIds: [],
-    } as TaskEvent;
+    });
 }
 
-function createServices(taskLeaderboardRepo: ReturnType<typeof createLeaderboardRepo>, events: TaskEvent[]) {
+function createServices(taskLeaderboardRepo: InMemoryTaskLeaderboardRepository, events: TaskEvent[]) {
     const eventsById = new Map(events.map((event) => [event.id, event]));
     return {
         guildId: "guild-1",
@@ -185,7 +140,7 @@ describe("TaskLeaderboards periodic submissions", () => {
             ),
             createEvent("week-5-pvm", "2026-02-02T00:00:00.000Z", "2026-02-09T00:00:00.000Z"),
         ];
-        const taskLeaderboardRepo = createLeaderboardRepo();
+        const taskLeaderboardRepo = new InMemoryTaskLeaderboardRepository();
         const services = createServices(taskLeaderboardRepo, events);
 
         await ensureTaskLeaderboardsInitialized(services as any);
@@ -193,10 +148,9 @@ describe("TaskLeaderboards periodic submissions", () => {
             await registerPeriodicTaskEvent(services as any, event.id);
         }
 
-        expect(taskLeaderboardRepo.current()?.period?.eventIds).toEqual(
-            events.slice(0, 12).map((event) => event.id)
-        );
-        expect(taskLeaderboardRepo.current()?.pendingPeriod?.period.eventIds).toEqual(["week-5-pvm"]);
+        const periodic = await taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(periodic?.period?.eventIds).toEqual(events.slice(0, 12).map((event) => event.id));
+        expect(periodic?.pendingPeriod?.period.eventIds).toEqual(["week-5-pvm"]);
     });
 
     it("carries approved submissions from the 48-hour overlap into the following monthly leaderboard", async () => {
@@ -207,7 +161,7 @@ describe("TaskLeaderboards periodic submissions", () => {
             createEvent("week-4", "2026-01-26T00:00:00.000Z", "2026-02-02T00:00:00.000Z"),
             createEvent("week-5", "2026-02-02T00:00:00.000Z", "2026-02-09T00:00:00.000Z"),
         ];
-        const taskLeaderboardRepo = createLeaderboardRepo();
+        const taskLeaderboardRepo = new InMemoryTaskLeaderboardRepository();
         const services = createServices(taskLeaderboardRepo, events);
 
         await ensureTaskLeaderboardsInitialized(services as any);
@@ -219,7 +173,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         await registerPeriodicTaskEvent(services as any, "week-5");
         await incrementPeriodicPoints(services as any, "overlap-user", 3, "week-5", "silver");
 
-        const finalisingLeaderboard = taskLeaderboardRepo.current();
+        const finalisingLeaderboard = await taskLeaderboardRepo.getLeaderboard("periodic");
         expect(finalisingLeaderboard?.points).toEqual({ "old-period-user": 6 });
 
         await finalizePeriodicLeaderboard(
@@ -228,12 +182,11 @@ describe("TaskLeaderboards periodic submissions", () => {
             [{ userId: "old-period-user", points: 6 }]
         );
 
-        expect(taskLeaderboardRepo.current()?.completedPeriod?.topTen).toEqual([
-            { userId: "old-period-user", points: 6 },
-        ]);
-        expect(taskLeaderboardRepo.current()?.period?.eventIds).toEqual(["week-5"]);
-        expect(taskLeaderboardRepo.current()?.points).toEqual({ "overlap-user": 3 });
-        expect(taskLeaderboardRepo.current()?.tierCounts).toEqual({
+        const periodic = await taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(periodic?.completedPeriod?.topTen).toEqual([{ userId: "old-period-user", points: 6 }]);
+        expect(periodic?.period?.eventIds).toEqual(["week-5"]);
+        expect(periodic?.points).toEqual({ "overlap-user": 3 });
+        expect(periodic?.tierCounts).toEqual({
             "overlap-user": { bronze: 0, silver: 1, gold: 0 },
         });
     });
@@ -243,7 +196,7 @@ describe("TaskLeaderboards periodic submissions", () => {
             createEvent("week-1", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z"),
             createEvent("week-2", "2026-01-12T00:00:00.000Z", "2026-01-19T00:00:00.000Z"),
         ];
-        const taskLeaderboardRepo = createLeaderboardRepo();
+        const taskLeaderboardRepo = new InMemoryTaskLeaderboardRepository();
         const services = createServices(taskLeaderboardRepo, events);
 
         await ensureTaskLeaderboardsInitialized(services as any);
@@ -258,8 +211,9 @@ describe("TaskLeaderboards periodic submissions", () => {
         await incrementPeriodicPoints(services as any, "upgraded-user", 2, "week-2", "silver");
         await incrementPeriodicPoints(services as any, "upgraded-user", 3, "week-2", "gold");
 
-        expect(taskLeaderboardRepo.current()?.points).toEqual({ "upgraded-user": 12 });
-        expect(taskLeaderboardRepo.current()?.tierCounts).toEqual({
+        const periodic = await taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(periodic?.points).toEqual({ "upgraded-user": 12 });
+        expect(periodic?.tierCounts).toEqual({
             "upgraded-user": { bronze: 0, silver: 0, gold: 2 },
         });
     });
