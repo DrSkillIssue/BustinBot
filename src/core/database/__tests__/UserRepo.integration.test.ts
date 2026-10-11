@@ -51,6 +51,15 @@ describe('UserRepository', () => {
         expect(await repo.getUserById('user-1')).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedSilver: 1 });
     });
 
+    test('keeps a tier move and an increment made at the same moment for a user with no stats yet', async ({ repo }) => {
+        await Promise.all([
+            repo.updateTierStat('user-1', 'tasksCompletedBronze', 'tasksCompletedSilver'),
+            repo.incrementStat('user-1', 'tasksCompletedGold', 1),
+        ]);
+
+        expect(await repo.getUserById('user-1')).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+
     test('clears every user in the guild', async ({ repo }) => {
         await repo.createUser(buildUserStats({ userId: 'user-1' }));
         await repo.createUser(buildUserStats({ userId: 'user-2' }));

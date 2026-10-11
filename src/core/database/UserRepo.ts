@@ -63,23 +63,28 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         });
     }
 
+    // Moves a member's task completion from one tier to the higher one they reached. In one transaction like
+    // incrementStat, so a member with no stats yet can't have their document created twice.
     async updateTierStat(
         userId: string,
         fromField: keyof UserStats,
         toField: keyof UserStats
     ): Promise<void> {
         const docRef = this.collection.doc(userId);
-        const doc = await docRef.get();
 
-        if (!doc.exists) {
-            await docRef.set({ ...newUserStats(userId, new Date()), [toField]: 1 });
-            return;
-        }
+        await this.db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(docRef);
 
-        await docRef.update({
-            [fromField]: FieldValue.increment(-1),
-            [toField]: FieldValue.increment(1),
-            lastActiveAt: new Date(),
+            if (!doc.exists) {
+                transaction.set(docRef, { ...newUserStats(userId, new Date()), [toField]: 1 });
+                return;
+            }
+
+            transaction.update(docRef, {
+                [fromField]: FieldValue.increment(-1),
+                [toField]: FieldValue.increment(1),
+                lastActiveAt: new Date(),
+            });
         });
     }
 
