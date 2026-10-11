@@ -15,6 +15,7 @@ import {
     InteractionResponseType,
     type APIAttachment,
     type APIDMChannel,
+    type APIGuild,
     type APIGatewayBotInfo,
     type APIGuildMember,
     type APIRole,
@@ -348,6 +349,14 @@ export class DiscordHarness {
             .get(origin)
             .intercept({ path: startingWith(pathname), method: "GET" })
             .reply(200, Buffer.from(contents), { headers: { "content-type": attachment.content_type ?? "application/octet-stream" } })
+            .persist();
+    }
+
+    // A guild Discord knows about, for the bot to fetch when discord.js hasn't cached it
+    guild(guild: APIGuild): void {
+        this.api
+            .intercept({ path: startingWith(`${API}/guilds/${guild.id}?`), method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: guild, responseOptions: JSON_RESPONSE })))
             .persist();
     }
 
