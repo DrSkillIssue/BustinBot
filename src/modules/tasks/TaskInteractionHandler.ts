@@ -27,7 +27,8 @@ export async function handleTaskInteraction(
             return;
         }
 
-        if (interaction.customId.startsWith("task-feedback|")) {
+        // Buttons posted before 2025-11-03 use the older task-feedback-up-<task>-<event> ids
+        if (interaction.customId.startsWith("task-feedback|") || interaction.customId.startsWith("task-feedback-")) {
             return handleTaskFeedback(interaction, services.tasks.repository);
         }
 

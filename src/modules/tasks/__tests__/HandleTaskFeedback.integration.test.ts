@@ -2,7 +2,7 @@ import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
-import { buttonInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask } from "../../../tests/fakes/builders.js";
 
 const privateDeferral = { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } };
@@ -38,6 +38,17 @@ describe("task feedback buttons", () => {
 
         expect(discord.originalEdits(change)).toEqual([expect.objectContaining({ content: "Feedback updated!" })]);
         expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ weight: 49 });
+    });
+
+    test("still work on posts made before the button ids changed", async ({ discord, interact, services, db }) => {
+        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", weight: 50 }));
+
+        const click = await interact(buttonInteraction("task-feedback-down-PVM001-20251006"));
+
+        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thanks for your feedback!" })]);
+        expect((await db.doc(`guilds/${IDS.guild}/taskFeedback/PVM001_${IDS.user}`).get()).data()).toMatchObject({
+            taskId: "PVM001", eventId: "PVM001-20251006", vote: "down",
+        });
     });
 
     test("reject a direction they don't know", async ({ discord, interact }) => {
