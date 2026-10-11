@@ -42,7 +42,7 @@ describe('announce command channel handling', () => {
     const interaction = createInteraction();
     const services = {
       guilds: {
-        requireConfig: vi.fn().mockResolvedValue({ channels: {} }),
+        get: vi.fn().mockResolvedValue({ channels: {} }),
       },
     } as any;
 
@@ -58,7 +58,7 @@ describe('announce command channel handling', () => {
     interaction.guild.channels.fetch.mockRejectedValueOnce(new Error('Missing Access'));
     const services = {
       guilds: {
-        requireConfig: vi.fn().mockResolvedValue({ channels: { announcements: 'channel-1' } }),
+        get: vi.fn().mockResolvedValue({ channels: { announcements: 'channel-1' } }),
       },
     } as any;
 

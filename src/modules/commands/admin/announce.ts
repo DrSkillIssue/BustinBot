@@ -92,7 +92,7 @@ const announce: Command = {
         }
 
         // Get announcement channel
-        const guildConfig = await services?.guilds.requireConfig(interaction);
+        const guildConfig = await services?.guilds.get(interaction.guildId!);
         const channelId = guildConfig?.channels?.announcements;
         if (!channelId) {
             await interaction.editReply({
