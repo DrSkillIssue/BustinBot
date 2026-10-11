@@ -23,6 +23,8 @@ import {
     type RESTPostAPIInteractionCallbackJSONBody,
     type RESTPostAPIInteractionCallbackWithResponseResult,
     type RESTPutAPIApplicationGuildCommandsJSONBody,
+    type RESTPostAPIChannelMessageJSONBody,
+    type RESTPatchAPIWebhookWithTokenMessageJSONBody,
 } from "discord-api-types/v10";
 import type { Interceptable } from "undici";
 import type { MockInterceptor } from "undici/types/mock-interceptor.js";
@@ -251,7 +253,7 @@ export class DiscordHarness {
     }
 
     // The first edit to an interaction's original response, once it arrives
-    async originalEdit(interaction: Interaction): Promise<unknown> {
+    async originalEdit(interaction: Interaction): Promise<RESTPatchAPIWebhookWithTokenMessageJSONBody> {
         const { body } = await this.request("PATCH", `/webhooks/${IDS.application}/${interaction.token}/messages/@original`);
         return body;
     }
@@ -268,7 +270,7 @@ export class DiscordHarness {
     }
 
     // Edits to an interaction's original response (editReply)
-    originalEdits(interaction: Interaction): unknown[] {
+    originalEdits(interaction: Interaction): RESTPatchAPIWebhookWithTokenMessageJSONBody[] {
         return this.bodies("PATCH", `/webhooks/${IDS.application}/${interaction.token}/messages/@original`);
     }
 
@@ -277,7 +279,7 @@ export class DiscordHarness {
         return this.bodies("PUT", `/applications/${IDS.application}/guilds/${guildId}/commands`);
     }
 
-    messagesSentTo(channelId: string): unknown[] {
+    messagesSentTo(channelId: string): RESTPostAPIChannelMessageJSONBody[] {
         return this.bodies("POST", `/channels/${channelId}/messages`);
     }
 
