@@ -34,25 +34,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return snapshot.docs.map(doc => doc.data());
     }
 
-    // Get random tasks (optional category filter)
-    async getRandomTasks(limit = 3, category?: string): Promise<Task[]> {
-        const queryRef = category
-            ? this.collection.where("category", "==", category)
-            : this.collection;
-
-        const snapshot = await queryRef.get();
-        const tasks = snapshot.docs.map((doc) => doc.data());
-
-        for (let i = tasks.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            const ti = tasks[i];
-            const tj = tasks[j];
-            if (ti && tj) [tasks[i], tasks[j]] = [tj, ti];
-        }
-
-        return tasks.slice(0, limit);
-    }
-
     // Increment weighting field
     async incrementWeight(id: string, amount = 1): Promise<void> {
         const docRef = this.collection.doc(id);

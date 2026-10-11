@@ -10,7 +10,6 @@ export interface ITaskRepository {
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
     getTasksByCategory(category: string): Promise<Task[]>;
-    getRandomTasks(limit?: number, category?: string): Promise<Task[]>;
     incrementWeight(id: string, amount?: number): Promise<void>;
 
     // Task polls
