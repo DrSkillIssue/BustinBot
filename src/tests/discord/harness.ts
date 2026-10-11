@@ -17,6 +17,7 @@ import {
     type APIGatewayBotInfo,
     type APIGuildMember,
     type APIRole,
+    type APIUser,
     type APIInteraction,
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
@@ -38,11 +39,26 @@ import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 const API = "/api/v10";
 const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
 
+// A request body as Discord reads it. JSON bodies are parsed; multipart bodies (messages with attachments) carry
+// their JSON in the payload_json field beside files[n], and are read as that JSON plus the attached file names.
+// undici hands reply callbacks a multipart body's [name, value] entries and keeps the FormData in its call history.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed JSON, typed by the accessor that reads it
+function parseBody(body: unknown): any {
+    if (typeof body === "string") return body ? JSON.parse(body) : undefined;
+    const entries: [string, unknown][] | null = body instanceof FormData
+        ? [...body.entries()]
+        : Array.isArray(body) && body.every((entry) => Array.isArray(entry) && typeof entry[0] === "string") ? body : null;
+    if (!entries) return undefined;
+    const payload = entries.find(([name]) => name === "payload_json")?.[1];
+    const files = entries.filter(([name]) => name.startsWith("files[")).map(([, file]) => (file instanceof File ? file.name : String(file)));
+    return { ...(typeof payload === "string" ? JSON.parse(payload) : {}), files };
+}
+
 function toDiscordRequest(method: string, path: string, body: unknown): DiscordRequest {
     return {
         method,
         path: decodeURIComponent(path.split("?")[0] ?? "").replace(API, ""),
-        body: typeof body === "string" && body ? JSON.parse(body) : undefined,
+        body: parseBody(body),
     };
 }
 
@@ -176,7 +192,7 @@ export class DiscordHarness {
                 if (!new URL(path, "https://discord.com").searchParams.has("with_response")) {
                     return { statusCode: 204 };
                 }
-                const callback: RESTPostAPIInteractionCallbackJSONBody = JSON.parse(String(body));
+                const callback: RESTPostAPIInteractionCallbackJSONBody = parseBody(body);
                 const { type } = callback;
                 const response: RESTPostAPIInteractionCallbackWithResponseResult = {
                     interaction: { id: payload.id, type: payload.type, response_message_loading: false, response_message_ephemeral: false },
@@ -233,7 +249,7 @@ export class DiscordHarness {
         this.api
             .intercept({ path: `${API}/applications/${IDS.application}/guilds/${guildId}/commands`, method: "PUT" })
             .reply(this.answered(({ body }) => {
-                const commands: object[] = JSON.parse(String(body));
+                const commands: object[] = parseBody(body);
                 const stored = commands.map((command) => ({ ...command, id: nextId(), application_id: IDS.application, guild_id: guildId, version: nextId() }));
                 return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
             }))
@@ -286,6 +302,14 @@ export class DiscordHarness {
         this.api
             .intercept({ path: `${API}/guilds/${guildId}/roles/${roleId}`, method: "DELETE" })
             .reply(this.answered(() => ({ statusCode: 204 })));
+    }
+
+    // A user Discord knows about
+    user(user: APIUser): void {
+        this.api
+            .intercept({ path: `${API}/users/${user.id}`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: user, responseOptions: JSON_RESPONSE })))
+            .persist();
     }
 
     // A member Discord knows about; members a test doesn't declare get no answer
@@ -395,7 +419,7 @@ export class DiscordHarness {
     }
 
     private messageFrom(body: unknown, overrides: Partial<APIMessage> = {}): APIMessage {
-        const sent: Partial<APIMessage> = JSON.parse(String(body));
+        const sent: Partial<APIMessage> = parseBody(body);
         const { content, embeds, components } = sent;
         return apiMessage({ content: content ?? "", embeds: embeds ?? [], components: components ?? [], ...overrides });
     }
