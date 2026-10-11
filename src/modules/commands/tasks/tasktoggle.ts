@@ -62,13 +62,13 @@ const tasktoggle: Command = {
 
             if (newState) {
                 // Enable scheduler
-                initTaskScheduler(interaction.client, services);
+                await initTaskScheduler(interaction.client, services);
                 await interaction.editReply({
                     content: `✅ Task scheduler **enabled** and started for this guild.`,
                 });
             } else {
                 // Disable scheduler
-                stopTaskScheduler();
+                await stopTaskScheduler(guildId);
                 await interaction.editReply({
                     content: `⏹️ Task scheduler **disabled** and stopped for this guild.`,
                 });

@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
-import type { ScheduledTask } from 'node-cron';
 import { Client, TextChannel } from 'discord.js';
 import { postAllTaskPolls } from './HandleTaskPoll.js';
 import { startAllTaskEvents } from './HandleTaskStart.js';
@@ -75,12 +74,12 @@ function isTestMode() {
 }
 const testIntervalMinutes = 7;
 
-let pollJob: ScheduledTask;
-let taskStartJob: ScheduledTask;
-let prizeJob: ScheduledTask;
-let testJob: ScheduledTask;
-let leaderboardUpdateJob: ScheduledTask;
-let leaderboardWarnJob: ScheduledTask;
+// Each guild's jobs are kept in node-cron's own registry under names that start with this prefix and the guild id
+const JOB_PREFIX = 'taskScheduler';
+
+function jobOptions(guildId: string, job: string) {
+    return { timezone: schedulerTimezone, name: `${JOB_PREFIX}:${guildId}:${job}` };
+}
 
 function updateTestModeNextTimes(reference: Date = new Date()) {
     const base = new Date(reference);
@@ -126,12 +125,8 @@ export async function getDefaultChannel(client: Client, services: ServiceContain
     return channel?.isTextBased() ? (channel as TextChannel) : null;
 }
 
-export function initTaskScheduler(
-    client: Client,
-    services: ServiceContainer,
-    getChannel: (client: Client, services: ServiceContainer) => Promise<TextChannel | null> = getDefaultChannel,
-    getWeek: typeof getWeekNumber = getWeekNumber
-) {
+// Schedules the guild's task jobs, replacing any it already has
+export async function initTaskScheduler(client: Client, services: ServiceContainer): Promise<void> {
     console.log('[TaskScheduler] Initialising default task schedule...');
 
     const { tasks, taskEvents, keywords, repos } = services;
@@ -147,7 +142,10 @@ export function initTaskScheduler(
     const prizeRepo = repos.prizeRepo;
     const prizeExpression = `0 ${defaultSchedule.prizeHourUTC} * * ${defaultSchedule.prizeDay}`;
     const isPrizeWeek = (date: Date) =>
-        ((getWeek(date) + defaultSchedule.prizeWeekOffset) % defaultSchedule.prizeFrequencyWeeks) === 0;
+        ((getWeekNumber(date) + defaultSchedule.prizeWeekOffset) % defaultSchedule.prizeFrequencyWeeks) === 0;
+
+    const { guildId } = services;
+    await stopTaskScheduler(guildId);
 
     if (isTestMode()) {
         // ------------------------------
@@ -156,7 +154,7 @@ export function initTaskScheduler(
         const T = testIntervalMinutes;
         updateTestModeNextTimes();
 
-        testJob = cron.schedule('* * * * *', async () => {
+        cron.schedule('* * * * *', async () => {
             const now = new Date();
             const minute = now.getMinutes();
             updateTestModeNextTimes(now);
@@ -195,16 +193,16 @@ export function initTaskScheduler(
             }
             console.log('[TaskScheduler] Test mode active (interval: every 7 minutes)');
             return;
-        });
+        }, jobOptions(guildId, 'test'));
     } else {
         // ------------------------------
         // PRODUCTION MODE (admin-configured cycle)
         // ------------------------------
-        pollJob = cron.schedule(
+        cron.schedule(
             `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`,
             async () => {
                 console.log('[TaskScheduler] Running weekly task poll post...');
-                const channel = await getChannel(client, services);
+                const channel = await getDefaultChannel(client, services);
                 if (channel) {
                     await postAllTaskPolls(client, services);
                 }
@@ -212,14 +210,14 @@ export function initTaskScheduler(
                 nextPollTime = getNextRunDate(pollExpr);
                 if (nextPollTime) SchedulerStatusReporter.onNewTrigger('Task Poll', nextPollTime);
             },
-            { timezone: schedulerTimezone }
+            jobOptions(guildId, 'poll')
         );
 
-        taskStartJob = cron.schedule(
+        cron.schedule(
             `0 ${defaultSchedule.pollHourUTC} * * ${(defaultSchedule.pollDay + 1) % 7}`,
             async () => {
                 console.log('[TaskScheduler] Closing poll and starting task event...');
-                const channel = await getChannel(client, services);
+                const channel = await getDefaultChannel(client, services);
                 if (channel) {
                     await startAllTaskEvents(client, services,);
                 }
@@ -227,7 +225,7 @@ export function initTaskScheduler(
                 nextEventTime = getNextRunDate(eventExpr);
                 if (nextEventTime) SchedulerStatusReporter.onNewTrigger('Task Event', nextEventTime);
             },
-            { timezone: schedulerTimezone }
+            jobOptions(guildId, 'taskStart')
         );
 
         const scheduleNextPrize = (reference: Date) => {
@@ -237,7 +235,7 @@ export function initTaskScheduler(
             }
         };
 
-        prizeJob = cron.schedule(
+        cron.schedule(
             prizeExpression,
             async () => {
                 const now = new Date();
@@ -265,22 +263,22 @@ export function initTaskScheduler(
 
                 scheduleNextPrize(now);
             },
-            { timezone: schedulerTimezone }
+            jobOptions(guildId, 'prizeDraw')
         );
-        leaderboardWarnJob = cron.schedule(
+        cron.schedule(
             '0 0 * * 2',
             async () => {
                 await warnPendingLeaderboardFinalization(client, services);
             },
-            { timezone: schedulerTimezone }
+            jobOptions(guildId, 'leaderboardWarning')
         );
 
-        leaderboardUpdateJob = cron.schedule(
+        cron.schedule(
             '0 0 * * 3',
             async () => {
                 await postPeriodicLeaderboardUpdate(client, services);
             },
-            { timezone: schedulerTimezone }
+            jobOptions(guildId, 'leaderboardUpdate')
         );
         const pollExpr = `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`;
         nextPollTime = getNextRunDate(pollExpr);
@@ -295,12 +293,9 @@ export function initTaskScheduler(
     console.log('[TaskScheduler] Production mode schedule initialised.');
 }
 
-export function stopTaskScheduler() {
-    testJob?.stop();
-    pollJob?.stop();
-    taskStartJob?.stop();
-    prizeJob?.stop();
-    leaderboardWarnJob?.stop();
-    leaderboardUpdateJob?.stop();
-    console.log('[TaskScheduler] All jobs stopped.');
+// Removes the guild's task jobs, leaving other guilds' running
+export async function stopTaskScheduler(guildId: string): Promise<void> {
+    const guildJobs = [...cron.getTasks().values()].filter((job) => job.name?.startsWith(`${JOB_PREFIX}:${guildId}:`));
+    await Promise.all(guildJobs.map((job) => job.destroy()));
+    if (guildJobs.length) console.log(`[TaskScheduler] Stopped ${guildJobs.length} jobs for ${guildId}.`);
 }

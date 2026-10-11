@@ -127,7 +127,7 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
             if (guild.toggles?.taskScheduler) {
                 console.log(`[Startup] Starting Task Scheduler for ${guild.id}`);
                 const guildServices = getServices(guild.id);
-                initTaskScheduler(client, guildServices);
+                await initTaskScheduler(client, guildServices);
             }
         }
 
