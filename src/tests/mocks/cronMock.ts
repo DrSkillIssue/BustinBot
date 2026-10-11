@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 export const scheduledTasks: any[] = [];
 
 function schedule(expression: string, callback: Function) {

@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
 import type { BotStatsService } from '../services/BotStatsService.js';
 import type { Command } from '../../models/Command.js';

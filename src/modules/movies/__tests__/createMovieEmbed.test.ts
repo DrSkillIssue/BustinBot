@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock("discord.js", () => import("../../../tests/mocks/discordMock.js"));
 
 import { createMovieEmbed } from "../MovieEmbeds.js";

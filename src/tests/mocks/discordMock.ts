@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 export const mockEmbedInstance = {
     setTitle: vi.fn().mockReturnThis(),
     setDescription: vi.fn().mockReturnThis(),

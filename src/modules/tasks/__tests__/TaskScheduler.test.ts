@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock("node-cron", () => import("../../../tests/mocks/cronMock.js"));
 
 vi.mock("../HandlePrizeDraw.js", () => ({
