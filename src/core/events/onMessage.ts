@@ -1,4 +1,4 @@
-import { Message, GuildMember } from 'discord.js';
+import { Message } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
@@ -18,7 +18,7 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
     if (!command) return;
 
     // Permission check placeholder
-    const member = message.member as GuildMember;
+    const member = message.member;
     if (!member) {
         await message.reply('Unable to verify your permissions.');
         return;

@@ -3,6 +3,7 @@ import type { APIInteractionGuildMember, Interaction } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandModule, CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
+import type { GuildSetupComplete } from '../../models/Guild.js';
 import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
 
 export async function handleInteraction(
@@ -103,7 +104,7 @@ export async function handleInteraction(
         // Module setup validation
         const guildId = interaction.guildId!;
         const guildConfig = await services.guilds.get(guildId);
-        const setupMap = guildConfig?.setupComplete ?? {} as any;
+        const setupMap: GuildSetupComplete = guildConfig?.setupComplete ?? {};
 
         const requiredModule = command.module;
         const moduleReady = setupMap[requiredModule];
