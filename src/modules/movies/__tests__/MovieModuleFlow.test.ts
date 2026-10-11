@@ -458,6 +458,10 @@ describe("Movie module flows", () => {
 });
 
 describe("saveCurrentMovie", () => {
+  beforeEach(async () => {
+    saveCurrentMovie = (await import("../PickMovieInteractions.js")).saveCurrentMovie;
+  });
+
   it("updates the active event with the selected movie", async () => {
     const { scheduleMovieAutoEnd } = vi.mocked(await import("../MovieLifecycle.js")) as any;
     scheduleMovieAutoEnd.mockClear();
