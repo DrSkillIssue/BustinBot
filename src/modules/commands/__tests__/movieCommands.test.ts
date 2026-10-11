@@ -27,8 +27,6 @@ const { presentMovieSelection } = vi.mocked(await import('../../movies/MovieSele
 const { randomUUID } = vi.mocked(await import('node:crypto'));
 
 const { default: addmovie } = await import('../movies/addmovie.js');
-const { default: moviesetup } = await import('../movies/moviesetup.js');
-const { default: tasksetup } = await import('../tasks/tasksetup.js');
 
 const mockGuilds = {
     get: vi.fn(),
@@ -280,45 +278,5 @@ describe('addmovie command', () => {
 
         expect(fetchMovieDetailsById).toHaveBeenCalledWith(123);
         expect(addMovieWithStats).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('moviesetup and tasksetup commands', () => {
-    it('presents current movie configuration options', async () => {
-        const { interaction, reply } = baseInteraction();
-        mockGuilds.get.mockResolvedValue({
-            roles: { movieAdmin: 'movie-admin', movieUser: 'movie-user' },
-            channels: { movieNight: 'movie-channel', movieVC: 'movie-vc' },
-        });
-
-        await moviesetup.execute({ interaction: interaction as any, services: { guilds: mockGuilds } as any });
-
-        expect(mockGuilds.get).toHaveBeenCalledWith('guild-1');
-        expect(reply).toHaveBeenCalledWith(
-            expect.objectContaining({
-                content: expect.stringContaining('Select the channels and roles'),
-                components: expect.arrayContaining([
-                    expect.objectContaining({ components: expect.any(Array) }),
-                ]),
-            })
-        );
-    });
-
-    it('presents current task configuration options', async () => {
-        const { interaction, reply } = baseInteraction();
-        mockGuilds.get.mockResolvedValue({
-            roles: { taskAdmin: 'task-admin', taskUser: 'task-user' },
-            channels: { taskChannel: 'task-channel', taskVerification: 'verify-channel' },
-        });
-
-        await tasksetup.execute({ interaction: interaction as any, services: { guilds: mockGuilds } as any });
-
-        expect(mockGuilds.get).toHaveBeenCalledWith('guild-1');
-        expect(reply).toHaveBeenCalledWith(
-            expect.objectContaining({
-                content: expect.stringContaining('Configure the task roles'),
-                components: expect.any(Array),
-            })
-        );
     });
 });

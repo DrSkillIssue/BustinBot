@@ -1,3 +1,4 @@
+import type { Guild as DiscordGuild } from "discord.js";
 import type { GuildService } from "./GuildService.js";
 
 type SetupType = "core" | "movie" | "task";
@@ -118,4 +119,13 @@ export class SetupService {
 
         console.log(`[SetupService] Persisted ${type} setup for ${guildId}`);
     }
+}
+
+// How a configured channel or role reads in a setup menu's placeholder, which can't show mentions
+export function channelLabel(guild: DiscordGuild, channelId: string | undefined): string {
+    return channelId ? `#${guild.channels.cache.get(channelId)?.name ?? channelId}` : "None";
+}
+
+export function roleLabel(guild: DiscordGuild, roleId: string | undefined): string {
+    return roleId ? `@${guild.roles.cache.get(roleId)?.name ?? roleId}` : "None";
 }
