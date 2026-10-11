@@ -3,6 +3,8 @@ import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
+import type { Guild } from "../../models/Guild.js";
+import { IDS } from "../discord/payloads.js";
 
 // Builders return complete, valid domain objects; tests override only the fields they care about.
 
@@ -84,6 +86,19 @@ export function buildTaskPoll(overrides: Partial<TaskPoll> = {}): TaskPoll {
         endsAt: new Date("2026-01-05T00:00:00.000Z"),
         isActive: true,
         votes: {},
+        ...overrides,
+    };
+}
+
+// A fully set-up guild whose ids match the Discord harness's guild, channel and roles
+export function buildGuild(overrides: Partial<Guild> = {}): Guild {
+    return {
+        id: IDS.guild,
+        toggles: { taskScheduler: false, leaguesEnabled: false },
+        roles: { ...IDS.roles },
+        channels: { announcements: IDS.channel, taskChannel: IDS.channel, taskVerification: IDS.channel, movieNight: IDS.channel },
+        setupComplete: { core: true, movie: true, task: true },
+        timezone: "UTC",
         ...overrides,
     };
 }

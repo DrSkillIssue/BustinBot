@@ -13,6 +13,7 @@ export default defineConfig({
     },
     test: {
         environment: "node",
+        setupFiles: ["./src/tests/setup.ts"],
         coverage: { provider: "v8", reporter: ["text", "html"] },
         projects: [
             {
@@ -28,6 +29,11 @@ export default defineConfig({
                 test: {
                     name: "integration",
                     include: ["src/**/*.integration.test.ts"],
+                    env: {
+                        // Tests never run on Google Cloud; skip the metadata-server probe Google's auth library
+                        // otherwise makes before the first Firestore call
+                        METADATA_SERVER_DETECTION: "none",
+                    },
                     // Every file shares the one emulator database and clears it between tests
                     fileParallelism: false,
                 },
