@@ -130,15 +130,6 @@ export async function handleInteraction(
         }
 
         try {
-            const userRepo = services.repos.userRepo;
-            if (userRepo) {
-                // Not awaited so the Firestore write doesn't delay the command's own deferReply
-                userRepo.incrementStat(interaction.user.id, "commandsRun", 1).catch((err) => {
-                    console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
-                });
-            } else {
-                console.warn("[Stats] UserRepo unavailable; skipping commandsRun increment.");
-            }
             await command.execute({ interaction, services });
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
@@ -147,6 +138,18 @@ export async function handleInteraction(
             } else {
                 await interaction.followUp({ content: 'There was an error executing that command.', flags: 1 << 6 });
             }
+        }
+
+        // Counted after the command has responded, so the Firestore write never delays its acknowledgement
+        const userRepo = services.repos.userRepo;
+        if (userRepo) {
+            try {
+                await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
+            } catch (err) {
+                console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
+            }
+        } else {
+            console.warn("[Stats] UserRepo unavailable; skipping commandsRun increment.");
         }
         return;
     }

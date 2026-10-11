@@ -54,17 +54,19 @@ describe("slash command routing", () => {
         ]);
     });
 
-    test("counts the command in the member's stats without delaying it", async ({ discord, services }) => {
+    test("counts the command in the member's stats once it has responded", async ({ discord, services }) => {
+        const users = services.repos.userRepo!;
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        let statsWhenAcknowledged: unknown;
 
         await handleInteraction(interaction, new Map([["probe", command(async ({ interaction }) => {
             await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
+            statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
         })]]), services);
 
         expect(discord.callbacks(interaction)).toHaveLength(1);
-        await vi.waitFor(async () => {
-            expect(await services.repos.userRepo!.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
-        });
+        expect(statsWhenAcknowledged).toBeNull();
+        expect(await users.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
     test("replies with a private error when a command fails before responding", async ({ discord, services }) => {
