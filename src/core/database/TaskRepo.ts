@@ -4,7 +4,7 @@ import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
-import type { TaskFeedback } from "../../models/TaskFeedback.js";
+import type { TaskFeedback, TaskFeedbackOutcome } from "../../models/TaskFeedback.js";
 import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
 import type { TaskCategory } from "../../models/Task.js";
 import { taskConverter, taskEventConverter, taskFeedbackConverter, taskPollConverter, taskSubmissionConverter } from "./converters.js";
@@ -32,14 +32,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     async getTasksByCategory(category: string): Promise<Task[]> {
         const snapshot = await this.collection.where("category", "==", category).get();
         return snapshot.docs.map(doc => doc.data());
-    }
-
-    // Increment weighting field
-    async incrementWeight(id: string, amount = 1): Promise<void> {
-        const docRef = this.collection.doc(id);
-        const snap = await docRef.get();
-        const current = snap.data()?.weight ?? 0;
-        await docRef.update({ weight: current + amount });
     }
 
     private get pollsCollection() {
@@ -190,15 +182,32 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return this.guildCollection('taskFeedback', taskFeedbackConverter);
     }
 
-    async addFeedback(feedback: TaskFeedback): Promise<void> {
-        await this.feedbackCollection.doc(feedback.id).set(feedback);
-    }
+    // Records a member's 👍/👎 on a task and moves the task's weight by the change, in one transaction so that two
+    // clicks at once are counted once. Each member has one vote per task, stored under a predictable id.
+    async recordFeedback(feedback: Omit<TaskFeedback, "id">): Promise<TaskFeedbackOutcome> {
+        const { taskId, userId, vote } = feedback;
+        const taskRef = this.collection.doc(taskId);
+        const voteRef = this.feedbackCollection.doc(`${taskId}_${userId}`);
 
-    async getFeedbackForTask(taskId: string, eventId?: string): Promise<TaskFeedback[]> {
-    let query = this.feedbackCollection.where('taskId', '==', taskId);
-    if (eventId) query = query.where('eventId', '==', eventId);
-    const snapshot = await query.get();
-    return snapshot.docs.map((d) => d.data());
+        return this.db.runTransaction(async (transaction) => {
+            const task = await transaction.get(taskRef);
+            if (!task.exists) return "taskNotFound";
+
+            const stored = await transaction.get(voteRef);
+            // Votes cast before each member had one vote document per task were stored under other ids
+            const legacy = stored.exists
+                ? []
+                : (await transaction.get(this.feedbackCollection.where("taskId", "==", taskId).where("userId", "==", userId))).docs;
+            const previous = stored.data()?.vote ?? legacy[0]?.data().vote;
+            if (previous === vote) return "unchanged";
+
+            const step = vote === "up" ? 1 : -1;
+            transaction.set(voteRef, { ...feedback, id: voteRef.id });
+            for (const old of legacy) transaction.delete(old.ref);
+            // Changing a vote undoes the old one as well as adding the new one
+            transaction.update(taskRef, { weight: FieldValue.increment(previous ? 2 * step : step) });
+            return previous ? "changed" : "added";
+        });
     }
 
     async deleteAllTasks(): Promise<void> {

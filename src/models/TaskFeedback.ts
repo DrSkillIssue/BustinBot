@@ -5,3 +5,6 @@ export interface TaskFeedback {
     userId: string;
     vote: 'up' | 'down';
 }
+
+// What recording a member's vote on a task did
+export type TaskFeedbackOutcome = "added" | "changed" | "unchanged" | "taskNotFound";

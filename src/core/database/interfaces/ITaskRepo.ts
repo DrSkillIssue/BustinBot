@@ -2,7 +2,7 @@ import type { Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import type { TaskSubmission } from "../../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
-import type { TaskFeedback } from "../../../models/TaskFeedback.js";
+import type { TaskFeedback, TaskFeedbackOutcome } from "../../../models/TaskFeedback.js";
 import type { TaskCategory } from "../../../models/Task.js";
 
 export interface ITaskRepository {
@@ -10,7 +10,6 @@ export interface ITaskRepository {
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
     getTasksByCategory(category: string): Promise<Task[]>;
-    incrementWeight(id: string, amount?: number): Promise<void>;
 
     // Task polls
     createTaskPoll(poll: TaskPoll): Promise<void>;
@@ -41,8 +40,7 @@ export interface ITaskRepository {
     ): Promise<void>;
 
     // Feedback
-    addFeedback(feedback: TaskFeedback): Promise<void>;
-    getFeedbackForTask(taskId: string, eventId?: string): Promise<TaskFeedback[]>;
+    recordFeedback(feedback: Omit<TaskFeedback, "id">): Promise<TaskFeedbackOutcome>;
 
     // Utilities
     deleteAllTasks(): Promise<void>;

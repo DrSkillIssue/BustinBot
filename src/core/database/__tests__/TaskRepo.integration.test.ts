@@ -27,15 +27,6 @@ describe('TaskRepository tasks', () => {
         await repo.deleteAllTasks();
         expect(await repo.getAllTasks()).toEqual([]);
     });
-
-    test('adjusts a task\'s selection weight', async ({ repo }) => {
-        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
-
-        await repo.incrementWeight('PVM001', 1);
-        await repo.incrementWeight('PVM001', -2);
-
-        expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 49 });
-    });
 });
 
 describe('TaskRepository polls', () => {
@@ -143,13 +134,40 @@ describe('TaskRepository submissions', () => {
 });
 
 describe('TaskRepository feedback', () => {
-    test('stores feedback and filters it by task and event', async ({ repo }) => {
-        await repo.addFeedback({ id: 'f1', taskId: 'PVM001', eventId: 'week-1', userId: 'user-1', vote: 'up' });
-        await repo.addFeedback({ id: 'f2', taskId: 'PVM001', eventId: 'week-2', userId: 'user-2', vote: 'down' });
-        await repo.addFeedback({ id: 'f3', taskId: 'PVM002', eventId: 'week-1', userId: 'user-1', vote: 'up' });
+    const vote = (userId: string, direction: 'up' | 'down') => ({ taskId: 'PVM001', eventId: 'week-1', userId, vote: direction });
 
-        expect((await repo.getFeedbackForTask('PVM001')).map((f) => f.id).sort()).toEqual(['f1', 'f2']);
-        expect((await repo.getFeedbackForTask('PVM001', 'week-2')).map((f) => f.id)).toEqual(['f2']);
+    test('moves the task weight by a member\'s first vote, a changed vote and not a repeated one', async ({ repo }) => {
+        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
+
+        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('added');
+        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('unchanged');
+        expect(await repo.recordFeedback(vote('user-2', 'down'))).toBe('added');
+        expect(await repo.recordFeedback(vote('user-1', 'down'))).toBe('changed');
+
+        expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 48 });
+    });
+
+    test('counts a member\'s votes at the same moment once', async ({ repo }) => {
+        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
+
+        const outcomes = await Promise.all([repo.recordFeedback(vote('user-1', 'up')), repo.recordFeedback(vote('user-1', 'up'))]);
+
+        expect(outcomes.sort()).toEqual(['added', 'unchanged']);
+        expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 51 });
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+
+    test('treats a vote stored under an older id as the member\'s previous vote and moves it', async ({ repo, db }) => {
+        await repo.createTask(buildTask({ id: 'PVM001', weight: 51 }));
+        await db.doc('guilds/guild-1/taskFeedback/1730000000000').set({ id: '1730000000000', ...vote('user-1', 'up') });
+
+        expect(await repo.recordFeedback(vote('user-1', 'down'))).toBe('changed');
+
+        expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 49 });
+        expect((await db.collection('guilds/guild-1/taskFeedback').get()).docs.map((doc) => doc.id)).toEqual(['PVM001_user-1']);
+    });
+
+    test('records nothing for a task that doesn\'t exist', async ({ repo }) => {
+        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('taskNotFound');
     });
 });
 
