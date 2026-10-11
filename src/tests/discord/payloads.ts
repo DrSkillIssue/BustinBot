@@ -27,6 +27,7 @@ import {
     type APIRole,
     type APIUser,
     type GatewayGuildCreateDispatchData,
+    type GatewayMessageCreateDispatchData,
 } from "discord-api-types/v10";
 
 // Raw Discord API payloads, shaped exactly as Discord sends them. Tests override only what they care about.
@@ -271,6 +272,18 @@ export function apiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
         embeds: [],
         pinned: false,
         type: MessageType.Default,
+        ...overrides,
+    };
+}
+
+// A member's message in the harness guild's channel, as delivered by the gateway's MESSAGE_CREATE event
+export function messageCreate(content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): GatewayMessageCreateDispatchData {
+    const { user: _user, permissions: _permissions, ...member } = apiMember();
+    return {
+        ...apiMessage({ content, author: apiUser() }),
+        guild_id: IDS.guild,
+        member,
+        mentions: [],
         ...overrides,
     };
 }

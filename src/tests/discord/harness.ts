@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, type Interaction, type RESTOptions } from "discord.js";
+import { Client, GatewayIntentBits, type Interaction, type Message, type RESTOptions } from "discord.js";
 import {
     GatewayDispatchEvents,
     InteractionResponseType,
@@ -6,6 +6,7 @@ import {
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
     type GatewayGuildCreateDispatchData,
+    type GatewayMessageCreateDispatchData,
     type RESTPostAPIInteractionCallbackJSONBody,
 } from "discord-api-types/v10";
 import { http, HttpResponse, type JsonBodyType } from "msw";
@@ -84,6 +85,15 @@ export class DiscordHarness {
             this.client.once("interactionCreate", (interaction) => resolve(interaction as T));
         });
         this.gateway(GatewayDispatchEvents.InteractionCreate, payload);
+        return created;
+    }
+
+    // Delivers a message the way the gateway does and returns the discord.js Message created for it
+    async sendMessage(payload: GatewayMessageCreateDispatchData): Promise<Message> {
+        const created = new Promise<Message>((resolve) => {
+            this.client.once("messageCreate", resolve);
+        });
+        this.gateway(GatewayDispatchEvents.MessageCreate, payload);
         return created;
     }
 
