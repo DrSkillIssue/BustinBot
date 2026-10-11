@@ -6,7 +6,7 @@ import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction, nextId } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
+import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
 import { handleDirectMessage } from "../TaskInteractions.js";
 
@@ -302,11 +302,11 @@ describe("approving a submission", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await storeApproval(services, SubmissionStatus.Bronze);
-        await services.repos.taskLeaderboardRepo.createLeaderboard({
-            id: "periodic", points: { [IDS.user]: 1 }, tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } }, createdAt: "", updatedAt: "",
-            period: { length: 4, eventIds: [EVENT], startedAt: "", index: 1 },
-        });
-        await services.repos.taskLeaderboardRepo.createLeaderboard({ id: "lifetime", points: { [IDS.user]: 1 }, createdAt: "", updatedAt: "" });
+        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({
+            points: { [IDS.user]: 1 }, tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } },
+            period: buildLeaderboardPeriod({ eventIds: [EVENT] }),
+        }));
+        await services.repos.taskLeaderboardRepo.createLeaderboard(buildLifetimeLeaderboard({ points: { [IDS.user]: 1 } }));
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
 

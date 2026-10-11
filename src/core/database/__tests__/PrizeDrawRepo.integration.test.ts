@@ -1,21 +1,10 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
+import { buildPrizeDraw } from '../../../tests/fakes/builders.js';
+import { IDS, nextId } from '../../../tests/discord/payloads.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
-import type { PrizeDraw } from '../../../models/PrizeDraw.js';
 
-const test = base.extend('repo', ({ db }) => new PrizeDrawRepository(db, 'guild-1'));
-
-function buildPrizeDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
-    return {
-        id: '2026-01-05_to_2026-01-18',
-        start: '2026-01-05T00:00:00.000Z',
-        end: '2026-01-18T23:59:59.999Z',
-        snapshotTakenAt: '2026-01-19T00:00:00.000Z',
-        participants: {},
-        entries: [],
-        totalEntries: 0,
-        ...overrides,
-    };
-}
+const test = base.extend('repo', ({ db }) => new PrizeDrawRepository(db, IDS.guild));
+const otherUser = nextId();
 
 describe('PrizeDrawRepository', () => {
     test('stores draws and lists them newest first', async ({ repo }) => {
@@ -30,10 +19,10 @@ describe('PrizeDrawRepository', () => {
     test('records participants and recomputes the entry total', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
-        await repo.updateParticipants('2026-01-05_to_2026-01-18', { 'user-1': 2, 'user-2': 1 });
+        await repo.updateParticipants('2026-01-05_to_2026-01-18', { [IDS.user]: 2, [otherUser]: 1 });
 
         expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).toMatchObject({
-            participants: { 'user-1': 2, 'user-2': 1 },
+            participants: { [IDS.user]: 2, [otherUser]: 1 },
             totalEntries: 3,
         });
     });
@@ -41,12 +30,12 @@ describe('PrizeDrawRepository', () => {
     test('adds each user as an entry at most once', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
-        await repo.addEntry('2026-01-05_to_2026-01-18', 'user-1');
-        await repo.addEntry('2026-01-05_to_2026-01-18', 'user-1');
-        await repo.addEntry('2026-01-05_to_2026-01-18', 'user-2');
+        await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
+        await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
+        await repo.addEntry('2026-01-05_to_2026-01-18', otherUser);
 
         expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).toMatchObject({
-            entries: ['user-1', 'user-2'],
+            entries: [IDS.user, otherUser],
             totalEntries: 2,
         });
     });
@@ -54,10 +43,10 @@ describe('PrizeDrawRepository', () => {
     test('records the winner and when they were rolled', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
-        await repo.setWinner('2026-01-05_to_2026-01-18', 'user-1');
+        await repo.setWinner('2026-01-05_to_2026-01-18', IDS.user);
 
         const draw = await repo.getPrizeDrawById('2026-01-05_to_2026-01-18');
-        expect(draw).toMatchObject({ winnerId: 'user-1' });
+        expect(draw).toMatchObject({ winnerId: IDS.user });
         expect(draw?.rolledAt).toEqual(expect.any(String));
     });
 

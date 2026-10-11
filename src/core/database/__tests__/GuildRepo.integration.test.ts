@@ -33,11 +33,11 @@ describe('GuildRepository', () => {
     test('changes a single toggle and records who changed it', async ({ repo }) => {
         await repo.initGuild(IDS.guild, buildGuild({ toggles: { taskScheduler: false, leaguesEnabled: true } }));
 
-        await repo.updateToggle(IDS.guild, 'toggles.taskScheduler', true, 'user-1');
+        await repo.updateToggle(IDS.guild, 'toggles.taskScheduler', true, IDS.user);
 
         expect(await repo.getGuild(IDS.guild)).toMatchObject({
             toggles: { taskScheduler: true, leaguesEnabled: true },
-            updatedBy: 'user-1',
+            updatedBy: IDS.user,
         });
     });
 

@@ -1,15 +1,16 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { test as base, describe, expect, vi } from "../../../tests/fixtures.js";
+import { IDS } from "../../../tests/discord/payloads.js";
 import { KeywordRepository } from "../../../core/database/KeywordRepo.js";
 import { KeywordSelector } from "../KeywordSelector.js";
 
-const test = base.extend("repo", ({ db }) => new KeywordRepository(db, "guild-1"));
+const test = base.extend("repo", ({ db }) => new KeywordRepository(db, IDS.guild));
 
 // Stores keywords that were each used once, the first most recently
 async function storeKeywordsUsedInOrder(db: Firestore, words: string[]): Promise<void> {
     const lastUse = Date.UTC(2026, 0, 1);
     for (const [index, word] of words.entries()) {
-        await db.doc(`guilds/guild-1/keywords/${word}`).set({
+        await db.doc(`guilds/${IDS.guild}/keywords/${word}`).set({
             id: word,
             word,
             lastUsedAt: new Date(lastUse - index * 60_000),

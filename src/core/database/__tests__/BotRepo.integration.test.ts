@@ -1,29 +1,8 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
+import { buildBotStats } from '../../../tests/fakes/builders.js';
 import { BotRepository } from '../BotRepo.js';
-import type { BotStats } from '../../../models/BotStats.js';
 
 const test = base.extend('repo', ({ db }) => new BotRepository(db));
-
-function buildBotStats(): BotStats {
-    return {
-        startedAt: new Date('2026-01-01T00:00:00.000Z'),
-        commandsRun: 0,
-        commandsByName: {},
-        messagesSeen: 0,
-        guildCount: 0,
-        channelCount: 0,
-        userCount: 0,
-        moviesAdded: 0,
-        moviesWatched: 0,
-        moviePollsRun: 0,
-        tasksAdded: 0,
-        taskPollsRun: 0,
-        tasksCompleted: 0,
-        funStats: { bustinCount: 0, goodbotCount: 0, badbotCount: 0 },
-        errorCount: 0,
-        lastUpdatedAt: new Date('2026-01-01T00:00:00.000Z'),
-    };
-}
 
 describe('BotRepository', () => {
     test('reads the stats back exactly as stored', async ({ repo }) => {

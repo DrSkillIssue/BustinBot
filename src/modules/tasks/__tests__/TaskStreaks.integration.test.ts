@@ -1,4 +1,5 @@
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { IDS } from "../../../tests/discord/payloads.js";
 import type { ITaskRepository } from "../../../core/database/interfaces/ITaskRepo.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
@@ -17,7 +18,7 @@ async function storeWeeks(repo: ITaskRepository, start: Date, ids: string[]): Pr
 async function submit(repo: ITaskRepository, eventId: string, submittedAt: Date, overrides: Parameters<typeof buildTaskSubmission>[0] = {}): Promise<void> {
     await repo.createSubmission(buildTaskSubmission({
         id: `${eventId}-submission`,
-        userId: "user-1",
+        userId: IDS.user,
         taskEventId: eventId,
         status: SubmissionStatus.Bronze,
         createdAt: submittedAt,
@@ -33,7 +34,7 @@ describe("task streaks", () => {
         await storeWeeks(repo, start, ["week-1"]);
         await submit(repo, "week-1", at(start, 1));
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(start, 2))).toMatchObject({
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(start, 2))).toMatchObject({
             currentStreak: 1,
             longestStreak: 1,
             hasCompletedCurrentPeriod: true,
@@ -47,7 +48,7 @@ describe("task streaks", () => {
         await submit(repo, "week-1", at(start, 1));
         await submit(repo, "week-2", at(start, 8));
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(start, 8))).toMatchObject({
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(start, 8))).toMatchObject({
             currentStreak: 2,
             longestStreak: 2,
             hasCompletedCurrentPeriod: true,
@@ -60,7 +61,7 @@ describe("task streaks", () => {
         await storeWeeks(repo, start, ["week-1", "week-2", "week-3"]);
         await submit(repo, "week-1", at(start, 1));
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(start, 16))).toMatchObject({
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(start, 16))).toMatchObject({
             currentStreak: 0,
             longestStreak: 1,
             hasCompletedCurrentPeriod: false,
@@ -75,7 +76,7 @@ describe("task streaks", () => {
         await repo.createTaskEvent(buildTaskEvent({ id: "after-break", startTime: afterBreak, endTime: at(afterBreak, 7), createdAt: afterBreak }));
         await submit(repo, "before-break", at(start, 1));
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(afterBreak, 1))).toMatchObject({
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(afterBreak, 1))).toMatchObject({
             currentStreak: 1,
             longestStreak: 1,
             hasCompletedCurrentPeriod: false,
@@ -92,7 +93,7 @@ describe("task streaks", () => {
             createdAt: new Date(end.getTime() + 2 * 60 * 60 * 1000),
         });
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(end, 1))).toMatchObject({ currentStreak: 1, longestStreak: 1 });
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(end, 1))).toMatchObject({ currentStreak: 1, longestStreak: 1 });
     });
 
     test("ignore submissions that were rejected or are still pending", async ({ services }) => {
@@ -102,6 +103,6 @@ describe("task streaks", () => {
         await submit(repo, "week-1", at(start, 1), { status: SubmissionStatus.Rejected });
         await submit(repo, "week-2", at(start, 8), { status: SubmissionStatus.Pending });
 
-        expect(await calculateTaskStreakSummary("user-1", repo, at(start, 9))).toMatchObject({ currentStreak: 0, longestStreak: 0 });
+        expect(await calculateTaskStreakSummary(IDS.user, repo, at(start, 9))).toMatchObject({ currentStreak: 0, longestStreak: 0 });
     });
 });

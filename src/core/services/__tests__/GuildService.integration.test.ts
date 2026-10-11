@@ -57,12 +57,12 @@ describe("GuildService", () => {
     });
 
     test("loads every guild into the cache", async ({ repo, guilds, db }) => {
-        await repo.initGuild("guild-a", buildGuild({ id: "guild-a" }));
-        await repo.initGuild("guild-b", buildGuild({ id: "guild-b" }));
+        await repo.initGuild(IDS.guild, buildGuild({ id: IDS.guild }));
+        await repo.initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
 
-        expect((await guilds.getAll()).map((guild) => guild.id).sort()).toEqual(["guild-a", "guild-b"]);
-        await db.doc("guilds/guild-a").delete();
-        expect(await guilds.get("guild-a")).toMatchObject({ id: "guild-a" });
+        expect((await guilds.getAll()).map((guild) => guild.id).sort()).toEqual([IDS.guild, IDS.otherGuild]);
+        await db.doc(`guilds/${IDS.guild}`).delete();
+        expect(await guilds.get(IDS.guild)).toMatchObject({ id: IDS.guild });
     });
 
     test("creates a guild record only when one does not exist", async ({ repo, guilds }) => {

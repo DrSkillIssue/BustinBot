@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
-import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { buildPrizeDraw, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { PrizeDraw } from "../../../models/PrizeDraw.js";
 import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../HandlePrizeDraw.js";
@@ -24,8 +24,9 @@ async function snapshot(services: ServiceContainer): Promise<PrizeDraw> {
     return generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
 }
 
+// A draw whose snapshot was taken yesterday, the winner holding two of its three entries
 function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
-    return {
+    return buildPrizeDraw({
         id: "draw-1",
         start: daysAgo(14).toISOString(),
         end: daysAgo(1).toISOString(),
@@ -35,7 +36,7 @@ function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
         totalEntries: 3,
         tierCounts: { bronze: 1, silver: 1, gold: 1 },
         ...overrides,
-    };
+    });
 }
 
 describe("a prize draw snapshot", () => {

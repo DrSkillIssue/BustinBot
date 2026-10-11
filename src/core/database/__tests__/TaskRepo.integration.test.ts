@@ -1,11 +1,13 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
+import { IDS, nextId } from '../../../tests/discord/payloads.js';
 import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus, type SubmissionTier } from '../../../models/TaskSubmission.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
 
-const test = base.extend('repo', ({ db }) => new TaskRepository(db, 'guild-1'));
+const test = base.extend('repo', ({ db }) => new TaskRepository(db, IDS.guild));
+const otherUser = nextId();
 
 describe('TaskRepository tasks', () => {
     test('creates, reads and lists tasks by category', async ({ repo }) => {
@@ -54,12 +56,12 @@ describe('TaskRepository polls', () => {
     test('records votes and reports whether each was the voter\'s first', async ({ repo }) => {
         await repo.createTaskPoll(buildTaskPoll());
 
-        const first = await repo.voteInPollOnce('poll-1', 'user-1', 'PVM001');
-        const changed = await repo.voteInPollOnce('poll-1', 'user-1', 'PVM002');
+        const first = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM001');
+        const changed = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM002');
 
         expect(first.firstTime).toBe(true);
         expect(changed.firstTime).toBe(false);
-        expect((await repo.getTaskPollById('poll-1'))?.votes).toEqual({ 'user-1': 'PVM002' });
+        expect((await repo.getTaskPollById('poll-1'))?.votes).toEqual({ [IDS.user]: 'PVM002' });
     });
 
     test('counts every vote when voters vote at the same time', async ({ repo }) => {
@@ -91,14 +93,14 @@ describe('TaskRepository events', () => {
 
 describe('TaskRepository submissions', () => {
     test('finds submissions by id, event and user', async ({ repo }) => {
-        await repo.createSubmission(buildTaskSubmission({ id: 'a', userId: 'user-1', taskEventId: 'week-1' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'b', userId: 'user-2', taskEventId: 'week-1' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'c', userId: 'user-1', taskEventId: 'week-2' }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'a', userId: IDS.user, taskEventId: 'week-1' }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'b', userId: otherUser, taskEventId: 'week-1' }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'c', userId: IDS.user, taskEventId: 'week-2' }));
 
-        expect(await repo.getSubmissionById('a')).toMatchObject({ userId: 'user-1' });
+        expect(await repo.getSubmissionById('a')).toMatchObject({ userId: IDS.user });
         expect(await repo.getSubmissionById('missing')).toBeNull();
         expect((await repo.getSubmissionsForTask('week-1')).map((s) => s.id).sort()).toEqual(['a', 'b']);
-        expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id).sort()).toEqual(['a', 'c']);
+        expect((await repo.getSubmissionsByUser(IDS.user)).map((s) => s.id).sort()).toEqual(['a', 'c']);
     });
 
     test('gives every new submission its own id', async ({ repo }) => {
@@ -112,20 +114,20 @@ describe('TaskRepository submissions', () => {
         await repo.createSubmission(buildTaskSubmission({ id: 'bronze', status: SubmissionStatus.Bronze }));
         await repo.createSubmission(buildTaskSubmission({ id: 'rejected', status: SubmissionStatus.Rejected }));
 
-        expect(await repo.getHeldTier('user-1', 'PVM001-20260105')).toBe(SubmissionStatus.Silver);
-        expect(await repo.getHeldTier('user-2', 'PVM001-20260105')).toBeNull();
+        expect(await repo.getHeldTier(IDS.user, 'PVM001-20260105')).toBe(SubmissionStatus.Silver);
+        expect(await repo.getHeldTier(otherUser, 'PVM001-20260105')).toBeNull();
     });
 });
 
 describe('TaskRepository submission drafts', () => {
-    const draft = (taskEventId: string, createdAt = new Date('2026-01-06T00:00:00.000Z')) => ({ userId: 'user-1', taskEventId, createdAt });
+    const draft = (taskEventId: string, createdAt = new Date('2026-01-06T00:00:00.000Z')) => ({ userId: IDS.user, taskEventId, createdAt });
 
     test('keeps one draft per member, the latest replacing the one before', async ({ repo }) => {
         await repo.saveSubmissionDraft(draft('week-1'));
         await repo.saveSubmissionDraft(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
 
-        expect(await repo.getSubmissionDraft('user-1')).toEqual(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
-        expect(await repo.getSubmissionDraft('user-2')).toBeNull();
+        expect(await repo.getSubmissionDraft(IDS.user)).toEqual(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
+        expect(await repo.getSubmissionDraft(otherUser)).toBeNull();
     });
 
     test('turns a draft into a submission once', async ({ repo }) => {
@@ -134,8 +136,8 @@ describe('TaskRepository submission drafts', () => {
         expect(await repo.submitDraft(buildTaskSubmission({ id: 'first' }))).toBe(true);
         expect(await repo.submitDraft(buildTaskSubmission({ id: 'second' }))).toBe(false);
 
-        expect(await repo.getSubmissionDraft('user-1')).toBeNull();
-        expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id)).toEqual(['first']);
+        expect(await repo.getSubmissionDraft(IDS.user)).toBeNull();
+        expect((await repo.getSubmissionsByUser(IDS.user)).map((s) => s.id)).toEqual(['first']);
     });
 
     test('turns a draft into one submission when two arrive at the same moment', async ({ repo }) => {
@@ -144,14 +146,14 @@ describe('TaskRepository submission drafts', () => {
         const outcomes = await Promise.all([repo.submitDraft(buildTaskSubmission({ id: 'a' })), repo.submitDraft(buildTaskSubmission({ id: 'b' }))]);
 
         expect(outcomes.sort()).toEqual([false, true]);
-        expect(await repo.getSubmissionsByUser('user-1')).toHaveLength(1);
+        expect(await repo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('refuses a submission for another task than the draft is for', async ({ repo }) => {
         await repo.saveSubmissionDraft(draft('week-2'));
 
         expect(await repo.submitDraft(buildTaskSubmission({ taskEventId: 'week-1' }))).toBe(false);
-        expect(await repo.getSubmissionDraft('user-1')).not.toBeNull();
+        expect(await repo.getSubmissionDraft(IDS.user)).not.toBeNull();
     });
 });
 
@@ -169,12 +171,12 @@ describe('TaskRepository reviews', () => {
         expect(await repo.getSubmissionById('upgrade')).toMatchObject({ status: 'gold', reviewedBy: 'admin-1', reviewedAt: expect.any(Date), prizeRolls: 1 });
         expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({
             completionCounts: { bronze: 0, silver: 0, gold: 1 },
-            completedUserIds: ['user-1'],
+            completedUserIds: [IDS.user],
         });
     });
 
     test('resolves an approval at or below the member\'s tier without counting it', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: ['user-1'] }));
+        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] }));
         await repo.createSubmission(buildTaskSubmission({ id: 'held', status: SubmissionStatus.Silver }));
         await repo.createSubmission(buildTaskSubmission({ id: 'lower' }));
 
@@ -185,14 +187,14 @@ describe('TaskRepository reviews', () => {
     });
 
     test('rejects a submission with its reason, leaving the tier the member holds', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: ['user-1'] }));
+        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] }));
         await repo.createSubmission(buildTaskSubmission({ id: 'held', status: SubmissionStatus.Bronze }));
         await repo.createSubmission(buildTaskSubmission({ id: 'retry' }));
 
         await repo.reviewSubmission({ submissionId: 'retry', reviewedBy: 'admin-1', decision: SubmissionStatus.Rejected, rejectionReason: 'No keyword' });
 
         expect(await repo.getSubmissionById('retry')).toMatchObject({ status: 'rejected', rejectionReason: 'No keyword', reviewedBy: 'admin-1' });
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: ['user-1'] });
+        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
     });
 
     test('reviews a submission once', async ({ repo }) => {
@@ -232,10 +234,10 @@ describe('TaskRepository feedback', () => {
     test('moves the task weight by a member\'s first vote, a changed vote and not a repeated one', async ({ repo }) => {
         await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
 
-        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('added');
-        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('unchanged');
-        expect(await repo.recordFeedback(vote('user-2', 'down'))).toBe('added');
-        expect(await repo.recordFeedback(vote('user-1', 'down'))).toBe('changed');
+        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('added');
+        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('unchanged');
+        expect(await repo.recordFeedback(vote(otherUser, 'down'))).toBe('added');
+        expect(await repo.recordFeedback(vote(IDS.user, 'down'))).toBe('changed');
 
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 48 });
     });
@@ -243,7 +245,7 @@ describe('TaskRepository feedback', () => {
     test('counts a member\'s votes at the same moment once', async ({ repo }) => {
         await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
 
-        const outcomes = await Promise.all([repo.recordFeedback(vote('user-1', 'up')), repo.recordFeedback(vote('user-1', 'up'))]);
+        const outcomes = await Promise.all([repo.recordFeedback(vote(IDS.user, 'up')), repo.recordFeedback(vote(IDS.user, 'up'))]);
 
         expect(outcomes.sort()).toEqual(['added', 'unchanged']);
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 51 });
@@ -251,16 +253,16 @@ describe('TaskRepository feedback', () => {
 
     test('treats a vote stored under an older id as the member\'s previous vote and moves it', async ({ repo, db }) => {
         await repo.createTask(buildTask({ id: 'PVM001', weight: 51 }));
-        await db.doc('guilds/guild-1/taskFeedback/1730000000000').set({ id: '1730000000000', ...vote('user-1', 'up') });
+        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({ id: '1730000000000', ...vote(IDS.user, 'up') });
 
-        expect(await repo.recordFeedback(vote('user-1', 'down'))).toBe('changed');
+        expect(await repo.recordFeedback(vote(IDS.user, 'down'))).toBe('changed');
 
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 49 });
-        expect((await db.collection('guilds/guild-1/taskFeedback').get()).docs.map((doc) => doc.id)).toEqual(['PVM001_user-1']);
+        expect((await db.collection(`guilds/${IDS.guild}/taskFeedback`).get()).docs.map((doc) => doc.id)).toEqual([`PVM001_${IDS.user}`]);
     });
 
     test('records nothing for a task that doesn\'t exist', async ({ repo }) => {
-        expect(await repo.recordFeedback(vote('user-1', 'up'))).toBe('taskNotFound');
+        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('taskNotFound');
     });
 });
 
@@ -275,10 +277,10 @@ describe('TaskRepository dates', () => {
         await repo.createTaskEvent(event);
         await repo.createTaskPoll(poll);
         await repo.createSubmission(submission);
-        const draft = { userId: 'user-1', taskEventId: event.id, createdAt: new Date('2026-01-06T00:30:00.000Z') };
+        const draft = { userId: IDS.user, taskEventId: event.id, createdAt: new Date('2026-01-06T00:30:00.000Z') };
         await repo.saveSubmissionDraft(draft);
 
-        expect(await repo.getSubmissionDraft('user-1')).toEqual(draft);
+        expect(await repo.getSubmissionDraft(IDS.user)).toEqual(draft);
         expect(await repo.getTaskEventById(event.id)).toEqual(event);
         expect(await repo.getTaskPollById(poll.id)).toEqual(poll);
         expect(await repo.getSubmissionById(submission.id)).toEqual(submission);

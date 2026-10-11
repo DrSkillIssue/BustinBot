@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { IDS, apiGuildMember, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from "../HandleLeaderboardUpdate.js";
@@ -25,12 +25,8 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
 }
 
 async function storePeriodic(services: ServiceContainer, overrides: Partial<TaskLeaderboard>): Promise<void> {
-    await services.repos.taskLeaderboardRepo.createLeaderboard({
-        id: "periodic", points: {}, tierCounts: {}, createdAt: "", updatedAt: "",
-        period: { length: 4, eventIds: [], startedAt: "", index: 1 },
-        ...overrides,
-    });
-    await services.repos.taskLeaderboardRepo.createLeaderboard({ id: "lifetime", points: {}, createdAt: "", updatedAt: "" });
+    await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard(overrides));
+    await services.repos.taskLeaderboardRepo.createLeaderboard(buildLifetimeLeaderboard());
 }
 
 // Champion roles set up in the guild, and the members who placed, as Discord knows them
@@ -53,7 +49,7 @@ describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const events = await storeWeeks(services, 2, 1);
-        await storePeriodic(services, { points: { [winner]: 6 }, tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
+        await storePeriodic(services, { points: { [winner]: 6 }, tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } }, period: buildLeaderboardPeriod({ eventIds: events }) });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: winner, username: "member1", global_name: "member1" }) }));
         discord.acceptMessages(IDS.channel);
 
@@ -71,7 +67,8 @@ describe("the weekly leaderboard update", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
+        const period = buildLeaderboardPeriod({ eventIds: events });
+        await storePeriodic(services, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
         const { roles, dms } = await setUpChampions(discord, services);
         discord.acceptMessages(IDS.channel);
 
@@ -79,9 +76,9 @@ describe("the weekly leaderboard update", () => {
 
         const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored).toMatchObject({
-            points: {}, period: { index: 2, eventIds: [] },
-            completedPeriod: { index: 1, topThree: [{ userId: winner, points: 9 }, { userId: runnerUp, points: 6 }, { userId: third, points: 1 }] },
-            champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: 1 },
+            points: {}, period: { index: period.index + 1, eventIds: [] },
+            completedPeriod: { index: period.index, topThree: [{ userId: winner, points: 9 }, { userId: runnerUp, points: 6 }, { userId: third, points: 1 }] },
+            champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: period.index },
         });
         expect(discord.memberRoleChanges("PUT").sort()).toEqual([`${winner}:${roles.first.id}`, `${runnerUp}:${roles.second.id}`, `${third}:${roles.third.id}`].sort());
         expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
@@ -91,14 +88,14 @@ describe("the weekly leaderboard update", () => {
         expect(discord.messagesSentTo(dms[winner]!)).toEqual([expect.objectContaining({
             content: "🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **Test Guild**.\nYou have been awarded the **Task Champion (1st)** role to flex.",
         })]);
-        expect(warn).toHaveBeenCalledWith("[LeaderboardUpdate] Period 1 had already ended.");
+        expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Period ${period.index} had already ended.`);
     });
 
     test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({ discord, services, slash }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { points: { [winner]: 9 }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
+        await storePeriodic(services, { points: { [winner]: 9 }, period: buildLeaderboardPeriod({ eventIds: events }) });
         await setUpChampions(discord, services);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel, { persist: true });
@@ -139,7 +136,7 @@ describe("the warning before a period ends", () => {
     test("tells the task admins how many submissions still need reviewing", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
+        await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
             await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: `pending-${index}`, taskEventId: eventId, status: SubmissionStatus.Pending }));
         }
@@ -157,7 +154,7 @@ describe("the warning before a period ends", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
+        await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });
         await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
         await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);

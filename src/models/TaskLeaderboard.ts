@@ -21,10 +21,14 @@ export interface TaskTierChange {
     to: SubmissionTier;
 }
 
+// One leaderboard period: a run of weekly task events whose points count towards the same standings
 export interface TaskLeaderboardPeriod {
+    // How many weeks of task events the period lasts
     length: number;
+    // The task events registered in it so far
     eventIds: string[];
     startedAt: string;
+    // Which period this is: 1 for the guild's first, counting up as each one ends
     index: number;
 }
 

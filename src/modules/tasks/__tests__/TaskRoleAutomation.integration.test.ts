@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { IDS, apiGuildMember, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
-import { buildUserStats } from "../../../tests/fakes/builders.js";
+import { buildLeaderboardPeriod, buildPeriodicLeaderboard, buildUserStats } from "../../../tests/fakes/builders.js";
 import { applyTaskMilestoneRoles } from "../TaskMilestones.js";
 import { awardTaskChampionRoles } from "../TaskLeaderboards.js";
 
@@ -54,11 +54,12 @@ describe("champion roles", () => {
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: first.id, taskChampionSecond: second.id } });
         const previousChampion = nextId();
         const runnerUp = nextId();
-        await services.repos.taskLeaderboardRepo.createLeaderboard({
-            id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z",
-            period: { length: 4, eventIds: [], startedAt: "2026-01-05T00:00:00.000Z", index: 4 },
+        // Champions are awarded once their period has ended and the next one has begun
+        const endedPeriod = 3;
+        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({
+            period: buildLeaderboardPeriod({ index: endedPeriod + 1 }),
             champions: { first: [previousChampion] },
-        });
+        }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: runnerUp }) }));
@@ -69,14 +70,14 @@ describe("champion roles", () => {
             second: [{ userId: runnerUp, points: 8 }],
             third: [],
             winners: [{ userId: member, points: 10 }, { userId: runnerUp, points: 8 }],
-        }, 3);
+        }, endedPeriod);
 
         expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);
         expect(await services.repos.userRepo.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
         expect(await services.repos.userRepo.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
         expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.champions).toMatchObject({
-            first: [member], second: [runnerUp], third: [], periodIndex: 3,
+            first: [member], second: [runnerUp], third: [], periodIndex: endedPeriod,
         });
     });
 });

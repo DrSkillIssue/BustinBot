@@ -8,7 +8,7 @@ import {
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
-import { buttonInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
@@ -28,11 +28,11 @@ beforeEach(() => {
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {
-        await services.repos.userRepo.createUser(buildUserStats({ userId: "user-1", tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
 
         await ensureTaskLeaderboardsInitialized(services);
 
-        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { "user-1": 8 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 8 } });
         expect(await periodic(services)).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
     });
 });
@@ -101,8 +101,11 @@ describe("TaskLeaderboards periodic submissions", () => {
 
         const finalising = await periodic(services);
         expect(finalising?.points).toEqual({ "old-period-user": 6 });
+        // The leaderboard starts at its first period
+        const firstPeriod = 1;
+        expect(finalising?.period?.index).toBe(firstPeriod);
 
-        const finalised = await finalizePeriodicLeaderboard(services, finalising!.period!.index);
+        const finalised = await finalizePeriodicLeaderboard(services, firstPeriod);
 
         expect(finalised?.placements.first).toEqual([{ userId: "old-period-user", points: 6 }]);
         const stored = await periodic(services);
@@ -111,7 +114,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         expect(stored?.period?.eventIds).toEqual(["week-5"]);
         expect(stored?.points).toEqual({ "overlap-user": 3 });
         expect(stored?.tierCounts).toEqual({ "overlap-user": { silver: 1 } });
-        expect(await finalizePeriodicLeaderboard(services, finalising!.period!.index)).toBeNull();
+        expect(await finalizePeriodicLeaderboard(services, firstPeriod)).toBeNull();
     });
 
     test("moves tier counts when approved submissions are upgraded", async ({ services }) => {

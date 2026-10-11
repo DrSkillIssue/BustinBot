@@ -3,7 +3,7 @@ import { ApplicationCommandOptionType, type APIApplicationCommandInteractionData
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
 import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, nextId, withRoles } from "../../../../tests/discord/payloads.js";
-import { buildUserStats } from "../../../../tests/fakes/builders.js";
+import { buildPeriodicLeaderboard, buildUserStats } from "../../../../tests/fakes/builders.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
 import type { TaskMilestoneRole } from "../../../../models/Guild.js";
 
@@ -167,9 +167,7 @@ describe("/taskroles toggle", () => {
         const gold = apiRole({ name: "Gold Champion" });
         serveRoles(discord, [gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
-        await services.repos.taskLeaderboardRepo.createLeaderboard({
-            id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z", champions: { first: [member] },
-        });
+        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({ champions: { first: [member] } }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 

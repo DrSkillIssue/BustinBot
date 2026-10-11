@@ -1,8 +1,9 @@
 import { test as base, describe, expect, vi } from '../../../tests/fixtures.js';
+import { IDS } from '../../../tests/discord/payloads.js';
 import { Timestamp } from 'firebase-admin/firestore';
 import { KeywordRepository } from '../KeywordRepo.js';
 
-const test = base.extend('repo', ({ db }) => new KeywordRepository(db, 'guild-1'));
+const test = base.extend('repo', ({ db }) => new KeywordRepository(db, IDS.guild));
 
 
 describe('KeywordRepository', () => {
@@ -40,7 +41,7 @@ describe('KeywordRepository', () => {
 
     test('picks only from keywords outside the most recently used ones', async ({ repo, db }) => {
         for (const [index, word] of ['a', 'b', 'c', 'd'].entries()) {
-            await db.doc(`guilds/guild-1/keywords/${word}`).set({
+            await db.doc(`guilds/${IDS.guild}/keywords/${word}`).set({
                 id: word,
                 word,
                 lastUsedAt: Timestamp.fromMillis(1000 - index),
