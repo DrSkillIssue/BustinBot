@@ -17,6 +17,7 @@ import {
     MessageType,
     RoleFlags,
     type APIApplicationCommandInteractionDataOption,
+    type APIAttachment,
     type APIChatInputApplicationCommandGuildInteraction,
     type APIGuildMember,
     type APIGuildTextChannel,
@@ -41,6 +42,8 @@ export const IDS = {
     bot: "100000000000000002",
     guild: "100000000000000010",
     channel: "100000000000000020",
+    // The harness user's DM channel with the bot
+    dm: "100000000000000050",
     user: "100000000000000030",
     roles: {
         admin: "100000000000000041",
@@ -90,9 +93,10 @@ export function apiRole(overrides: Partial<APIRole> = {}): APIRole {
     };
 }
 
+// A guild text channel, as the gateway and REST API send one: with the id of its guild
 export function apiTextChannel(
     overrides: Partial<APIGuildTextChannel<ChannelType.GuildText>> = {}
-): APIGuildTextChannel<ChannelType.GuildText> {
+): APIGuildTextChannel<ChannelType.GuildText> & { guild_id: string } {
     return {
         id: IDS.channel,
         type: ChannelType.GuildText,
@@ -342,6 +346,32 @@ export function messageCreate(content: string, overrides: Partial<GatewayMessage
         ...apiMessage({ content, author: apiUser() }),
         guild_id: IDS.guild,
         member,
+        mentions: [],
+        ...overrides,
+    };
+}
+
+// A file attached to a message, stored on Discord's CDN
+export function apiAttachment(overrides: Partial<APIAttachment> = {}): APIAttachment {
+    const id = overrides.id ?? nextId();
+    const filename = overrides.filename ?? "screenshot.png";
+    const url = `https://cdn.discordapp.com/attachments/${IDS.channel}/${id}/${filename}`;
+    return {
+        id,
+        filename,
+        size: 8,
+        url,
+        proxy_url: url.replace("cdn.discordapp.com", "media.discordapp.net"),
+        content_type: "image/png",
+        ...overrides,
+    };
+}
+
+// A member's message to the bot in their DMs, as delivered by the gateway's MESSAGE_CREATE event
+export function directMessage(content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): GatewayMessageCreateDispatchData {
+    return {
+        ...apiMessage({ content, author: apiUser(), channel_id: IDS.dm }),
+        channel_type: ChannelType.DM,
         mentions: [],
         ...overrides,
     };

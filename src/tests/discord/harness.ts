@@ -1,6 +1,6 @@
 import { EventEmitter, once } from "node:events";
 import { Collection } from "@discordjs/collection";
-import { Client, Events, GatewayIntentBits, type Interaction, type Message } from "discord.js";
+import { Client, Events, type Interaction, type Message } from "discord.js";
 import {
     WebSocketShardEvents,
     WebSocketShardStatus,
@@ -13,6 +13,7 @@ import {
     GatewayDispatchEvents,
     GatewayOpcodes,
     InteractionResponseType,
+    type APIAttachment,
     type APIDMChannel,
     type APIGatewayBotInfo,
     type APIGuildMember,
@@ -21,6 +22,7 @@ import {
     type APIInteraction,
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
+    type GatewayChannelCreateDispatchData,
     type GatewayDispatchPayload,
     type GatewayGuildCreateDispatchData,
     type GatewayMessageCreateDispatchData,
@@ -33,10 +35,13 @@ import {
 } from "discord-api-types/v10";
 import type { Interceptable } from "undici";
 import type { MockInterceptor } from "undici/types/mock-interceptor.js";
+import { clientOptions } from "../../clientOptions.js";
 import { mockAgent } from "../http.js";
 import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 
 const API = "/api/v10";
+// The 8-byte signature that opens every PNG file
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
 
 // A request body as Discord reads it. JSON bodies are parsed; multipart bodies (messages with attachments) carry
@@ -140,8 +145,9 @@ export class DiscordHarness {
     // A client that has not logged in yet, for wiring the bot's event handlers before READY arrives
     static create(guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
         let harness: DiscordHarness | undefined;
+        // Configured as the bot's own client is, so events reach it just as they reach the bot
         const client = new Client({
-            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
+            ...clientOptions,
             ws: {
                 buildStrategy: (manager) => {
                     const gateway = new TestGateway(manager, guild);
@@ -182,6 +188,13 @@ export class DiscordHarness {
     async addRole(guildId: string, role: APIRole): Promise<void> {
         const created = once(this.client, Events.GuildRoleCreate);
         this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.GuildRoleCreate, s: 0, d: { guild_id: guildId, role } });
+        await created;
+    }
+
+    // A channel being created in a guild, as the gateway announces it, so discord.js has it cached
+    async addChannel(channel: GatewayChannelCreateDispatchData): Promise<void> {
+        const created = once(this.client, Events.ChannelCreate);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.ChannelCreate, s: 0, d: channel });
         await created;
     }
 
@@ -258,6 +271,30 @@ export class DiscordHarness {
             .persist();
     }
 
+    // A message Discord has, so the bot can fetch it
+    message(message: APIMessage): void {
+        this.api
+            .intercept({ path: `${API}/channels/${message.channel_id}/messages/${message.id}`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: message, responseOptions: JSON_RESPONSE })))
+            .persist();
+    }
+
+    // Discord accepting the deletion of messages in a channel
+    acceptMessageDeletions(channelId: string): void {
+        this.api
+            .intercept({ path: startingWith(`${API}/channels/${channelId}/messages/`), method: "DELETE" })
+            .reply(this.answered(() => ({ statusCode: 204 })))
+            .persist();
+    }
+
+    // Ids of the messages deleted in a channel
+    messageDeletions(channelId: string): string[] {
+        const prefix = `/channels/${channelId}/messages/`;
+        return this.requests()
+            .filter((request) => request.method === "DELETE" && request.path.startsWith(prefix))
+            .map((request) => request.path.slice(prefix.length));
+    }
+
     // Edits made to a message
     messageEdits(channelId: string, messageId: string): SentMessage[] {
         return this.bodies("PATCH", `/channels/${channelId}/messages/${messageId}`);
@@ -292,6 +329,16 @@ export class DiscordHarness {
             .persist();
         this.acceptMessages(dmChannelId);
         return dmChannelId;
+    }
+
+    // Discord's CDN serving a file attached to a message, so the bot can download it to post it elsewhere
+    serveAttachment(attachment: APIAttachment, contents: Uint8Array = PNG): void {
+        const { origin, pathname } = new URL(attachment.url);
+        mockAgent()
+            .get(origin)
+            .intercept({ path: startingWith(pathname), method: "GET" })
+            .reply(200, Buffer.from(contents), { headers: { "content-type": attachment.content_type ?? "application/octet-stream" } })
+            .persist();
     }
 
     // Discord listing a guild's roles

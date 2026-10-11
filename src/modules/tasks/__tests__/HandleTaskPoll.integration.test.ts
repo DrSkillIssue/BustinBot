@@ -132,9 +132,7 @@ describe("closing a task poll", () => {
         const poll = await storeOpenPoll(services, { votes: { "100000000000000031": "PVM002" } });
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages/${poll.messageId}`, method: "GET" })
-            .reply(200, apiMessage({ id: poll.messageId }), { headers: { "content-type": "application/json" } });
+        discord.message(apiMessage({ id: poll.messageId }));
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "keyword");
 

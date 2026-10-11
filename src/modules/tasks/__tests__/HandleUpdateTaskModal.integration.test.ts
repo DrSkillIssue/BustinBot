@@ -1,7 +1,6 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskPoll } from "../../../tests/fakes/builders.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
@@ -11,13 +10,6 @@ const DAY = 24 * HOUR;
 const eventMessage = "100000000000000600";
 const pollMessage = "100000000000000601";
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
-
-// Discord serving a message the bot posted, so it can be fetched and edited
-function servePost(discord: DiscordHarness, messageId: string): void {
-    discord.api
-        .intercept({ path: `/api/v10/channels/${IDS.channel}/messages/${messageId}`, method: "GET" })
-        .reply(200, apiMessage({ id: messageId }), { headers: { "content-type": "application/json" } });
-}
 
 async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
     const task = buildTask({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
@@ -43,7 +35,7 @@ describe("the update task form", () => {
             id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" })],
             votes: { "100000000000000032": "PVM001" }, endsAt: new Date(Date.now() + HOUR),
         }));
-        for (const message of [eventMessage, pollMessage]) servePost(discord, message);
+        for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
