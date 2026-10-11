@@ -9,7 +9,7 @@ import {
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
-import { hasActiveTaskPollCollector, handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -18,11 +18,6 @@ export async function handleTaskInteraction(
 ) {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
-            // Live polls use in-memory collectors. Persisted fallback handles post-restart votes.
-            if (hasActiveTaskPollCollector(interaction.message.id)) {
-                return;
-            }
-
             await handleTaskPollVoteInteraction(interaction, services);
             return;
         }

@@ -3,7 +3,7 @@ import { buildTaskEventEmbed } from "./TaskEmbeds.js";
 import { isTextChannel } from "../../utils/ChannelUtils.js";
 import { TaskCategory, TaskType } from "../../models/Task.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
+import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
 
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
     await interaction.deferReply({ flags: 1 << 6 });
@@ -68,11 +68,11 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     if (task.category) {
         const activePoll = await repo.getActiveTaskPollByCategory(task.category as TaskCategory);
         if (activePoll?.options?.some(option => option.id === task.id)) {
+            // Only the options change, so votes cast meanwhile are kept
             activePoll.options = activePoll.options.map(option =>
                 option.id === task.id ? { ...option, ...task } : option
             );
-            await repo.createTaskPoll(activePoll);
-            syncActivePollSelection(activePoll.messageId, task);
+            await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
             try {
                 await refreshTaskPollMessage(interaction.client, activePoll);
             } catch (err) {

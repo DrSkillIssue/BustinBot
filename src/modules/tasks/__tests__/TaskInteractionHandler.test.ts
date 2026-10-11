@@ -6,7 +6,6 @@ const handleAdminButton = vi.fn().mockResolvedValue(undefined);
 const handleTaskSelect = vi.fn().mockResolvedValue(undefined);
 const handleRejectionModal = vi.fn().mockResolvedValue(undefined);
 const handleUpdateTaskModal = vi.fn().mockResolvedValue(undefined);
-const hasActiveTaskPollCollector = vi.fn();
 const handleTaskPollVoteInteraction = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../HandleTaskFeedback', () => ({ handleTaskFeedback }));
@@ -20,7 +19,6 @@ vi.mock('../HandleUpdateTaskModal', () => ({
     handleUpdateTaskModal,
 }));
 vi.mock('../HandleTaskPoll.js', () => ({
-    hasActiveTaskPollCollector,
     handleTaskPollVoteInteraction,
 }));
 
@@ -59,22 +57,6 @@ describe('handleTaskInteraction', () => {
 
         await handleTaskInteraction(interaction, {} as any, services);
         expect(handleTaskFeedback).toHaveBeenCalledWith(interaction, services.tasks.repository);
-    });
-
-    it('routes vote buttons to persisted poll handler when no collector is active', async () => {
-        hasActiveTaskPollCollector.mockReturnValue(false);
-
-        const interaction: any = {
-            ...baseInteraction(),
-            isButton: () => true,
-            customId: 'vote_PvM_task-1',
-            message: { id: 'poll-message-1' },
-        };
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(hasActiveTaskPollCollector).toHaveBeenCalledWith('poll-message-1');
-        expect(handleTaskPollVoteInteraction).toHaveBeenCalledWith(interaction, services);
     });
 
     it('routes review-confirm buttons to admin handler', async () => {

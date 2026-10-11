@@ -16,6 +16,7 @@ export interface ITaskRepository {
     getTaskPollById(pollId: string): Promise<TaskPoll | null>;
     getActiveTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
     getLatestTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
+    updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void>;
     closeTaskPoll(pollId: string): Promise<void>;
     clearTaskPolls(): Promise<void>;
 

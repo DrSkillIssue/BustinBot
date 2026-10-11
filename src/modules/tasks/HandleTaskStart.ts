@@ -5,6 +5,7 @@ import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { TaskCategory } from '../../models/Task.js';
 import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
+import { refreshTaskPollMessage } from './HandleTaskPoll.js';
 
 function generateTaskEventId(taskId: string): string {
     const now = new Date();
@@ -196,6 +197,12 @@ export async function startTaskEventForCategory(
 
     if (pollData.id) {
         await repos.taskRepo.closeTaskPoll(pollData.id);
+        // Its winner has started, so the poll's message stops offering votes
+        try {
+            await refreshTaskPollMessage(client, { ...pollData, isActive: false });
+        } catch (err) {
+            console.warn(`[TaskStart] Failed to show the ${category} poll as closed:`, err);
+        }
     }
 
     console.log(`[TaskStart] Task event posted for ${category} (${taskEventId})`);

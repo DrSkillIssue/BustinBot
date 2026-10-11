@@ -67,6 +67,10 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return snapshot.docs[0]?.data() ?? null;
     }
 
+    async updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void> {
+        await this.pollsCollection.doc(pollId).update({ options });
+    }
+
     async closeTaskPoll(pollId: string): Promise<void> {
         const docRef = this.pollsCollection.doc(pollId);
         await docRef.update({
