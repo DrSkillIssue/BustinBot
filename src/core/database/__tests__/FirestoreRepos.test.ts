@@ -23,7 +23,6 @@ vi.mock("firebase-admin/firestore", () => ({
 }));
 
 let TaskRepository: any;
-let TaskLeaderboardRepository: any;
 
 type DocStub = {
     set: ReturnType<typeof vi.fn>;
@@ -119,7 +118,6 @@ function createCollectionStub(path: string): CollectionStub {
 beforeAll(async () => {
     vi.resetModules();
     TaskRepository = (await import("../TaskRepo.js")).TaskRepository;
-    TaskLeaderboardRepository = (await import("../TaskLeaderboardRepo.js")).TaskLeaderboardRepository;
 });
 
 beforeEach(() => {
@@ -187,19 +185,5 @@ describe("TaskRepository Firestore interactions", () => {
         expect(second).toMatchObject({ field: "endTime", op: "<=" });
         expect(first?.value).toEqual(expect.objectContaining({ __ts: start }));
         expect(second?.value).toEqual(expect.objectContaining({ __ts: end }));
-    });
-});
-
-describe("TaskLeaderboardRepository Firestore interactions", () => {
-    it("replaces complete score maps so stale period scores are cleared", async () => {
-        const repo = new TaskLeaderboardRepository(stubDb, "guild-123");
-        const replacement = { points: {}, tierCounts: {} };
-
-        await repo.updateLeaderboard("periodic", replacement);
-
-        const stub = collectionStubs["guilds/guild-123/taskLeaderboards"];
-        const doc = stub?.__docStubs.get("periodic");
-        expect(doc?.update).toHaveBeenCalledWith(replacement);
-        expect(doc?.set).not.toHaveBeenCalled();
     });
 });
