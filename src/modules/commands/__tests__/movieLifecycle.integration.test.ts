@@ -102,6 +102,7 @@ describe("/cancelmovie", () => {
 
         await slash("cancelmovie", [], movieAdmin);
 
+        expect(discord.requests().filter((request) => request.path === `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`)).toHaveLength(1);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: `❌ Movie night has been cancelled by <@${IDS.user}>.` })]);
     });
 });

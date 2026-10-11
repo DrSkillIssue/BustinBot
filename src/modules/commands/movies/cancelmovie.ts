@@ -35,7 +35,7 @@ const cancelmovie: Command = {
         const client = interaction.client;
 
         async function fetchMessageFromChannels(messageId: string, ...channelIds: (string | null | undefined)[]) {
-            for (const channelId of channelIds) {
+            for (const channelId of new Set(channelIds)) {
                 if (!channelId) continue;
                 try {
                     const fetchedChannel = await client.channels.fetch(channelId);
