@@ -85,9 +85,15 @@ export async function applyTaskMilestoneRoles(
         if (shouldHave && !hasRole) {
             try {
                 await member.roles.add(roleId);
+            } catch (err) {
+                console.warn(`[TaskMilestones] Failed to grant milestone role ${milestone.label} to ${userId}:`, err);
+                continue;
+            }
+            // The role is granted either way; a member who blocks DMs just isn't told
+            try {
                 await member.send(`You have earned the **${milestone.label}** role for completing ${milestone.requiredSubmissions} tasks!`);
             } catch (err) {
-                console.warn(`[TaskMilestones] Failed to grant or DM milestone role ${milestone.label} to ${userId}:`, err);
+                console.warn(`[TaskMilestones] Granted ${milestone.label} to ${userId} but couldn't DM them:`, err);
             }
         } else if (!shouldHave && hasRole) {
             try {
