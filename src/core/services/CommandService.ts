@@ -3,9 +3,7 @@ import { readdirSync, statSync } from 'fs';
 import { pathToFileURL } from 'url';
 import type { Command } from '../../models/Command.js';
 
-const commandMap = new Map<string, Command>();
-
-async function loadCommandFiles(dir: string): Promise<void> {
+async function loadCommandFiles(dir: string, commandMap: Map<string, Command>): Promise<void> {
     const entries = readdirSync(dir);
 
     for (const entry of entries) {
@@ -15,7 +13,7 @@ async function loadCommandFiles(dir: string): Promise<void> {
         if (stats.isDirectory()) {
             // skip test directories and internal folders
             if (entry === "__tests__" || entry.startsWith("__")) continue;
-            await loadCommandFiles(fullPath);
+            await loadCommandFiles(fullPath, commandMap);
             continue;
         }
 
@@ -56,8 +54,9 @@ async function loadCommandFiles(dir: string): Promise<void> {
     }
 }
 
+// Returns a new registry on every call, so loading never changes a registry someone else is using
 export async function loadCommands(commandsDir: string): Promise<Map<string, Command>> {
-    commandMap.clear();
-    await loadCommandFiles(commandsDir);
+    const commandMap = new Map<string, Command>();
+    await loadCommandFiles(commandsDir, commandMap);
     return commandMap;
 }
