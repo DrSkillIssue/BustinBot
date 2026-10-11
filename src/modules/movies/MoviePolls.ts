@@ -1,6 +1,6 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Message, TextChannel, Client } from "discord.js";
 import type { RepliableInteraction } from "discord.js";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
 import { injectMockUsers } from "./MovieMockUtils.js";
@@ -52,7 +52,7 @@ async function createAndSendMoviePoll(
         return;
     }
 
-    const pollId = uuidv4();
+    const pollId = randomUUID();
     const now = DateTime.utc();
     let endsAt = now.plus({ hours: 24 });
 
