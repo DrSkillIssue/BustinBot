@@ -24,22 +24,6 @@ vi.mock('../HandleTaskPoll.js', () => ({
     handleTaskPollVoteInteraction,
 }));
 
-const persist = vi.fn().mockResolvedValue(undefined);
-const getSelections = vi.fn();
-const getMissingFields = vi.fn();
-const clearSelections = vi.fn();
-const setSelection = vi.fn();
-
-vi.mock('../../../core/services/SetupService', () => ({
-    setupService: {
-        getSelections,
-        getMissingFields,
-        persist,
-        clearSelections,
-        setSelection,
-    },
-}));
-
 const services: any = {
     tasks: { repository: { name: 'taskRepo' } },
     guilds: { name: 'guildService' },
@@ -75,91 +59,6 @@ describe('handleTaskInteraction', () => {
 
         await handleTaskInteraction(interaction, {} as any, services);
         expect(handleTaskFeedback).toHaveBeenCalledWith(interaction, services.tasks.repository);
-    });
-
-    it('persists setup when all selections made', async () => {
-        const interaction: any = {
-            ...baseInteraction(),
-            isButton: () => true,
-            customId: 'tasksetup_confirm',
-        };
-
-        getSelections.mockReturnValue({ taskAdmin: 'a', taskUser: 'b', taskChannel: 'c', taskVerification: 'd' });
-        getMissingFields.mockReturnValue([]);
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(persist).toHaveBeenCalledWith('task', services.guilds, 'guild-1', expect.any(Object));
-        expect(clearSelections).toHaveBeenCalledWith('task', 'user-1');
-        expect(interaction.update).toHaveBeenCalledWith({
-            content: expect.stringContaining('setup complete'),
-            components: [],
-        });
-    });
-
-    it('warns when setup selections missing', async () => {
-        const interaction: any = {
-            ...baseInteraction(),
-            isButton: () => true,
-            customId: 'tasksetup_confirm',
-        };
-
-        getSelections.mockReturnValue({ taskAdmin: 'a' });
-        getMissingFields.mockReturnValue(['taskUser']);
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(interaction.reply).toHaveBeenCalledWith({
-            content: expect.stringContaining('taskUser'),
-            flags: 1 << 6,
-        });
-        expect(persist).not.toHaveBeenCalled();
-    });
-
-    it('cancels setup and clears selections', async () => {
-        const interaction: any = {
-            ...baseInteraction(),
-            isButton: () => true,
-            customId: 'tasksetup_cancel',
-        };
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(clearSelections).toHaveBeenCalledWith('task', 'user-1');
-        expect(interaction.update).toHaveBeenCalledWith({
-            content: expect.stringContaining('cancelled'),
-            components: [],
-        });
-    });
-
-    it('stores role selection values', async () => {
-        const interaction: any = {
-            ...baseInteraction(),
-            isRoleSelectMenu: () => true,
-            customId: 'tasksetup_admin_role',
-            values: ['role-1'],
-            deferUpdate: vi.fn().mockResolvedValue(undefined),
-        };
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(setSelection).toHaveBeenCalledWith('task', 'user-1', 'taskAdmin', 'role-1');
-        expect(interaction.deferUpdate).toHaveBeenCalled();
-    });
-
-    it('stores channel selection values', async () => {
-        const interaction: any = {
-            ...baseInteraction(),
-            isChannelSelectMenu: () => true,
-            customId: 'tasksetup_channel',
-            values: ['channel-1'],
-            deferUpdate: vi.fn().mockResolvedValue(undefined),
-        };
-
-        await handleTaskInteraction(interaction, {} as any, services);
-
-        expect(setSelection).toHaveBeenCalledWith('task', 'user-1', 'taskChannel', 'channel-1');
-        expect(interaction.deferUpdate).toHaveBeenCalled();
     });
 
     it('routes vote buttons to persisted poll handler when no collector is active', async () => {

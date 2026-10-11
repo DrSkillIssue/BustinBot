@@ -23,6 +23,8 @@ import {
     type APIMessage,
     type APIMessageButtonInteractionData,
     type APIMessageComponentButtonInteraction,
+    type APIMessageComponentSelectMenuInteraction,
+    type APIMessageSelectMenuInteractionData,
     type APIModalSubmitGuildInteraction,
     type APIRole,
     type APIUser,
@@ -214,7 +216,7 @@ export function chatInputInteraction(
 
 export function buttonInteraction(
     customId: string,
-    message: APIMessage,
+    message: APIMessage = apiMessage(),
     overrides: Partial<APIMessageComponentButtonInteraction> = {}
 ): APIMessageComponentButtonInteraction {
     const data: APIMessageButtonInteractionData = { custom_id: customId, component_type: ComponentType.Button };
@@ -230,6 +232,54 @@ export function buttonInteraction(
         member: apiMember(),
         ...overrides,
     };
+}
+
+function selectInteraction(
+    data: APIMessageSelectMenuInteractionData,
+    message: APIMessage,
+    overrides: Partial<APIMessageComponentSelectMenuInteraction>
+): APIMessageComponentSelectMenuInteraction {
+    return {
+        ...interactionBase,
+        id: nextId(),
+        token: `token-${nextId()}`,
+        type: InteractionType.MessageComponent,
+        data,
+        message,
+        channel: interactionChannel(),
+        channel_id: IDS.channel,
+        member: apiMember(),
+        ...overrides,
+    };
+}
+
+export function channelSelectInteraction(
+    customId: string,
+    channelIds: string[],
+    message: APIMessage = apiMessage(),
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+): APIMessageComponentSelectMenuInteraction {
+    const channels = Object.fromEntries(channelIds.map((id) => [id, { id, name: "channel", type: ChannelType.GuildText, permissions: "0" }]));
+    return selectInteraction({ custom_id: customId, component_type: ComponentType.ChannelSelect, values: channelIds, resolved: { channels } }, message, overrides);
+}
+
+export function roleSelectInteraction(
+    customId: string,
+    roleIds: string[],
+    message: APIMessage = apiMessage(),
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+): APIMessageComponentSelectMenuInteraction {
+    const roles = Object.fromEntries(roleIds.map((id) => [id, apiRole({ id })]));
+    return selectInteraction({ custom_id: customId, component_type: ComponentType.RoleSelect, values: roleIds, resolved: { roles } }, message, overrides);
+}
+
+export function stringSelectInteraction(
+    customId: string,
+    values: string[],
+    message: APIMessage = apiMessage(),
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+): APIMessageComponentSelectMenuInteraction {
+    return selectInteraction({ custom_id: customId, component_type: ComponentType.StringSelect, values }, message, overrides);
 }
 
 export function modalSubmitInteraction(

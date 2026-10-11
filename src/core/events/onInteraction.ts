@@ -3,7 +3,6 @@ import type { APIInteractionGuildMember, Interaction } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandModule, CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
-import { setupService } from '../services/SetupService.js';
 import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
 
 export async function handleInteraction(
@@ -157,22 +156,22 @@ export async function handleInteraction(
         const userId = interaction.user.id;
 
         if (customId === 'setup_confirm') {
-            const selections = setupService.getSelections('core', userId);
-            const missing = setupService.getMissingFields('core', selections);
+            const selections = services.setup.getSelections('core', userId);
+            const missing = services.setup.getMissingFields('core', selections);
             if (missing.length) {
                 await interaction.reply({ content: `Please select: ${missing.join(', ')}`, flags: 1 << 6 });
                 return;
             }
 
-            await setupService.persist('core', services.guilds, interaction.guildId!, selections!);
-            setupService.clearSelections('core', userId);
+            await services.setup.persist('core', services.guilds, interaction.guildId!, selections!);
+            services.setup.clearSelections('core', userId);
 
             await interaction.update({ content: 'Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.', components: [] });
             return;
         }
 
         if (customId === 'setup_cancel') {
-            setupService.clearSelections('core', userId);
+            services.setup.clearSelections('core', userId);
             await interaction.update({ content: 'Setup cancelled. No changes were made.', components: [] });
             return;
         }
@@ -194,13 +193,13 @@ export async function handleInteraction(
 
         switch (interaction.customId) {
             case 'setup_announce':
-                setupService.setSelection('core', userId, 'announcements', channelId);
+                services.setup.setSelection('core', userId, 'announcements', channelId);
                 break;
             case 'setup_log':
-                setupService.setSelection('core', userId, 'botLog', channelId);
+                services.setup.setSelection('core', userId, 'botLog', channelId);
                 break;
             case 'setup_archive':
-                setupService.setSelection('core', userId, 'botArchive', channelId);
+                services.setup.setSelection('core', userId, 'botArchive', channelId);
                 break;
             default:
                 return;

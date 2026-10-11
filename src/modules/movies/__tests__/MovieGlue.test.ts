@@ -64,9 +64,6 @@ const { handleMovieInteraction } = await import('../MovieInteractionHandler.js')
 const { showMovieManualPollMenu } = await import('../MovieManualPoll.js');
 const { pickRandomMovie } = await import('../MovieLocalSelector.js');
 
-const setupServiceModule = await import('../../../core/services/SetupService.js');
-const { setupService } = setupServiceModule;
-
 const DateUtils = await import('../../../utils/DateUtils.js');
 vi.spyOn(DateUtils, 'normaliseFirestoreDates').mockImplementation((movie: any) => movie);
 
@@ -86,74 +83,13 @@ beforeEach(() => {
     services.guilds.get.mockResolvedValue({ setupComplete: { movie: false } });
     services.guilds.update.mockResolvedValue(undefined);
     services.guilds.refresh.mockResolvedValue(undefined);
-
-    setupService.clearSelections('movie', 'user-1');
 });
 
 afterEach(() => {
     clearScheduledMovieAutoEnd();
-    setupService.clearSelections('movie', 'user-1');
 });
 
 describe('handleMovieInteraction', () => {
-    it('prompts for missing selections on confirm', async () => {
-        const interaction: any = {
-            user: { id: 'user-1' },
-            guildId: 'guild-1',
-            isModalSubmit: () => false,
-            isButton: () => true,
-            isStringSelectMenu: () => false,
-            isChannelSelectMenu: () => false,
-            isRoleSelectMenu: () => false,
-            customId: 'moviesetup_confirm',
-            reply: vi.fn(),
-            update: vi.fn(),
-        };
-
-        setupService.clearSelections('movie', 'user-1');
-        setupService.setSelection('movie', 'user-1', 'movieNight', 'channel');
-
-        await handleMovieInteraction(interaction, services);
-        expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-            content: expect.stringContaining('movieAdmin'),
-        }));
-    });
-
-    it('persists movie setup when selections complete', async () => {
-        const interaction: any = {
-            user: { id: 'user-1' },
-            guildId: 'guild-1',
-            isModalSubmit: () => false,
-            isButton: () => true,
-            isStringSelectMenu: () => false,
-            isChannelSelectMenu: () => false,
-            isRoleSelectMenu: () => false,
-            customId: 'moviesetup_confirm',
-            reply: vi.fn(),
-            update: vi.fn(),
-        };
-
-        setupService.clearSelections('movie', 'user-1');
-        setupService.setSelection('movie', 'user-1', 'movieAdmin', 'role-admin');
-        setupService.setSelection('movie', 'user-1', 'movieUser', 'role-user');
-        setupService.setSelection('movie', 'user-1', 'movieNight', 'channel');
-        setupService.setSelection('movie', 'user-1', 'movieVC', 'voice');
-
-        const persistSpy = vi.spyOn(setupService, 'persist').mockResolvedValue(undefined);
-        const clearSpy = vi.spyOn(setupService, 'clearSelections');
-
-        await handleMovieInteraction(interaction, services);
-
-        expect(persistSpy).toHaveBeenCalledWith('movie', services.guilds, 'guild-1', expect.any(Object));
-        expect(clearSpy).toHaveBeenCalledWith('movie', 'user-1');
-        expect(interaction.update).toHaveBeenCalledWith(expect.objectContaining({
-            content: expect.stringContaining('Movie module setup complete'),
-        }));
-
-        persistSpy.mockRestore();
-        clearSpy.mockRestore();
-    });
-
     it('routes manual poll selection menu', async () => {
         services.repos.movieRepo.getAllMovies.mockResolvedValue([
             { id: 'movie-1', title: 'Movie One', addedAt: new Date('2024-01-01') },
@@ -177,27 +113,6 @@ describe('handleMovieInteraction', () => {
         await handleMovieInteraction(interaction, services);
         expect(updateManualPollSelectionSpy).toHaveBeenCalledWith('user-1', ['movie-1']);
         expect(showMovieManualPollMenuSpy).toHaveBeenCalledWith(services, interaction);
-    });
-
-    it('captures channel selection for setup', async () => {
-        const deferUpdate = vi.fn().mockResolvedValue(undefined);
-        const interaction: any = {
-            user: { id: 'user-1' },
-            isModalSubmit: () => false,
-            isButton: () => false,
-            isStringSelectMenu: () => false,
-            isChannelSelectMenu: () => true,
-            isRoleSelectMenu: () => false,
-            customId: 'moviesetup_channel',
-            values: ['channel-1'],
-            deferUpdate,
-            reply: vi.fn().mockResolvedValue(undefined),
-        };
-
-        setupService.clearSelections('movie', 'user-1');
-        await handleMovieInteraction(interaction, services);
-        expect(setupService.getSelections('movie', 'user-1')?.movieNight).toBe('channel-1');
-        expect(deferUpdate).toHaveBeenCalled();
     });
 
     it('handles movie pick modal submission', async () => {

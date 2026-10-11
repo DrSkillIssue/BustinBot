@@ -3,7 +3,6 @@ import { handleMoviePickChooseModalSubmit, handleConfirmRandomMovie, handleRerol
 import { handleMovieNightDate, handleMovieNightTime } from "./MovieScheduler.js";
 import { updateManualPollSelection, showMovieManualPollMenu } from "./MovieManualPoll.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { setupService } from "../../core/services/SetupService.js";
 
 export async function handleMovieInteraction(
     interaction: Interaction,
@@ -47,8 +46,8 @@ export async function handleMovieInteraction(
         }
 
         if (customId === "moviesetup_confirm") {
-            const selections = setupService.getSelections("movie", userId);
-            const missing = setupService.getMissingFields("movie", selections);
+            const selections = services.setup.getSelections("movie", userId);
+            const missing = services.setup.getMissingFields("movie", selections);
 
             if (missing.length) {
                 await interaction.reply({
@@ -58,8 +57,8 @@ export async function handleMovieInteraction(
                 return;
             }
 
-            await setupService.persist("movie", services.guilds, interaction.guildId!, selections!);
-            setupService.clearSelections("movie", userId);
+            await services.setup.persist("movie", services.guilds, interaction.guildId!, selections!);
+            services.setup.clearSelections("movie", userId);
 
             await interaction.update({
                 content: "Movie module setup complete! Movie roles and channels have been saved.",
@@ -69,7 +68,7 @@ export async function handleMovieInteraction(
         }
 
         if (customId === "moviesetup_cancel") {
-            setupService.clearSelections("movie", userId);
+            services.setup.clearSelections("movie", userId);
             await interaction.update({
                 content: "Movie setup cancelled. No changes were made.",
                 components: [],
@@ -105,10 +104,10 @@ export async function handleMovieInteraction(
 
         switch (interaction.customId) {
             case "moviesetup_channel":
-                setupService.setSelection("movie", userId, "movieNight", channelId);
+                services.setup.setSelection("movie", userId, "movieNight", channelId);
                 break;
             case "moviesetup_voice_channel":
-                setupService.setSelection("movie", userId, "movieVC", channelId);
+                services.setup.setSelection("movie", userId, "movieVC", channelId);
                 break;
             default:
                 return;
@@ -127,10 +126,10 @@ export async function handleMovieInteraction(
 
         switch (interaction.customId) {
             case "moviesetup_admin_role":
-                setupService.setSelection("movie", userId, "movieAdmin", roleId);
+                services.setup.setSelection("movie", userId, "movieAdmin", roleId);
                 break;
             case "moviesetup_user_role":
-                setupService.setSelection("movie", userId, "movieUser", roleId);
+                services.setup.setSelection("movie", userId, "movieUser", roleId);
                 break;
             default:
                 return;
