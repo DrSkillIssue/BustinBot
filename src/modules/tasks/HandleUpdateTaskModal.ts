@@ -30,8 +30,14 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
 
     await repo.createTask(task);
 
-    const activeEvent = await repo.getLatestTaskEvent();
-    if (activeEvent && activeEvent.task.id === task.id && activeEvent.messageId && activeEvent.channelId) {
+    // Events from every category start together, so the latest event may belong to another category
+    const now = new Date();
+    const activeEvents = (await repo.getTaskEventsBetween(now, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)))
+        .filter(event => event.task.id === task.id && normaliseFirestoreDates(event).startTime <= now);
+
+    for (const activeEvent of activeEvents) {
+        if (!activeEvent.messageId || !activeEvent.channelId) continue;
+
         activeEvent.task = task;
         activeEvent.amounts = {
             bronze: task.amtBronze,
