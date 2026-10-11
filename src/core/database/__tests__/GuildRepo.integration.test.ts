@@ -1,10 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { test as base, afterEach, beforeEach, describe, expect, vi } from '../../../tests/fixtures.js';
 import { GuildRepository } from '../GuildRepo.js';
 import type { Guild } from '../../../models/Guild.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new GuildRepository(db);
+const test = base.extend('repo', ({ db }) => new GuildRepository(db));
 
 function buildGuild(overrides: Partial<Guild> = {}): Guild {
     return {
@@ -18,9 +16,8 @@ function buildGuild(overrides: Partial<Guild> = {}): Guild {
     };
 }
 
-beforeEach(async () => {
+beforeEach(() => {
     vi.stubEnv('BOT_MODE', 'production');
-    await clearEmulatorFirestore();
 });
 
 afterEach(() => {
@@ -28,7 +25,7 @@ afterEach(() => {
 });
 
 describe('GuildRepository', () => {
-    it('initialises a guild only when it has no document yet', async () => {
+    test('initialises a guild only when it has no document yet', async ({ repo }) => {
         await repo.initGuild('guild-1', buildGuild());
         await repo.initGuild('guild-1', buildGuild({ timezone: 'UTC' }));
 
@@ -36,7 +33,7 @@ describe('GuildRepository', () => {
         expect(await repo.getGuild('missing')).toBeNull();
     });
 
-    it('merges updates into the stored guild without dropping other fields', async () => {
+    test('merges updates into the stored guild without dropping other fields', async ({ repo }) => {
         await repo.initGuild('guild-1', buildGuild());
 
         await repo.updateGuild('guild-1', { roles: { movieAdmin: 'role-movie-admin' } });
@@ -48,7 +45,7 @@ describe('GuildRepository', () => {
         });
     });
 
-    it('changes a single toggle and records who changed it', async () => {
+    test('changes a single toggle and records who changed it', async ({ repo }) => {
         await repo.initGuild('guild-1', buildGuild({ toggles: { taskScheduler: false, leaguesEnabled: true } }));
 
         await repo.updateToggle('guild-1', 'toggles.taskScheduler', true, 'user-1');
@@ -59,14 +56,14 @@ describe('GuildRepository', () => {
         });
     });
 
-    it('lists every guild', async () => {
+    test('lists every guild', async ({ repo }) => {
         await repo.initGuild('guild-1', buildGuild({ id: 'guild-1' }));
         await repo.initGuild('guild-2', buildGuild({ id: 'guild-2' }));
 
         expect((await repo.getAllGuilds()).map((guild) => guild.id).sort()).toEqual(['guild-1', 'guild-2']);
     });
 
-    it('only reads and writes the dev guild in dev mode', async () => {
+    test('only reads and writes the dev guild in dev mode', async ({ repo }) => {
         await repo.initGuild('guild-1', buildGuild({ id: 'guild-1' }));
         await repo.initGuild('guild-dev', buildGuild({ id: 'guild-dev' }));
         vi.stubEnv('BOT_MODE', 'dev');

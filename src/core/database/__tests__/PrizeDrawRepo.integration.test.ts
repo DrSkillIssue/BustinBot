@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { test as base, afterEach, describe, expect, vi } from '../../../tests/fixtures.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
 import type { PrizeDraw } from '../../../models/PrizeDraw.js';
 import { TaskCategory } from '../../../models/Task.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new PrizeDrawRepository(db, 'guild-1');
+const test = base.extend('repo', ({ db }) => new PrizeDrawRepository(db, 'guild-1'));
 
 function buildPrizeDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
     return {
@@ -20,16 +18,12 @@ function buildPrizeDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
     };
 }
 
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
-
 afterEach(() => {
     vi.restoreAllMocks();
 });
 
 describe('PrizeDrawRepository', () => {
-    it('stores draws and lists them newest first', async () => {
+    test('stores draws and lists them newest first', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw({ id: 'older', start: '2026-01-05T00:00:00.000Z' }));
         await repo.createPrizeDraw(buildPrizeDraw({ id: 'newer', start: '2026-01-19T00:00:00.000Z' }));
 
@@ -38,7 +32,7 @@ describe('PrizeDrawRepository', () => {
         expect(await repo.getPrizeDrawById('missing')).toBeNull();
     });
 
-    it('records participants and recomputes the entry total', async () => {
+    test('records participants and recomputes the entry total', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
         await repo.updateParticipants('2026-01-05_to_2026-01-18', { 'user-1': 2, 'user-2': 1 });
@@ -49,7 +43,7 @@ describe('PrizeDrawRepository', () => {
         });
     });
 
-    it('adds each user as an entry at most once', async () => {
+    test('adds each user as an entry at most once', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
         await repo.addEntry('2026-01-05_to_2026-01-18', 'user-1');
@@ -62,7 +56,7 @@ describe('PrizeDrawRepository', () => {
         });
     });
 
-    it('records winners and the overall winner', async () => {
+    test('records winners and the overall winner', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
         await repo.setWinners('2026-01-05_to_2026-01-18', { [TaskCategory.PvM]: ['user-1'] } as Record<TaskCategory, string[]>, 'user-1');
@@ -72,7 +66,7 @@ describe('PrizeDrawRepository', () => {
         expect(draw?.rolledAt).toEqual(expect.any(String));
     });
 
-    it('leaves no overall winner when none is given', async () => {
+    test('leaves no overall winner when none is given', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw({ winnerId: 'stale-winner' }));
 
         await repo.setWinners('2026-01-05_to_2026-01-18', {} as Record<TaskCategory, string[]>);
@@ -80,7 +74,7 @@ describe('PrizeDrawRepository', () => {
         expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).not.toHaveProperty('winnerId');
     });
 
-    it('deletes one draw or all draws', async () => {
+    test('deletes one draw or all draws', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw({ id: 'a' }));
         await repo.createPrizeDraw(buildPrizeDraw({ id: 'b' }));
         await repo.createPrizeDraw(buildPrizeDraw({ id: 'c' }));

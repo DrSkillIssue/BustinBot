@@ -1,10 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { BotRepository } from '../BotRepo.js';
 import type { BotStats } from '../../../models/BotStats.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new BotRepository(db);
+const test = base.extend('repo', ({ db }) => new BotRepository(db));
 
 function buildBotStats(): BotStats {
     return {
@@ -27,12 +25,8 @@ function buildBotStats(): BotStats {
     };
 }
 
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
-
 describe('BotRepository', () => {
-    it('creates the stats document only when it does not exist', async () => {
+    test('creates the stats document only when it does not exist', async ({ repo }) => {
         expect(await repo.getBotStats()).toBeNull();
 
         await repo.initBotStats({ ...buildBotStats(), commandsRun: 5 });
@@ -41,7 +35,7 @@ describe('BotRepository', () => {
         expect(await repo.getBotStats()).toMatchObject({ commandsRun: 5 });
     });
 
-    it('increments counters, fun stats and per-command counts', async () => {
+    test('increments counters, fun stats and per-command counts', async ({ repo }) => {
         await repo.initBotStats(buildBotStats());
 
         await repo.increment('moviesAdded', 2);
@@ -59,7 +53,7 @@ describe('BotRepository', () => {
         });
     });
 
-    it('records guild counts and resets every counter', async () => {
+    test('records guild counts and resets every counter', async ({ repo }) => {
         await repo.initBotStats(buildBotStats());
         await repo.updateGuildStats(5, 10, 20);
         expect(await repo.getBotStats()).toMatchObject({ guildCount: 5, channelCount: 10, userCount: 20 });

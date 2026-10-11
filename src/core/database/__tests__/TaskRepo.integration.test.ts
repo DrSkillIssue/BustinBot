@@ -1,19 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus } from '../../../models/TaskSubmission.js';
-import { CONCURRENT_TRANSACTION_TIMEOUT_MS, clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
 
-const db = getEmulatorFirestore();
-const repo = new TaskRepository(db, 'guild-1');
-
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
+const test = base.extend('repo', ({ db }) => new TaskRepository(db, 'guild-1'));
 
 describe('TaskRepository tasks', () => {
-    it('creates, reads and lists tasks by category', async () => {
+    test('creates, reads and lists tasks by category', async ({ repo }) => {
         await repo.createTask(buildTask({ id: 'PVM001', category: TaskCategory.PvM }));
         await repo.createTask(buildTask({ id: 'SKL001', category: TaskCategory.Skilling }));
 
@@ -23,7 +18,7 @@ describe('TaskRepository tasks', () => {
         expect((await repo.getTasksByCategory(TaskCategory.Skilling)).map((task) => task.id)).toEqual(['SKL001']);
     });
 
-    it('seeds more tasks than fit in one Firestore batch and deletes them all', async () => {
+    test('seeds more tasks than fit in one Firestore batch and deletes them all', async ({ repo }) => {
         const tasks = Array.from({ length: 501 }, (_, index) => buildTask({ id: `TASK${index}` }));
 
         await repo.seedTasks(tasks);
@@ -33,7 +28,7 @@ describe('TaskRepository tasks', () => {
         expect(await repo.getAllTasks()).toEqual([]);
     });
 
-    it('adjusts a task\'s selection weight', async () => {
+    test('adjusts a task\'s selection weight', async ({ repo }) => {
         await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
 
         await repo.incrementWeight('PVM001', 1);
@@ -44,7 +39,7 @@ describe('TaskRepository tasks', () => {
 });
 
 describe('TaskRepository polls', () => {
-    it('finds the active poll and the latest poll for a category', async () => {
+    test('finds the active poll and the latest poll for a category', async ({ repo }) => {
         await repo.createTaskPoll(buildTaskPoll({ id: 'old', createdAt: new Date('2026-01-04T00:00:00.000Z'), isActive: false }));
         await repo.createTaskPoll(buildTaskPoll({ id: 'new', createdAt: new Date('2026-01-11T00:00:00.000Z') }));
         await repo.createTaskPoll(buildTaskPoll({ id: 'skilling', category: TaskCategory.Skilling }));
@@ -55,7 +50,7 @@ describe('TaskRepository polls', () => {
         expect(await repo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
     });
 
-    it('closes polls and clears them all', async () => {
+    test('closes polls and clears them all', async ({ repo }) => {
         await repo.createTaskPoll(buildTaskPoll());
 
         await repo.closeTaskPoll('poll-1');
@@ -65,7 +60,7 @@ describe('TaskRepository polls', () => {
         expect(await repo.getTaskPollById('poll-1')).toBeNull();
     });
 
-    it('records votes and reports whether each was the voter\'s first', async () => {
+    test('records votes and reports whether each was the voter\'s first', async ({ repo }) => {
         await repo.createTaskPoll(buildTaskPoll());
 
         const first = await repo.voteInPollOnce('poll-1', 'user-1', 'PVM001');
@@ -76,7 +71,7 @@ describe('TaskRepository polls', () => {
         expect((await repo.getTaskPollById('poll-1'))?.votes).toEqual({ 'user-1': 'PVM002' });
     });
 
-    it('counts every vote when voters vote at the same time', async () => {
+    test('counts every vote when voters vote at the same time', async ({ repo }) => {
         await repo.createTaskPoll(buildTaskPoll());
 
         await Promise.all(
@@ -88,7 +83,7 @@ describe('TaskRepository polls', () => {
 });
 
 describe('TaskRepository events', () => {
-    it('stores events and finds the latest and those ending in a range', async () => {
+    test('stores events and finds the latest and those ending in a range', async ({ repo }) => {
         await repo.createTaskEvent(buildTaskEvent({
             id: 'week-1', createdAt: new Date('2026-01-05T00:00:00.000Z'), endTime: new Date('2026-01-12T00:00:00.000Z'),
         }));
@@ -102,7 +97,7 @@ describe('TaskRepository events', () => {
             .map((event) => event.id)).toEqual(['week-2']);
     });
 
-    it('adds and removes completed users without duplicates', async () => {
+    test('adds and removes completed users without duplicates', async ({ repo }) => {
         await repo.createTaskEvent(buildTaskEvent({ id: 'week-1' }));
 
         await repo.addCompletedUser('week-1', 'user-1');
@@ -115,7 +110,7 @@ describe('TaskRepository events', () => {
 });
 
 describe('TaskRepository submissions', () => {
-    it('finds submissions by id, event and user', async () => {
+    test('finds submissions by id, event and user', async ({ repo }) => {
         await repo.createSubmission(buildTaskSubmission({ id: 'a', userId: 'user-1', taskEventId: 'week-1' }));
         await repo.createSubmission(buildTaskSubmission({ id: 'b', userId: 'user-2', taskEventId: 'week-1' }));
         await repo.createSubmission(buildTaskSubmission({ id: 'c', userId: 'user-1', taskEventId: 'week-2' }));
@@ -126,7 +121,7 @@ describe('TaskRepository submissions', () => {
         expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id).sort()).toEqual(['a', 'c']);
     });
 
-    it('records the reviewer and status of a submission', async () => {
+    test('records the reviewer and status of a submission', async ({ repo }) => {
         await repo.createSubmission(buildTaskSubmission({ id: 'a' }));
 
         await repo.updateSubmissionStatus('a', SubmissionStatus.Silver, 'admin-1');
@@ -134,7 +129,7 @@ describe('TaskRepository submissions', () => {
         expect(await repo.getSubmissionById('a')).toMatchObject({ status: 'silver', reviewedBy: 'admin-1' });
     });
 
-    it('returns the most recently reviewed tiered submission for a user and event', async () => {
+    test('returns the most recently reviewed tiered submission for a user and event', async ({ repo }) => {
         await repo.createSubmission(buildTaskSubmission({ id: 'bronze', status: SubmissionStatus.Pending }));
         await repo.createSubmission(buildTaskSubmission({ id: 'rejected', status: SubmissionStatus.Pending }));
         await repo.createSubmission(buildTaskSubmission({ id: 'gold', status: SubmissionStatus.Pending }));
@@ -148,7 +143,7 @@ describe('TaskRepository submissions', () => {
 });
 
 describe('TaskRepository feedback', () => {
-    it('stores feedback and filters it by task and event', async () => {
+    test('stores feedback and filters it by task and event', async ({ repo }) => {
         await repo.addFeedback({ id: 'f1', taskId: 'PVM001', eventId: 'week-1', userId: 'user-1', vote: 'up' });
         await repo.addFeedback({ id: 'f2', taskId: 'PVM001', eventId: 'week-2', userId: 'user-2', vote: 'down' });
         await repo.addFeedback({ id: 'f3', taskId: 'PVM002', eventId: 'week-1', userId: 'user-1', vote: 'up' });

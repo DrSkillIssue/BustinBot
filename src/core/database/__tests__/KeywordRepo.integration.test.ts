@@ -1,21 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { test as base, afterEach, describe, expect, vi } from '../../../tests/fixtures.js';
 import { Timestamp } from 'firebase-admin/firestore';
 import { KeywordRepository } from '../KeywordRepo.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new KeywordRepository(db, 'guild-1');
-
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
+const test = base.extend('repo', ({ db }) => new KeywordRepository(db, 'guild-1'));
 
 afterEach(() => {
     vi.restoreAllMocks();
 });
 
 describe('KeywordRepository', () => {
-    it('adds a keyword under a normalised id with no usage', async () => {
+    test('adds a keyword under a normalised id with no usage', async ({ repo }) => {
         await repo.addKeyword('New Keyword!');
 
         const keyword = await repo.getKeywordById('new_keyword');
@@ -24,7 +18,7 @@ describe('KeywordRepository', () => {
         expect(await repo.getAllKeywords()).toHaveLength(1);
     });
 
-    it('records usage with the most recent event first, keeping the last 20', async () => {
+    test('records usage with the most recent event first, keeping the last 20', async ({ repo }) => {
         await repo.addKeyword('rare');
         for (let event = 1; event <= 21; event++) {
             await repo.markKeywordUsed('rare', `event-${event}`);
@@ -38,7 +32,7 @@ describe('KeywordRepository', () => {
         expect(keyword?.lastUsedAt.toMillis()).toBeGreaterThan(0);
     });
 
-    it('ignores usage of a keyword that does not exist', async () => {
+    test('ignores usage of a keyword that does not exist', async ({ repo }) => {
         vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         await repo.markKeywordUsed('missing', 'event-1');
@@ -46,7 +40,7 @@ describe('KeywordRepository', () => {
         expect(await repo.getKeywordById('missing')).toBeNull();
     });
 
-    it('picks only from keywords outside the most recently used ones', async () => {
+    test('picks only from keywords outside the most recently used ones', async ({ repo, db }) => {
         for (const [index, word] of ['a', 'b', 'c', 'd'].entries()) {
             await db.doc(`guilds/guild-1/keywords/${word}`).set({
                 id: word,
@@ -62,7 +56,7 @@ describe('KeywordRepository', () => {
         expect(await repo.getRandomKeyword(4)).toBeNull();
     });
 
-    it('resets usage on every keyword and deletes single keywords', async () => {
+    test('resets usage on every keyword and deletes single keywords', async ({ repo }) => {
         await repo.addKeyword('alpha');
         await repo.addKeyword('beta');
         await repo.markKeywordUsed('alpha', 'event-1');

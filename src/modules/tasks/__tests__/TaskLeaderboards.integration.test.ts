@@ -1,30 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import {
     ensureTaskLeaderboardsInitialized,
     finalizePeriodicLeaderboard,
     incrementPeriodicPoints,
     registerPeriodicTaskEvent,
 } from "../TaskLeaderboards.js";
-import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
-import { clearEmulatorFirestore, getEmulatorFirestore } from "../../../tests/firestoreEmulator.js";
 import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
-
-const db = getEmulatorFirestore();
-const GUILD_ID = "guild-1";
-
-async function createServices(): Promise<ServiceContainer> {
-    await new GuildRepository(db).initGuild(GUILD_ID, {
-        id: GUILD_ID,
-        toggles: { taskScheduler: true, leaguesEnabled: false },
-        roles: {},
-        channels: {},
-        taskSettings: { periodEvents: 4 },
-    });
-    return createServiceContainer(db, GUILD_ID);
-}
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
     await services.repos.taskRepo!.createTaskEvent(
@@ -37,20 +20,16 @@ async function periodic(services: ServiceContainer): Promise<TaskLeaderboard | n
     return services.repos.taskLeaderboardRepo!.getLeaderboard("periodic");
 }
 
-beforeEach(async () => {
-    vi.stubEnv("BOT_MODE", "production");
+beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => {});
-    await clearEmulatorFirestore();
 });
 
 afterEach(() => {
-    vi.unstubAllEnvs();
     vi.restoreAllMocks();
 });
 
 describe("TaskLeaderboards initialisation", () => {
-    it("builds the lifetime leaderboard from stored user stats", async () => {
-        const services = await createServices();
+    test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {
         await services.repos.userRepo!.createUser(buildUserStats({ userId: "user-1", tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
 
         await ensureTaskLeaderboardsInitialized(services);
@@ -59,8 +38,7 @@ describe("TaskLeaderboards initialisation", () => {
         expect(await periodic(services)).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
     });
 
-    it("throws when user stats are unavailable", async () => {
-        const services = await createServices();
+    test("throws when user stats are unavailable", async ({ services }) => {
         delete services.repos.userRepo;
 
         await expect(ensureTaskLeaderboardsInitialized(services)).rejects.toThrow("Leaderboard initialisation failed");
@@ -68,8 +46,7 @@ describe("TaskLeaderboards initialisation", () => {
 });
 
 describe("TaskLeaderboards periodic submissions", () => {
-    it("keeps every category event from the fourth week in the completing period", async () => {
-        const services = await createServices();
+    test("keeps every category event from the fourth week in the completing period", async ({ services }) => {
         const eventIds: string[] = [];
         for (const week of [1, 2, 3]) {
             for (const category of ["pvm", "skilling", "minigame"]) {
@@ -96,8 +73,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         expect(stored?.pendingPeriod?.period.eventIds).toEqual(["week-5-pvm"]);
     });
 
-    it("carries approved submissions from the overlap into the following period", async () => {
-        const services = await createServices();
+    test("carries approved submissions from the overlap into the following period", async ({ services }) => {
         const weeks = [
             ["week-1", "2026-01-05", "2026-01-12"],
             ["week-2", "2026-01-12", "2026-01-19"],
@@ -129,8 +105,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         expect(stored?.tierCounts).toEqual({ "overlap-user": { bronze: 0, silver: 1, gold: 0 } });
     });
 
-    it("moves tier counts when approved submissions are upgraded", async () => {
-        const services = await createServices();
+    test("moves tier counts when approved submissions are upgraded", async ({ services }) => {
         await storeEvent(services, "week-1", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z");
         await storeEvent(services, "week-2", "2026-01-12T00:00:00.000Z", "2026-01-19T00:00:00.000Z");
 

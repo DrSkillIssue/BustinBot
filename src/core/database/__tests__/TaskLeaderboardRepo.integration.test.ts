@@ -1,10 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { TaskLeaderboardRepository } from '../TaskLeaderboardRepo.js';
 import type { TaskLeaderboard } from '../../../models/TaskLeaderboard.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new TaskLeaderboardRepository(db, 'guild-1');
+const test = base.extend('repo', ({ db }) => new TaskLeaderboardRepository(db, 'guild-1'));
 
 function buildLeaderboard(overrides: Partial<TaskLeaderboard> = {}): TaskLeaderboard {
     return {
@@ -17,12 +15,8 @@ function buildLeaderboard(overrides: Partial<TaskLeaderboard> = {}): TaskLeaderb
     };
 }
 
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
-
 describe('TaskLeaderboardRepository', () => {
-    it('stores lifetime and periodic leaderboards as separate documents', async () => {
+    test('stores lifetime and periodic leaderboards as separate documents', async ({ repo }) => {
         await repo.createLeaderboard(buildLeaderboard({ id: 'lifetime', points: { 'user-1': 10 } }));
         await repo.createLeaderboard(buildLeaderboard({ id: 'periodic', points: { 'user-1': 3 } }));
 
@@ -30,7 +24,7 @@ describe('TaskLeaderboardRepository', () => {
         expect(await repo.getLeaderboard('periodic')).toMatchObject({ points: { 'user-1': 3 } });
     });
 
-    it('replaces whole score maps on update so stale scores are cleared', async () => {
+    test('replaces whole score maps on update so stale scores are cleared', async ({ repo }) => {
         await repo.createLeaderboard(buildLeaderboard({ points: { 'old-user': 6, 'user-1': 1 } }));
 
         await repo.updateLeaderboard('periodic', { points: { 'user-1': 3 }, pendingPeriod: null });
@@ -40,7 +34,7 @@ describe('TaskLeaderboardRepository', () => {
         expect(stored?.pendingPeriod).toBeNull();
     });
 
-    it('increments points and tier counts per user', async () => {
+    test('increments points and tier counts per user', async ({ repo }) => {
         await repo.createLeaderboard(buildLeaderboard());
 
         await repo.incrementPoints('periodic', 'user-1', 3);
@@ -54,7 +48,7 @@ describe('TaskLeaderboardRepository', () => {
         });
     });
 
-    it('rejects changes to a leaderboard that does not exist', async () => {
+    test('rejects changes to a leaderboard that does not exist', async ({ repo }) => {
         await expect(repo.incrementPoints('periodic', 'user-1', 1)).rejects.toThrow();
         await expect(repo.updateLeaderboard('periodic', { points: {} })).rejects.toThrow();
     });

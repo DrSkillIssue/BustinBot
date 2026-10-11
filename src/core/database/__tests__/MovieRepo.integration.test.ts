@@ -1,12 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { MovieRepository } from '../MovieRepo.js';
 import type { Movie } from '../../../models/Movie.js';
 import type { MovieEvent } from '../../../models/MovieEvent.js';
 import type { MoviePoll } from '../../../models/MoviePoll.js';
-import { CONCURRENT_TRANSACTION_TIMEOUT_MS, clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 
-const db = getEmulatorFirestore();
-const repo = new MovieRepository(db, 'guild-1');
+const test = base.extend('repo', ({ db }) => new MovieRepository(db, 'guild-1'));
 
 function buildMovie(overrides: Partial<Movie> = {}): Movie {
     return {
@@ -47,12 +46,8 @@ function buildEvent(overrides: Partial<MovieEvent> = {}): MovieEvent {
     };
 }
 
-beforeEach(async () => {
-    await clearEmulatorFirestore();
-});
-
 describe('MovieRepository movies', () => {
-    it('stores, lists and deletes movies', async () => {
+    test('stores, lists and deletes movies', async ({ repo }) => {
         await repo.upsertMovie(buildMovie({ id: 'movie-1' }));
         await repo.upsertMovie(buildMovie({ id: 'movie-2', title: 'Arrival' }));
 
@@ -63,7 +58,7 @@ describe('MovieRepository movies', () => {
         expect(await repo.getMovieById('movie-1')).toBeNull();
     });
 
-    it('stores a movie whose optional TMDb details are missing', async () => {
+    test('stores a movie whose optional TMDb details are missing', async ({ repo }) => {
         await repo.upsertMovie(buildMovie({ director: undefined, runtime: undefined, posterUrl: undefined }));
 
         expect(await repo.getMovieById('movie-1')).toMatchObject({ title: 'Inception' });
@@ -71,7 +66,7 @@ describe('MovieRepository movies', () => {
 });
 
 describe('MovieRepository polls', () => {
-    it('returns the most recently created active poll', async () => {
+    test('returns the most recently created active poll', async ({ repo }) => {
         await repo.createPoll(buildPoll({ id: 'older', createdAt: new Date('2026-01-01T00:00:00.000Z') }));
         await repo.createPoll(buildPoll({ id: 'newer', createdAt: new Date('2026-01-05T00:00:00.000Z') }));
         await repo.createPoll(buildPoll({ id: 'closed', createdAt: new Date('2026-01-09T00:00:00.000Z'), isActive: false }));
@@ -82,7 +77,7 @@ describe('MovieRepository polls', () => {
         expect(active?.endsAt).toEqual(new Date('2026-01-02T00:00:00.000Z'));
     });
 
-    it('closes a poll', async () => {
+    test('closes a poll', async ({ repo }) => {
         await repo.createPoll(buildPoll());
 
         await repo.closePoll('poll-1');
@@ -90,7 +85,7 @@ describe('MovieRepository polls', () => {
         expect(await repo.getActivePoll()).toBeNull();
     });
 
-    it('records a vote and reports whether it was the voter\'s first', async () => {
+    test('records a vote and reports whether it was the voter\'s first', async ({ repo }) => {
         await repo.createPoll(buildPoll());
 
         const first = await repo.voteInPollOnce('poll-1', 'user-1', 'movie-1');
@@ -102,7 +97,7 @@ describe('MovieRepository polls', () => {
         await expect(repo.voteInPollOnce('missing', 'user-1', 'movie-1')).rejects.toThrow('Poll not found.');
     });
 
-    it('counts every vote when voters vote at the same time', async () => {
+    test('counts every vote when voters vote at the same time', async ({ repo }) => {
         await repo.createPoll(buildPoll());
 
         await Promise.all(
@@ -112,7 +107,7 @@ describe('MovieRepository polls', () => {
         expect(Object.keys((await repo.getActivePoll())?.votes ?? {})).toHaveLength(5);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
-    it('clears all polls', async () => {
+    test('clears all polls', async ({ repo }) => {
         await repo.createPoll(buildPoll());
 
         await repo.clearPolls();
@@ -122,7 +117,7 @@ describe('MovieRepository polls', () => {
 });
 
 describe('MovieRepository events', () => {
-    it('returns the active event with the latest start time, as dates', async () => {
+    test('returns the active event with the latest start time, as dates', async ({ repo }) => {
         await repo.createMovieEvent(buildEvent({ id: 'early', startTime: new Date('2026-01-03T09:00:00.000Z') }));
         await repo.createMovieEvent(buildEvent({ id: 'late', startTime: new Date('2026-01-10T09:00:00.000Z') }));
         await repo.createMovieEvent(buildEvent({ id: 'done', completed: true }));
@@ -132,7 +127,7 @@ describe('MovieRepository events', () => {
         expect(active?.startTime).toEqual(new Date('2026-01-10T09:00:00.000Z'));
     });
 
-    it('lists events newest first and returns the latest', async () => {
+    test('lists events newest first and returns the latest', async ({ repo }) => {
         await repo.createMovieEvent(buildEvent({ id: 'first', createdAt: new Date('2026-01-01T00:00:00.000Z') }));
         await repo.createMovieEvent(buildEvent({ id: 'second', createdAt: new Date('2026-01-08T00:00:00.000Z') }));
 

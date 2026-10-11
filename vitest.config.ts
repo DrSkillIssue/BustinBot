@@ -14,6 +14,8 @@ export default defineConfig({
     test: {
         environment: "node",
         setupFiles: ["./src/tests/setup.ts"],
+        // Tests never inherit the developer's shell or .env mode (dotenv does not override variables already set)
+        env: { BOT_MODE: "test" },
         coverage: { provider: "v8", reporter: ["text", "html"] },
         projects: [
             {
