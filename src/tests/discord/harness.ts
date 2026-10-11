@@ -9,9 +9,11 @@ import {
 } from "@discordjs/ws";
 import {
     ApplicationFlags,
+    ChannelType,
     GatewayDispatchEvents,
     GatewayOpcodes,
     InteractionResponseType,
+    type APIDMChannel,
     type APIGatewayBotInfo,
     type APIGuildMember,
     type APIRole,
@@ -157,6 +159,13 @@ export class DiscordHarness {
         await created;
     }
 
+    // A role being created in a guild, as the gateway announces it, so discord.js has it cached
+    async addRole(guildId: string, role: APIRole): Promise<void> {
+        const created = once(this.client, Events.GuildRoleCreate);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.GuildRoleCreate, s: 0, d: { guild_id: guildId, role } });
+        await created;
+    }
+
     // Delivers an interaction the way the gateway does and returns the discord.js object created for it.
     // Discord accepts exactly one initial response per interaction, so its callback route answers once: a second
     // response fails the request, and an interaction left unanswered fails the test.
@@ -229,6 +238,25 @@ export class DiscordHarness {
                 return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
             }))
             .persist();
+    }
+
+    // Discord opening a DM with a user and accepting messages in it; returns the DM channel's id
+    acceptDirectMessages(userId: string): string {
+        const dmChannelId = nextId();
+        const dm: APIDMChannel = { id: dmChannelId, type: ChannelType.DM, name: null, last_message_id: null, recipients: [apiUser({ id: userId })] };
+        this.api
+            .intercept({
+                path: `${API}/users/@me/channels`,
+                method: "POST",
+                body: (body) => {
+                    const request: { recipient_id?: string } = JSON.parse(body);
+                    return request.recipient_id === userId;
+                },
+            })
+            .reply(this.answered(() => ({ statusCode: 200, data: dm, responseOptions: JSON_RESPONSE })))
+            .persist();
+        this.acceptMessages(dmChannelId);
+        return dmChannelId;
     }
 
     // Discord listing a guild's roles
