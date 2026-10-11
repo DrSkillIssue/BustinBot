@@ -2,10 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { Command } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import fs from 'fs';
-import path from 'path';
-import fetch from 'node-fetch';
-import { importTasksFromCsv } from "../../../scripts/importTasksFromCSV.js";
+import { importTasks, parseTasksCsv } from "../../tasks/TaskImport.js";
 
 const importtasks: Command = {
     name: "importtasks",
@@ -30,14 +27,19 @@ const importtasks: Command = {
             return;
         }
 
-        const res = await fetch(attachment.url);
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const tempPath = path.join("/tmp", `tasks-${Date.now()}.csv`);
-        fs.writeFileSync(tempPath, buffer);
+        const taskRepo = services?.repos.taskRepo;
+        if (!taskRepo) {
+            await interaction.editReply({ content: "Task repository unavailable." });
+            return;
+        }
 
         try {
-            const guildId = interaction.guildId!;
-            const result = await importTasksFromCsv(guildId, tempPath);
+            const res = await fetch(attachment.url);
+            if (!res.ok) {
+                throw new Error(`Failed to download ${attachment.name}: HTTP ${res.status}`);
+            }
+
+            const result = await importTasks(taskRepo, parseTasksCsv(await res.text()));
 
             await interaction.editReply({
                 content: `✅ Import complete.\n• ${result.newCount} new tasks added\n• ${result.skipped} skipped (existing)\n• ${result.total} total in file.`,
@@ -45,8 +47,6 @@ const importtasks: Command = {
         } catch (err) {
             console.error(err);
             await interaction.editReply({ content: "Import failed. Check logs for details." });
-        } finally {
-            fs.unlinkSync(tempPath);
         }
     }
 };

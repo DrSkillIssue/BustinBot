@@ -265,12 +265,14 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     async seedTasks(tasks: Task[]): Promise<void> {
-        const batch = db.batch();
-        tasks.forEach(task => {
-            const ref = this.collection.doc(task.id);
-            batch.set(ref, task);
-        });
-        await batch.commit();
+        // Firestore caps a batch at 500 writes
+        for (let start = 0; start < tasks.length; start += 500) {
+            const batch = db.batch();
+            tasks.slice(start, start + 500).forEach(task => {
+                batch.set(this.collection.doc(task.id), task);
+            });
+            await batch.commit();
+        }
     }
 
     async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: TaskPoll; }> {
