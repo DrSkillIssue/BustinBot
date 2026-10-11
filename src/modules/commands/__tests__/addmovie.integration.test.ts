@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { mockAgent } from "../../../tests/http.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie } from "../../../tests/fakes/builders.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
@@ -91,6 +91,7 @@ describe("/addmovie", () => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
         const uncachedGuild = "100000000000000012";
         await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild }));
+        discord.guild(apiGuild({ id: uncachedGuild }));
         await storeOwnMovies(services, 3);
         tmdbSearch("The Matrix", [matrix]);
 

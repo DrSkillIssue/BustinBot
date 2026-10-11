@@ -1,6 +1,6 @@
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiMember, apiUser, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMember, apiUser, chatInputInteraction } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 
 // A member who isn't the server owner (the harness user owns the guild)
@@ -24,6 +24,7 @@ describe("/moviehelp", () => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
         const uncachedGuild = "100000000000000012";
         await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild }));
+        discord.guild(apiGuild({ id: uncachedGuild }));
 
         const command = await interact(chatInputInteraction("moviehelp", [], { guild_id: uncachedGuild, member: asMember([IDS.roles.movieAdmin]) }));
 

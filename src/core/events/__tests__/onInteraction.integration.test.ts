@@ -4,7 +4,10 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { handleInteraction } from "../onInteraction.js";
 import updatetask from "../../../modules/commands/tasks/updatetask.js";
 import { CommandModule, CommandRole, type Command } from "../../../models/Command.js";
-import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMember, apiRole, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import type { DiscordHarness } from "../../../tests/discord/harness.js";
+import type { Firestore } from "firebase-admin/firestore";
+import { GuildRepository } from "../../database/GuildRepo.js";
 import { buildGuild, buildTask } from "../../../tests/fakes/builders.js";
 
 const taskAdmin = apiMember({ roles: [IDS.roles.taskAdmin] });
@@ -21,6 +24,45 @@ function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyo
 }
 
 describe("slash command routing", () => {
+    // Interactions from a guild discord.js hasn't cached carry the member as raw data with role ids only
+    const uncachedGuild = "100000000000000012";
+    async function fromUncachedGuild(discord: DiscordHarness, db: Firestore, adminRoleName: string) {
+        const admin = apiRole({ id: "100000000000000046", name: adminRoleName });
+        discord.guild(apiGuild({ id: uncachedGuild, roles: [apiRole({ id: uncachedGuild, name: "@everyone" }), admin] }));
+        await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild, roles: { admin: "BustinBot Admin" } }));
+        return { guild_id: uncachedGuild, member: apiMember({ roles: [admin.id] }) };
+    }
+
+    test("recognises a role configured by name for a member Discord sends as role ids", async ({ discord, services, db }) => {
+        const interaction = await discord.dispatch(chatInputInteraction("probe", [], await fromUncachedGuild(discord, db, "BustinBot Admin")));
+        const ran = command(async ({ interaction: probe }) => {
+            await probe?.reply({ content: "ran" });
+        }, [CommandRole.BotAdmin]);
+
+        await handleInteraction(interaction, new Map([["probe", ran]]), services);
+
+        expect(discord.callbacks(interaction)).toEqual([{ type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "ran" }) }]);
+    });
+
+    test("lets a BustinBot Admin Discord sends as role ids run /setup", async ({ discord, services, db, commands }) => {
+        const interaction = await discord.dispatch(chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "BustinBot Admin")));
+
+        await handleInteraction(interaction, commands, services);
+
+        expect(JSON.stringify(discord.callbacks(interaction))).not.toContain("Only members with the **BustinBot Admin** role can run");
+    });
+
+    test("refuses /setup to a member without the BustinBot Admin role", async ({ discord, services, db, commands }) => {
+        const interaction = await discord.dispatch(chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "Moderator")));
+
+        await handleInteraction(interaction, commands, services);
+
+        expect(discord.callbacks(interaction)).toEqual([{
+            type: InteractionResponseType.ChannelMessageWithSource,
+            data: expect.objectContaining({ content: "Only members with the **BustinBot Admin** role can run `/setup`. Please have a server admin create and assign this role first." }),
+        }]);
+    });
+
     test("replies privately when the command is unknown", async ({ discord, services }) => {
         const interaction = await discord.dispatch(chatInputInteraction("missing"));
 

@@ -1,10 +1,27 @@
 import { GuildMember } from 'discord.js';
-import type { APIInteractionGuildMember, Interaction } from 'discord.js';
+import type { APIInteractionGuildMember, ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandModule, CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
 import type { GuildSetupComplete } from '../../models/Guild.js';
 import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
+
+// A member's role ids and names. discord.js gives a cached member as a GuildMember with its roles; a member it hasn't
+// cached arrives as Discord's raw data with role ids only, so their names are read from the guild's role list.
+async function resolveMemberRoles(
+    interaction: ChatInputCommandInteraction,
+    member: GuildMember | APIInteractionGuildMember
+): Promise<{ ids: string[]; names: string[] }> {
+    if (member instanceof GuildMember) {
+        return { ids: [...member.roles.cache.keys()], names: member.roles.cache.map((role) => role.name) };
+    }
+
+    const guild = interaction.guildId ? await interaction.client.guilds.fetch(interaction.guildId) : null;
+    return {
+        ids: member.roles,
+        names: member.roles.flatMap((roleId) => guild?.roles.cache.get(roleId)?.name ?? []),
+    };
+}
 
 export async function handleInteraction(
     interaction: Interaction,
@@ -29,26 +46,12 @@ export async function handleInteraction(
             return;
         }
 
-        const guildMember = rawMember instanceof GuildMember ? rawMember : null;
-        const apiMember = rawMember as APIInteractionGuildMember;
-
-        const userRoleIds = guildMember
-            ? guildMember.roles.cache.map((role) => role.id)
-            : Array.isArray(apiMember.roles)
-            ? apiMember.roles
-            : [];
-
-        const userRoleNames = guildMember
-            ? guildMember.roles.cache.map((role) => role.name)
-            : [];
+        const { ids: userRoleIds, names: userRoleNames } = await resolveMemberRoles(interaction, rawMember);
 
         if (isSetupCommand) {
             const adminRoleName = "BustinBot Admin";
 
-            const hasAdminRole =
-                guildMember?.roles.cache.some(
-                    (role) => role.name === adminRoleName || role.id === adminRoleName,
-                ) ?? false;
+            const hasAdminRole = userRoleNames.includes(adminRoleName);
 
             if (!hasAdminRole) {
                 await interaction.reply({
