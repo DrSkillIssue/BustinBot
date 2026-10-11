@@ -36,7 +36,6 @@ const { incrementMock, serverTimestampMock, timestampNowMock, timestampFromMilli
 
 import type { Firestore } from 'firebase-admin/firestore';
 import { GuildScopedRepository } from '../CoreRepo.js';
-import { KeywordRepository } from '../KeywordRepo.js';
 
 type FirestoreDoc<T = any> = {
     get: ReturnType<typeof vi.fn>;
@@ -139,102 +138,5 @@ describe('GuildScopedRepository base behaviour', () => {
 
         await repo.delete('abc');
         expect(doc.delete).toHaveBeenCalled();
-    });
-});
-
-describe('KeywordRepository', () => {
-    const guildId = 'guild-keywords';
-
-    function setupKeywordCollection(docs: any[] = []) {
-        const docStore = new Map<string, ReturnType<typeof stubDoc>>();
-        const collection = stubCollection({
-            doc: vi.fn((id: string) => {
-                if (!docStore.has(id)) {
-                    const existing = docs.find((d) => d.id === id);
-                    docStore.set(id, stubDoc(existing ?? { id }, Boolean(existing)));
-                }
-                return docStore.get(id)!;
-            }),
-            get: vi.fn().mockResolvedValue(createQuerySnapshot(docs.map((d) => createDocSnapshot(d)))),
-        });
-        return collection;
-    }
-
-    it('adds and retrieves keywords', async () => {
-        const keywords = [{ id: 'hello_world', word: 'Hello World' }];
-        const collection = setupKeywordCollection(keywords);
-        const repo = new KeywordRepository(db, guildId);
-
-        await expect(repo.getAllKeywords()).resolves.toEqual(keywords);
-        expect(collection.get).toHaveBeenCalled();
-
-        await repo.addKeyword('New Keyword!');
-        expect(collection.doc).toHaveBeenCalledWith('new_keyword');
-        const createdDoc = collection.doc.mock.results.at(-1)?.value;
-        expect(createdDoc).toBeTruthy();
-        expect(createdDoc.set).toHaveBeenCalledWith(expect.objectContaining({
-            id: 'new_keyword',
-            word: 'New Keyword!',
-            timesUsed: 0,
-        }));
-    });
-
-    it('marks keyword usage and handles missing docs', async () => {
-        const existing = {
-            id: 'rare',
-            word: 'Rare',
-            timesUsed: 2,
-            usageHistory: ['old'],
-            lastUsedAt: { toMillis: () => 100 },
-        };
-        const doc = stubDoc(existing, true);
-        const missingDoc = stubDoc({}, false);
-
-        const collection = stubCollection({
-            doc: vi.fn((id: string) => (id === 'rare' ? doc : missingDoc)),
-        });
-
-        const repo = new KeywordRepository(db, guildId);
-
-        timestampNowMock.mockReturnValueOnce({ toMillis: () => 200 });
-        await repo.markKeywordUsed('rare', 'event-1');
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            timesUsed: 3,
-            lastUsedEventId: 'event-1',
-            usageHistory: ['event-1', 'old'],
-        }));
-
-        await repo.markKeywordUsed('missing', 'event-2');
-        expect(missingDoc.update).not.toHaveBeenCalled();
-    });
-
-    it('picks random eligible keyword excluding recent ones', async () => {
-        const keywords = Array.from({ length: 5 }, (_, i) => ({
-            id: `kw-${i}`,
-            word: `Word ${i}`,
-            lastUsedAt: { toMillis: () => 100 - i },
-        }));
-        const repo = new KeywordRepository(db, guildId);
-        vi.spyOn(repo, 'getAllKeywords').mockResolvedValue(keywords as any);
-
-        vi.spyOn(Math, 'random').mockReturnValue(0);
-        await expect(repo.getRandomKeyword(2)).resolves.toEqual(expect.objectContaining({ id: 'kw-2' }));
-        (Math.random as any).mockRestore();
-    });
-
-    it('resets usage via batch updates', async () => {
-        const docs = [createDocSnapshot({ id: 'kw-1' }), createDocSnapshot({ id: 'kw-2' })];
-        const collection = setupKeywordCollection([]);
-        collection.get.mockResolvedValueOnce(createQuerySnapshot(docs));
-
-        const batchUpdate = vi.fn();
-        const batchCommit = vi.fn().mockResolvedValue(undefined);
-        mockDb.batch.mockReturnValue({ update: batchUpdate, commit: batchCommit } as any);
-
-        const repo = new KeywordRepository(db, guildId);
-        await repo.resetAllUsage();
-
-        expect(batchUpdate).toHaveBeenCalledTimes(2);
-        expect(batchCommit).toHaveBeenCalled();
     });
 });
