@@ -1,7 +1,6 @@
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 
 export type TaskPeriod = {
     start: Date;
@@ -57,9 +56,7 @@ export async function getCurrentTaskPeriod(
     const latestEvent = await repo.getLatestTaskEvent();
     if (!latestEvent) return null;
 
-    const event = normaliseFirestoreDates(latestEvent);
-    if (!(event.startTime instanceof Date) || !(event.endTime instanceof Date)) return null;
-
+    const event = latestEvent;
     if (now < event.startTime || now > event.endTime) return null;
 
     return {
@@ -112,8 +109,7 @@ export async function calculateTaskStreakSummary(
 ): Promise<TaskStreakSummary> {
     const currentPeriod = await getCurrentTaskPeriod(repo, now);
 
-    const submissionsRaw = await repo.getSubmissionsByUser(userId);
-    const submissions = submissionsRaw.map((submission) => normaliseFirestoreDates(submission));
+    const submissions = await repo.getSubmissionsByUser(userId);
 
     const approvedSubmissions = submissions.filter((submission) => APPROVED_STATUSES.has(submission.status));
     if (approvedSubmissions.length === 0) {
@@ -134,7 +130,7 @@ export async function calculateTaskStreakSummary(
     events.forEach((event, index) => {
         const eventId = eventIds[index];
         if (!event || !eventId) return;
-        eventMap.set(eventId, normaliseFirestoreDates(event));
+        eventMap.set(eventId, event);
     });
 
     const periodMap = new Map<number, TaskPeriod>();

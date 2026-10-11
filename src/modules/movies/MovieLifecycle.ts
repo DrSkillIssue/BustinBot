@@ -6,7 +6,6 @@ import { Client } from 'discord.js';
 import { initAttendanceTracking, finaliseAttendance, getActiveVoiceMemberIds } from './MovieAttendance.js';
 import { SchedulerStatusReporter } from '../../core/services/SchedulerStatusReporter.js';
 import { resolveGuildContext } from './MovieLocalSelector.js';
-import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
 
 const autoEndTimeouts = new Map<string, NodeJS.Timeout>();
 
@@ -14,26 +13,8 @@ function getAutoEndTimerKey(guildId: string | null | undefined): string {
     return guildId && guildId.trim() ? guildId : 'global';
 }
 
-function getDateValue(value: unknown): Date | null {
-    if (value instanceof Date) return value;
-    if (!value) return null;
-
-    const maybeTimestamp = value as { toDate?: () => Date };
-    if (typeof maybeTimestamp.toDate === 'function') {
-        return maybeTimestamp.toDate();
-    }
-
-    if (typeof value === 'string') {
-        const parsed = new Date(value);
-        return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    return null;
-}
-
 function getStartMillis(event: MovieEvent): number {
-    const start = getDateValue(event.startTime);
-    return start ? start.getTime() : 0;
+    return event.startTime.getTime();
 }
 
 function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
@@ -47,12 +28,7 @@ function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
 
 function getMostRecentlySelectedUnwatchedMovie(movies: Movie[]): Movie | null {
     const selectedUnwatched = movies
-        .filter((movie) => !movie.watched && movie.selectedAt)
-        .map((movie) => {
-            const selectedAt = getDateValue(movie.selectedAt);
-            return selectedAt ? { movie, selectedAt } : null;
-        })
-        .filter((entry): entry is { movie: Movie; selectedAt: Date } => entry !== null)
+        .flatMap((movie) => (!movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : []))
         .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
     return selectedUnwatched[0]?.movie ?? null;
@@ -142,8 +118,8 @@ export async function finishMovieNight(
             return { success: false, message: 'No active movie event found to end.' };
         }
 
-        const allMovies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
-        const eventMovie = latestEvent.movie ? normaliseFirestoreDates(latestEvent.movie) : null;
+        const allMovies = await movieRepo.getAllMovies();
+        const eventMovie = latestEvent.movie ?? null;
         const movieFromDb =
             eventMovie?.id
                 ? allMovies.find((movie) => movie.id === eventMovie.id) ?? null

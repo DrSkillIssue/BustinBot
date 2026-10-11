@@ -2,7 +2,6 @@ import type { ModalSubmitInteraction, TextChannel } from "discord.js";
 import { buildTaskEventEmbed } from "./TaskEmbeds.js";
 import { isTextChannel } from "../../utils/ChannelUtils.js";
 import { TaskCategory, TaskType } from "../../models/Task.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
 
@@ -33,7 +32,7 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     // Events from every category start together, so the latest event may belong to another category
     const now = new Date();
     const activeEvents = (await repo.getTaskEventsBetween(now, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)))
-        .filter(event => event.task.id === task.id && normaliseFirestoreDates(event).startTime <= now);
+        .filter(event => event.task.id === task.id && event.startTime <= now);
 
     for (const activeEvent of activeEvents) {
         if (!activeEvent.messageId || !activeEvent.channelId) continue;
@@ -44,9 +43,7 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
             silver: task.amtSilver,
             gold: task.amtGold,
         }
-        const event = normaliseFirestoreDates(activeEvent);
-
-        const { embeds, components, files } = buildTaskEventEmbed(event);
+        const { embeds, components, files } = buildTaskEventEmbed(activeEvent);
 
         let channel = interaction.client.channels.cache.get(activeEvent.channelId) as TextChannel | undefined;
         if (!channel) {

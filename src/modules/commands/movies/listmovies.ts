@@ -61,28 +61,11 @@ const listmovies: Command = {
             return;
         }
 
-        const toMillis = (value: unknown): number => {
-            if (!value) return 0;
-            if (value instanceof Date) return value.getTime();
-
-            const maybeTimestamp = value as { toDate?: () => Date };
-            if (maybeTimestamp && typeof maybeTimestamp.toDate === "function") {
-                return maybeTimestamp.toDate().getTime();
-            }
-
-            if (typeof value === "number") return value;
-            if (typeof value === "string") {
-                const parsed = Date.parse(value);
-                return Number.isNaN(parsed) ? 0 : parsed;
-            }
-
-            return 0;
-        };
 
         const movies: Movie[] = await movieRepo.getAllMovies();
         const unwatchedMovies = movies
             .filter(movie => !movie.watched)
-            .sort((a, b) => toMillis(a.addedAt) - toMillis(b.addedAt));
+            .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
         
         if (!unwatchedMovies.length) {
             await interaction.editReply('No unwatched movies are currently queued. Add a new one with `/addmovie`!');

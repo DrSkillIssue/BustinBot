@@ -15,10 +15,6 @@ vi.mock('../../../utils/ChannelUtils', () => ({
     isTextChannel: (channel: any) => channel?.isTextBased?.() ?? false,
 }));
 
-vi.mock('utils/DateUtils', () => ({
-    normaliseFirestoreDates: (event: any) => event,
-}));
-
 const TaskEmbeds = await import('../TaskEmbeds.js');
 const { buildSubmissionEmbed, buildArchiveEmbed, buildTaskEventEmbed } = vi.mocked(TaskEmbeds);
 

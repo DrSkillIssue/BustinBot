@@ -6,7 +6,6 @@ import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import { scheduleMovieReminders, getPendingReminders } from "./MovieReminders.js";
 import { scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } from "./MovieLifecycle.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import { registerVoiceListeners } from "./MovieAttendance.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
@@ -90,14 +89,9 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     }
 
     // Prefer the most recently selected, unwatched movie
-    const movies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
+    const movies = await movieRepo.getAllMovies();
     const selectedMovies = movies
-        .filter((m) => !m.watched && m.selectedAt)
-        .map((m) => {
-            const selectedAtDate = m.selectedAt instanceof Date ? m.selectedAt : null;
-            return selectedAtDate ? { movie: m, selectedAt: selectedAtDate } : null;
-        })
-        .filter((entry): entry is { movie: Movie; selectedAt: Date } => entry !== null)
+        .flatMap((m) => (!m.watched && m.selectedAt ? [{ movie: m, selectedAt: m.selectedAt }] : []))
         .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
     movie = selectedMovies[0]?.movie ?? null;

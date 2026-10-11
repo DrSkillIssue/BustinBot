@@ -377,18 +377,6 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
         activePollSelections.set(poll.messageId, options);
     }
     const category = poll.category as TaskCategory;
-    const rawEndsAt = poll.endsAt as unknown;
-    let endsAtDate: Date | null = null;
-    if (rawEndsAt instanceof Date) {
-        endsAtDate = rawEndsAt;
-    } else if (rawEndsAt && typeof (rawEndsAt as any).toDate === 'function') {
-        endsAtDate = (rawEndsAt as any).toDate();
-    } else if (typeof rawEndsAt === 'number') {
-        endsAtDate = new Date(rawEndsAt);
-    } else if (typeof rawEndsAt === 'string') {
-        const parsed = new Date(rawEndsAt);
-        endsAtDate = Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         options.map((task, i) =>
             new ButtonBuilder()
@@ -399,7 +387,7 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
     );
 
     const updatedEmbed = buildTaskPollEmbed(category, options, voteMap, {
-        endsAt: endsAtDate,
+        endsAt: poll.endsAt,
         isClosed: !poll.isActive,
     });
     const files = getTaskPollIconFile(category);

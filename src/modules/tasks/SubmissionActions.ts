@@ -4,7 +4,6 @@ import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import { buildSubmissionEmbed, buildArchiveEmbed, buildTaskEventEmbed } from './TaskEmbeds.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
-import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
@@ -185,8 +184,7 @@ export async function updateTaskCounter(client: Client, taskEventId: string, use
             return;
         }
 
-        const safeEvent = normaliseFirestoreDates(event);
-        const updatedEmbed = buildTaskEventEmbed(safeEvent);
+        const updatedEmbed = buildTaskEventEmbed(event);
 
         await message.edit({
             embeds: updatedEmbed.embeds,

@@ -64,9 +64,6 @@ const { handleMovieInteraction } = await import('../MovieInteractionHandler.js')
 const { showMovieManualPollMenu } = await import('../MovieManualPoll.js');
 const { pickRandomMovie } = await import('../MovieLocalSelector.js');
 
-const DateUtils = await import('../../../utils/DateUtils.js');
-vi.spyOn(DateUtils, 'normaliseFirestoreDates').mockImplementation((movie: any) => movie);
-
 beforeEach(() => {
     clearScheduledMovieAutoEnd();
     updateManualPollSelectionSpy.mockClear();
