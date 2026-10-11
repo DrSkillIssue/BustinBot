@@ -27,12 +27,13 @@ const taskboard: Command = {
 
         try {
             const sub = interaction.options.getSubcommand();
-            if (sub === "final") {
-                await postFinalLeaderboardSnapshot(interaction.client, services);
-                await interaction.editReply("Final leaderboard posted.");
+            const posted = sub === "final"
+                ? await postFinalLeaderboardSnapshot(interaction.client, services)
+                : await postWeeklyLeaderboardSnapshot(interaction.client, services);
+            if (!posted) {
+                await interaction.editReply("Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.");
             } else {
-                await postWeeklyLeaderboardSnapshot(interaction.client, services);
-                await interaction.editReply("Leaderboard update posted.");
+                await interaction.editReply(sub === "final" ? "Final leaderboard posted." : "Leaderboard update posted.");
             }
         } catch (err) {
             console.error("[TaskBoard Command Error]", err);

@@ -66,7 +66,7 @@ describe("champion roles", () => {
         const runnerUp = "100000000000000033";
         await services.repos.taskLeaderboardRepo!.createLeaderboard({
             id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z",
-            period: { length: 4, eventIds: [], startedAt: "2026-01-05T00:00:00.000Z", index: 3 },
+            period: { length: 4, eventIds: [], startedAt: "2026-01-05T00:00:00.000Z", index: 4 },
             champions: { first: [previousChampion] },
         });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));
@@ -79,7 +79,7 @@ describe("champion roles", () => {
             second: [{ userId: runnerUp, points: 8 }],
             third: [],
             winners: [{ userId: member, points: 10 }, { userId: runnerUp, points: 8 }],
-        });
+        }, 3);
 
         expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);

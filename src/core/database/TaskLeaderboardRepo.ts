@@ -27,6 +27,21 @@ export class TaskLeaderboardRepository extends GuildScopedRepository<TaskLeaderb
         await this.collection.doc(id).update(data);
     }
 
+    // Reads a leaderboard and changes it in one transaction. change decides the update from what is stored, or
+    // returns null to leave it; its result is returned once the update is written.
+    async updateLeaderboardWith<T>(
+        id: TaskLeaderboardId,
+        change: (current: TaskLeaderboard | null) => { update: Partial<TaskLeaderboard>; result: T } | null
+    ): Promise<T | null> {
+        const ref = this.collection.doc(id);
+        return this.db.runTransaction(async (transaction) => {
+            const decided = change((await transaction.get(ref)).data() ?? null);
+            if (!decided) return null;
+            transaction.update(ref, decided.update);
+            return decided.result;
+        });
+    }
+
     async incrementPoints(id: TaskLeaderboardId, userId: string, amount: number): Promise<void> {
         await this.collection.doc(id).update({
             [`points.${userId}`]: FieldValue.increment(amount),

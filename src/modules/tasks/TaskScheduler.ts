@@ -271,7 +271,11 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             '0 0 * * 2',
             async () => {
-                await warnPendingLeaderboardFinalization(client, services);
+                try {
+                    await warnPendingLeaderboardFinalization(client, services);
+                } catch (err) {
+                    console.error('[TaskScheduler] Leaderboard warning job failed:', err);
+                }
             },
             jobOptions(guildId, 'leaderboardWarning')
         );
@@ -279,7 +283,11 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             '0 0 * * 3',
             async () => {
-                await postPeriodicLeaderboardUpdate(client, services);
+                try {
+                    await postPeriodicLeaderboardUpdate(client, services);
+                } catch (err) {
+                    console.error('[TaskScheduler] Leaderboard update job failed:', err);
+                }
             },
             jobOptions(guildId, 'leaderboardUpdate')
         );

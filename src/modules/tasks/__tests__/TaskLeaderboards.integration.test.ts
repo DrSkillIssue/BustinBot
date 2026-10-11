@@ -97,13 +97,16 @@ describe("TaskLeaderboards periodic submissions", () => {
         const finalising = await periodic(services);
         expect(finalising?.points).toEqual({ "old-period-user": 6 });
 
-        await finalizePeriodicLeaderboard(services, finalising!, [{ userId: "old-period-user", points: 6 }]);
+        const finalised = await finalizePeriodicLeaderboard(services, finalising!.period!.index);
 
+        expect(finalised?.placements.first).toEqual([{ userId: "old-period-user", points: 6 }]);
         const stored = await periodic(services);
+        expect(stored?.completedPeriod?.topThree).toEqual([{ userId: "old-period-user", points: 6 }]);
         expect(stored?.completedPeriod?.topTen).toEqual([{ userId: "old-period-user", points: 6 }]);
         expect(stored?.period?.eventIds).toEqual(["week-5"]);
         expect(stored?.points).toEqual({ "overlap-user": 3 });
         expect(stored?.tierCounts).toEqual({ "overlap-user": { silver: 1 } });
+        expect(await finalizePeriodicLeaderboard(services, finalising!.period!.index)).toBeNull();
     });
 
     test("moves tier counts when approved submissions are upgraded", async ({ services }) => {
