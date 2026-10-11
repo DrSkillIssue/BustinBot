@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IPrizeDrawRepository } from "./interfaces/IPrizeDrawRepo.js";
 import type { PrizeDraw } from "../../models/PrizeDraw.js";
@@ -72,7 +72,8 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
         const docRef = this.collection.doc(drawId);
         await docRef.update({
             winners,
-            winnerId: overallWinnerId ?? null,
+            // Remove any previous overall winner rather than storing null in a string field
+            winnerId: overallWinnerId ?? FieldValue.delete(),
             rolledAt: new Date().toISOString(),
         });
     }

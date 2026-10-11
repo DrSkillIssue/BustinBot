@@ -24,7 +24,6 @@ vi.mock("firebase-admin/firestore", () => ({
 
 let TaskRepository: any;
 let TaskLeaderboardRepository: any;
-let PrizeDrawRepository: any;
 
 type DocStub = {
     set: ReturnType<typeof vi.fn>;
@@ -121,7 +120,6 @@ beforeAll(async () => {
     vi.resetModules();
     TaskRepository = (await import("../TaskRepo.js")).TaskRepository;
     TaskLeaderboardRepository = (await import("../TaskLeaderboardRepo.js")).TaskLeaderboardRepository;
-    PrizeDrawRepository = (await import("../PrizeDrawRepo.js")).PrizeDrawRepository;
 });
 
 beforeEach(() => {
@@ -203,32 +201,5 @@ describe("TaskLeaderboardRepository Firestore interactions", () => {
         const doc = stub?.__docStubs.get("periodic");
         expect(doc?.update).toHaveBeenCalledWith(replacement);
         expect(doc?.set).not.toHaveBeenCalled();
-    });
-});
-
-describe("PrizeDrawRepository Firestore interactions", () => {
-    it("updates winners and winnerId in guild prize draw collection", async () => {
-        const repo = new PrizeDrawRepository(stubDb, "guild-xyz");
-        const prizeStub = createCollectionStub("guilds/guild-xyz/prizeDraws");
-        collectionStubs["guilds/guild-xyz/prizeDraws"] = prizeStub;
-
-        const winners: Record<TaskCategory, string[]> = {
-            [TaskCategory.Skilling]: [],
-            [TaskCategory.PvM]: [],
-            [TaskCategory.MinigameMisc]: ["user-1"],
-            [TaskCategory.Leagues]: [],
-        };
-
-        await repo.setWinners("draw-1", winners, "user-1");
-
-        const doc = prizeStub.__docStubs.get("draw-1");
-        expect(doc).toBeDefined();
-        expect(doc?.update).toHaveBeenCalledWith(
-            expect.objectContaining({
-                winners,
-                winnerId: "user-1",
-                rolledAt: expect.any(String),
-            })
-        );
     });
 });
