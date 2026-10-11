@@ -2,10 +2,12 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ChatInputCommandInteraction } from "discord.js";
+import { http, HttpResponse } from "msw";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
+import { server } from "../tests/setup.js";
 import { startBot } from "../bot.js";
 import { DiscordHarness } from "../tests/discord/harness.js";
-import { chatInputInteraction } from "../tests/discord/payloads.js";
+import { IDS, chatInputInteraction } from "../tests/discord/payloads.js";
 
 const commandsDir = path.join(import.meta.dirname, "../modules/commands");
 const run = promisify(execFile);
@@ -23,6 +25,36 @@ describe("startBot", () => {
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
         ]));
         expect(services.guildId).toBe(interaction.guildId);
+    });
+
+    test("syncs each slash command once to the primary guild when sync is enabled", async ({ db, services, commands, onTestFinished }) => {
+        const discord = DiscordHarness.create();
+        onTestFinished(() => discord.destroy());
+
+        await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } });
+
+        const [synced] = discord.guildCommandUpdates(IDS.guild) as { name: string }[][];
+        const names = synced!.map((command) => command.name);
+        expect(new Set(names).size).toBe(names.length);
+        expect(names.sort()).toEqual([...new Set([...commands.values()].map((command) => command.name))].sort());
+        expect(services.guildId).toBe(IDS.guild);
+    });
+
+    test("keeps starting when Discord rejects the command sync", async ({ db, services, onTestFinished }) => {
+        const discord = DiscordHarness.create();
+        onTestFinished(() => discord.destroy());
+        server.use(http.put("https://discord.com/api/v10/applications/:applicationId/guilds/:guildId/commands", () =>
+            HttpResponse.json({ code: 50001, message: "Missing Access" }, { status: 403 })
+        ));
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } });
+        discord.connect();
+        const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("bustin"));
+
+        expect(error).toHaveBeenCalledWith("Failed to sync guild slash commands:", expect.objectContaining({ status: 403 }));
+        await vi.waitFor(() => expect(discord.originalEdits(interaction)).toHaveLength(1));
+        expect(services.guildId).toBe(IDS.guild);
     });
 
     test("refuses to start when no guild is configured and no fallback is given", async ({ db, onTestFinished }) => {

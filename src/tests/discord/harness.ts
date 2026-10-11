@@ -10,7 +10,7 @@ import {
 } from "discord-api-types/v10";
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { server } from "../setup.js";
-import { IDS, apiGuild, apiMessage, apiUser } from "./payloads.js";
+import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 
 const API = "https://discord.com/api/v10";
 
@@ -102,6 +102,13 @@ export class DiscordHarness {
             .map((request) => request.body);
     }
 
+    // Slash command lists sent to Discord for a guild
+    guildCommandUpdates(guildId: string): unknown[] {
+        return this.requests
+            .filter((request) => request.method === "PUT" && request.path === `/applications/${IDS.application}/guilds/${guildId}/commands`)
+            .map((request) => request.body);
+    }
+
     messagesSentTo(channelId: string): unknown[] {
         return this.requests
             .filter((request) => request.method === "POST" && request.path === `/channels/${channelId}/messages`)
@@ -160,6 +167,17 @@ export class DiscordHarness {
             http.post(`${API}/webhooks/:applicationId/:token`, async ({ request }) => {
                 const { body } = await this.record(request);
                 return HttpResponse.json(this.messageFrom(body));
+            }),
+            // Bulk-overwriting commands returns the stored commands, each with an id
+            http.put(`${API}/applications/:applicationId/guilds/:guildId/commands`, async ({ request, params }) => {
+                const { body } = await this.record(request);
+                return HttpResponse.json((body as object[]).map((command) => ({
+                    ...command,
+                    id: nextId(),
+                    application_id: String(params.applicationId),
+                    guild_id: String(params.guildId),
+                    version: nextId(),
+                })));
             }),
             http.post(`${API}/channels/:channelId/messages`, async ({ request, params }) => {
                 const { body } = await this.record(request);

@@ -49,12 +49,8 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
 
     if (commandSync) {
         try {
-            await registerGuildCommands({
-                modulesDir: commandsDir,
-                guildId: primaryGuildId,
-                token: commandSync.token,
-                clientId: commandSync.clientId,
-            });
+            client.rest.setToken(commandSync.token);
+            await registerGuildCommands(client.rest, commandSync.clientId, primaryGuildId, commands);
         } catch (err) {
             console.error('Failed to sync guild slash commands:', err);
         }
