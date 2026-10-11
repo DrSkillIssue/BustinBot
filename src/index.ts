@@ -1,9 +1,10 @@
-import { Client, GatewayIntentBits, Partials } from 'discord.js';
+import { Client } from 'discord.js';
 import { config } from 'dotenv';
 import path from 'path';
 import { loadCommands } from './core/services/CommandService.js';
 import { createFirestore } from './core/database/firestore.js';
 import { startBot } from './bot.js';
+import { clientOptions } from './clientOptions.js';
 const isDryRun = process.argv.includes('--dryrun') || process.argv.includes('--dry-run');
 
 // Load environment variables (only for global secrets)
@@ -51,18 +52,7 @@ async function main(): Promise<void> {
         throw new Error('No Discord bot token available. Check DISCORD_TOKEN_LIVE / DISCORD_TOKEN_DEV.');
     }
 
-    // Create Discord client with required intents
-    const client = new Client({
-        intents: [
-            GatewayIntentBits.Guilds,
-            GatewayIntentBits.GuildMessages,
-            GatewayIntentBits.MessageContent,
-            GatewayIntentBits.DirectMessages,
-            GatewayIntentBits.GuildVoiceStates,
-            GatewayIntentBits.GuildMembers,
-        ],
-        partials: [Partials.Channel]
-    });
+    const client = new Client(clientOptions);
 
     const db = createFirestore();
     const shutdown = await startBot(client, {
