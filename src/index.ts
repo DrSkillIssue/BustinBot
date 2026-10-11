@@ -33,6 +33,10 @@ function resolveCommandSync(): { token: string; clientId: string } | null {
 }
 
 async function main(): Promise<void> {
+    if (!process.env.TMDB_API_KEY) {
+        throw new Error('TMDB_API_KEY is not set in your environment variables.');
+    }
+
     if (isDryRun) {
         console.log('Loading commands...');
         const commands = await loadCommands(commandsDir);

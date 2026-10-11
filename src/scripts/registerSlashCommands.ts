@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import path from 'path';
 import { registerSlashCommands } from '../utils/registerCommands.js';
 import { getDirname } from '../utils/PathUtils.js';

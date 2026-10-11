@@ -1,11 +1,8 @@
 import { REST, Routes } from 'discord.js';
-import { config } from 'dotenv';
 import path from 'path';
 import type { Command } from '../models/Command.js';
 import { getDirname } from './PathUtils.js';
 const dirname = getDirname(import.meta.url);
-
-config();
 
 export interface RegisterCommandOptions {
     modulesDir?: string;

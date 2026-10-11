@@ -1,15 +1,16 @@
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
 import type { Movie } from '../../models/Movie.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-dotenv.config();
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
-if (!TMDB_API_KEY) {
-    throw new Error('TMDB_API_KEY is not set in your environment variables.');
+// Read when a request is made: the entry point loads the environment, and checks this key at startup
+function tmdbApiKey(): string {
+    const key = process.env.TMDB_API_KEY;
+    if (!key) {
+        throw new Error('TMDB_API_KEY is not set in your environment variables.');
+    }
+    return key;
 }
 
 // TMDb Response Types
@@ -38,7 +39,7 @@ interface TMDbCreditsResponse {
 }
 
 export async function fetchMovieDetails(movieName: string): Promise<Partial<Movie> | null> {
-    const searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(movieName)}`;
+    const searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${tmdbApiKey()}&query=${encodeURIComponent(movieName)}`;
 
     const searchResponse = await fetch(searchUrl);
     const searchData = await searchResponse.json() as TMDbSearchResponse;
@@ -47,7 +48,7 @@ export async function fetchMovieDetails(movieName: string): Promise<Partial<Movi
 
     const topResult = searchData.results[0]!;
 
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${topResult.id}?api_key=${TMDB_API_KEY}`;
+    const detailsUrl = `${TMDB_BASE_URL}/movie/${topResult.id}?api_key=${tmdbApiKey()}`;
     const detailsResponse = await fetch(detailsUrl);
     const detailsData = (await detailsResponse.json()) as TMDbDetailsResponse;
 
@@ -69,8 +70,8 @@ export async function fetchMovieDetails(movieName: string): Promise<Partial<Movi
 }
 
 export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> | null> {
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}&language=en-US`;
-    const creditsUrl = `${TMDB_BASE_URL}/movie/${id}/credits?api_key=${TMDB_API_KEY}&language=en-US`;
+    const detailsUrl = `${TMDB_BASE_URL}/movie/${id}?api_key=${tmdbApiKey()}&language=en-US`;
+    const creditsUrl = `${TMDB_BASE_URL}/movie/${id}/credits?api_key=${tmdbApiKey()}&language=en-US`;
 
     const [detailsRes, creditsRes] = await Promise.all([
         fetch(detailsUrl),
