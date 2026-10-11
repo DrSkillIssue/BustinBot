@@ -46,7 +46,6 @@ const currentmovie: Command = {
         }
 
         const startTime = DateTime.fromJSDate(startDate);
-        const readableDate = startTime.toFormat("cccc, dd LLLL yyyy");
         const unixTimestamp = Math.floor(startTime.toSeconds());
 
         // Fetch current movie (if any)

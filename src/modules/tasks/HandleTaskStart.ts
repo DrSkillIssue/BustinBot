@@ -15,7 +15,7 @@ function generateTaskEventId(taskId: string): string {
 }
 
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {
-    const { keywords, repos } = services;
+    const { keywords } = services;
     if (!keywords) {
         console.error('[TaskStart] Missing keywords service.');
         return;

@@ -91,7 +91,6 @@ export async function handleTaskPollVoteInteraction(
 }
 
 export async function postAllTaskPolls(client: Client, services: ServiceContainer) {
-    const { repos } = services;
     const guildId = services.guildId;
     if (!guildId) {
         console.warn('[TaskPoll] No guild ID available in services.');

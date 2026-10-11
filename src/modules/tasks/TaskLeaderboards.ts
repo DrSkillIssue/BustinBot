@@ -886,7 +886,7 @@ export async function buildLeaderboardMessage(
         rankCounts.set(entry.rank, (rankCounts.get(entry.rank) ?? 0) + 1);
     }
 
-    const formattedRows = topEntries.map((entry, index) => {
+    const formattedRows = topEntries.map((entry) => {
         const rawName = nameMap.get(entry.userId) ?? entry.userId;
         const name =
             rawName.length > MAX_NAME_LENGTH ? `${rawName.slice(0, MAX_NAME_LENGTH - 3)}...` : rawName;

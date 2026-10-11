@@ -76,7 +76,6 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
         const batch = db.batch();
 
         snapshot.docs.forEach((doc) => {
-            const data = doc.data() as Keyword;
             batch.update(doc.ref, {
                 timesUsed: 0,
                 lastUsedAt: Timestamp.fromMillis(0),

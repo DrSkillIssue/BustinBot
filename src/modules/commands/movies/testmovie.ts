@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { fetchMovieDetails } from '../../movies/MovieService.js';
 import { CommandModule, CommandRole, type Command } from '../../../models/Command.js';
 import { createMovieEmbed } from '../../movies/MovieEmbeds.js';

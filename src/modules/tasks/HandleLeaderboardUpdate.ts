@@ -39,7 +39,7 @@ async function resolveTaskChannel(client: Client, services: ServiceContainer): P
     return fallback ?? null;
 }
 
-async function resolveTaskUserMention(client: Client, services: ServiceContainer): Promise<string | null> {
+async function resolveTaskUserMention(services: ServiceContainer): Promise<string | null> {
     const guildId = services.guildId;
     if (!guildId) return null;
 
@@ -426,7 +426,7 @@ export async function postFinalLeaderboardSnapshot(
                 tierCounts: completed.tierCounts ?? {},
             }
         );
-        const mention = await resolveTaskUserMention(client, services);
+        const mention = await resolveTaskUserMention(services);
         await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
         return;
     }
@@ -445,7 +445,7 @@ export async function postFinalLeaderboardSnapshot(
         },
         tierCounts: leaderboard.tierCounts ?? {},
     });
-    const mention = await resolveTaskUserMention(client, services);
+    const mention = await resolveTaskUserMention(services);
     await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
 }
 
@@ -506,7 +506,7 @@ export async function postPeriodicLeaderboardUpdate(
             },
             tierCounts: latest.tierCounts ?? {},
         });
-        const mention = await resolveTaskUserMention(client, services);
+        const mention = await resolveTaskUserMention(services);
         await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
 
         await notifyChampionWinners(client, services, placements);

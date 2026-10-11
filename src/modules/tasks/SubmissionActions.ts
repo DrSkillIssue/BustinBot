@@ -90,8 +90,6 @@ export async function notifyUser(client: Client, submission: TaskSubmission, str
         } as const;
 
         const tierInfo = tierMap[submission.status];
-        const rollCount = submission.prizeRolls ?? 0;
-        const plural = rollCount === 1 ? '' : 's';
 
         await user.send(
             `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`
