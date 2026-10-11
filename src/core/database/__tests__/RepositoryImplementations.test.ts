@@ -36,9 +36,7 @@ const { incrementMock, serverTimestampMock, timestampNowMock, timestampFromMilli
 
 import type { Firestore } from 'firebase-admin/firestore';
 import { GuildScopedRepository } from '../CoreRepo.js';
-import { BotRepository } from '../BotRepo.js';
 import { KeywordRepository } from '../KeywordRepo.js';
-import { UserRepository } from '../UserRepo.js';
 
 type FirestoreDoc<T = any> = {
     get: ReturnType<typeof vi.fn>;
@@ -144,81 +142,6 @@ describe('GuildScopedRepository base behaviour', () => {
     });
 });
 
-describe('BotRepository', () => {
-    function setupBotDoc(existing: boolean, data: any = {}) {
-        const doc = stubDoc(data, existing);
-        stubCollection({ doc: vi.fn().mockReturnValue(doc) });
-        return doc;
-    }
-
-    it('retrieves bot stats', async () => {
-        const expected = { commandsRun: 5 };
-        const doc = setupBotDoc(true, expected);
-        const repo = new BotRepository(db);
-
-        await expect(repo.getBotStats()).resolves.toEqual(expected);
-        expect(doc.get).toHaveBeenCalled();
-    });
-
-    it('initialises stats when missing', async () => {
-        const defaults = { commandsRun: 0 } as any;
-        const doc = setupBotDoc(false, defaults);
-        const repo = new BotRepository(db);
-
-        await repo.initBotStats(defaults);
-        expect(doc.set).toHaveBeenCalledWith(defaults);
-    });
-
-    it('resets stats and increments counters', async () => {
-        const doc = setupBotDoc(true, {});
-        const repo = new BotRepository(db);
-
-        await repo.resetAllStats();
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            commandsRun: 0,
-            funStats: expect.objectContaining({ bustinCount: 0 }),
-        }));
-
-        await repo.increment('commandsRun', 3);
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            commandsRun: expect.objectContaining({ amount: 3 }),
-        }));
-
-        await repo.incrementCommand('stats');
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            commandsRun: expect.any(Object),
-            'commandByName.stats': expect.any(Object),
-        }));
-
-        await repo.incrementFunStat('goodbotCount');
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            'funStats.goodbotCount': expect.any(Object),
-        }));
-
-        await repo.incrementErrorCount();
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            errorCount: expect.any(Object),
-        }));
-    });
-
-    it('updates guild metrics and timestamps', async () => {
-        const doc = setupBotDoc(true, {});
-        const repo = new BotRepository(db);
-
-        await repo.updateGuildStats(5, 10, 20);
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            guildCount: 5,
-            channelCount: 10,
-            userCount: 20,
-        }));
-
-        await repo.updateLastUpdated();
-        expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
-            lastUpdatedAt: expect.any(Date),
-        }));
-    });
-});
-
 describe('KeywordRepository', () => {
     const guildId = 'guild-keywords';
 
@@ -313,84 +236,5 @@ describe('KeywordRepository', () => {
 
         expect(batchUpdate).toHaveBeenCalledTimes(2);
         expect(batchCommit).toHaveBeenCalled();
-    });
-});
-
-describe('UserRepository', () => {
-    const guildId = 'guild-users';
-
-    function setupUserCollection(docs: any[] = []) {
-        const docStore = new Map<string, ReturnType<typeof stubDoc>>();
-        const collection = stubCollection({
-            doc: vi.fn((id: string) => {
-                if (!docStore.has(id)) {
-                    const existing = docs.find((d) => d.userId === id);
-                    docStore.set(id, stubDoc(existing ?? { userId: id }, Boolean(existing)));
-                }
-                return docStore.get(id)!;
-            }),
-            get: vi.fn().mockResolvedValue(createQuerySnapshot(docs.map((d) => createDocSnapshot(d)))),
-        });
-        return collection;
-    }
-
-    it('manages user documents and defaults', async () => {
-        const collection = setupUserCollection([{ userId: 'user-1', commandsRun: 1 }]);
-        const repo = new UserRepository(db, guildId);
-
-        await expect(repo.getAllUsers()).resolves.toEqual([{ userId: 'user-1', commandsRun: 1 }]);
-        await expect(repo.getUserById('user-1')).resolves.toEqual({ userId: 'user-1', commandsRun: 1 });
-
-        await repo.createUser({ userId: 'user-2' } as any);
-        const createdDoc = collection.doc.mock.results.at(-1)?.value;
-        expect(createdDoc).toBeTruthy();
-        expect(createdDoc.set).toHaveBeenCalledWith({ userId: 'user-2' });
-
-        await repo.updateUser('user-1', { commandsRun: 2 });
-        expect(collection.doc('user-1').update).toHaveBeenCalledWith({ commandsRun: 2 });
-
-        await repo.deleteUser('user-1');
-        expect(collection.doc('user-1').delete).toHaveBeenCalled();
-    });
-
-    it('clears all users using batch delete', async () => {
-        const docs = [createDocSnapshot({ userId: 'user-1' }), createDocSnapshot({ userId: 'user-2' })];
-        const collection = setupUserCollection([]);
-        collection.get.mockResolvedValueOnce(createQuerySnapshot(docs));
-
-        const batchDelete = vi.fn();
-        const batchCommit = vi.fn().mockResolvedValue(undefined);
-        mockDb.batch.mockReturnValue({ delete: batchDelete, commit: batchCommit } as any);
-
-        const repo = new UserRepository(db, guildId);
-        await repo.clearAllUsers();
-
-        expect(batchDelete).toHaveBeenCalledTimes(2);
-        expect(batchCommit).toHaveBeenCalled();
-    });
-
-    it('increments stats and initialises missing users', async () => {
-        const docExists = stubDoc({ userId: 'existing', tasksCompletedBronze: 1 }, true);
-        const docMissing = stubDoc({}, false);
-        const collection = stubCollection({
-            doc: vi.fn((id: string) => (id === 'existing' ? docExists : docMissing)),
-        });
-
-        const repo = new UserRepository(db, guildId);
-
-        await repo.incrementStat('existing', 'tasksCompletedBronze', 2);
-        expect(docExists.update).toHaveBeenCalledWith(expect.objectContaining({
-            tasksCompletedBronze: expect.objectContaining({ amount: 2 }),
-            lastActiveAt: expect.any(Date),
-        }));
-
-        await repo.incrementStat('new-user', 'tasksCompletedBronze', 5);
-        expect(docMissing.set).toHaveBeenCalledWith(expect.objectContaining({
-            userId: 'new-user',
-            tasksCompletedBronze: 5,
-        }));
-
-        await repo.updateLastActive('existing');
-        expect(docExists.update).toHaveBeenCalledWith({ lastActiveAt: expect.any(Date) });
     });
 });

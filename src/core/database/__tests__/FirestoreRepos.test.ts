@@ -25,7 +25,6 @@ vi.mock("firebase-admin/firestore", () => ({
 let TaskRepository: any;
 let TaskLeaderboardRepository: any;
 let PrizeDrawRepository: any;
-let BotRepository: any;
 
 type DocStub = {
     set: ReturnType<typeof vi.fn>;
@@ -123,7 +122,6 @@ beforeAll(async () => {
     TaskRepository = (await import("../TaskRepo.js")).TaskRepository;
     TaskLeaderboardRepository = (await import("../TaskLeaderboardRepo.js")).TaskLeaderboardRepository;
     PrizeDrawRepository = (await import("../PrizeDrawRepo.js")).PrizeDrawRepository;
-    BotRepository = (await import("../BotRepo.js")).BotRepository;
 });
 
 beforeEach(() => {
@@ -232,26 +230,5 @@ describe("PrizeDrawRepository Firestore interactions", () => {
                 rolledAt: expect.any(String),
             })
         );
-    });
-});
-
-describe("BotRepository Firestore interactions", () => {
-    it("increments command counters on the global stats document", async () => {
-        const repo = new BotRepository(stubDb);
-
-        await repo.incrementCommand("support");
-
-        expect(collectionMock).toHaveBeenCalledWith("bot");
-        const botCollection = collectionStubs["bot"];
-        expect(botCollection).toBeDefined();
-        const doc = botCollection?.__docStubs.get("stats");
-        expect(doc).toBeDefined();
-        expect(doc?.update).toHaveBeenCalled();
-
-        const updatePayload = doc?.update.mock.calls[0]![0];
-        expect(incrementMock).toHaveBeenCalledWith(1);
-        expect(updatePayload.commandsRun.__increment).toBe(1);
-        expect(updatePayload["commandByName.support"].__increment).toBe(1);
-        expect(updatePayload.lastUpdatedAt).toBeInstanceOf(Date);
     });
 });

@@ -55,7 +55,7 @@ export class BotRepository implements IBotRepository {
     async incrementCommand(commandName: string): Promise<void> {
         await this.docRef.update({
             commandsRun: FieldValue.increment(1),
-            [`commandByName.${commandName}`]: FieldValue.increment(1),
+            [`commandsByName.${commandName}`]: FieldValue.increment(1),
             lastUpdatedAt: new Date(),
         });
     }
