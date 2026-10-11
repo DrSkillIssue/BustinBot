@@ -20,9 +20,7 @@ describe("startBot", () => {
         await discord.connect();
         const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
-        await vi.waitFor(() => expect(discord.originalEdits(interaction)).toEqual([
-            expect.objectContaining({ content: "Bustin makes me feel good!" }),
-        ]));
+        expect(await discord.originalEdit(interaction)).toEqual(expect.objectContaining({ content: "Bustin makes me feel good!" }));
         expect(services.guildId).toBe(interaction.guildId);
     });
 
@@ -54,7 +52,7 @@ describe("startBot", () => {
         const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
         expect(error).toHaveBeenCalledWith("Failed to sync guild slash commands:", expect.objectContaining({ status: 403 }));
-        await vi.waitFor(() => expect(discord.originalEdits(interaction)).toHaveLength(1));
+        expect(await discord.originalEdit(interaction)).toEqual(expect.objectContaining({ content: "Bustin makes me feel good!" }));
         expect(services.guildId).toBe(IDS.guild);
     });
 
@@ -74,15 +72,11 @@ describe("startBot", () => {
             channel: { id: otherChannel, type: 0 as const, guild_id: otherGuild, name: "general" },
         };
         // The other guild is already in use before anyone praises the bot
-        const earlier = await discord.dispatch(chatInputInteraction("bustin", [], inOtherGuild));
-        await vi.waitFor(() => expect(discord.originalEdits(earlier)).toHaveLength(1));
-        const first = await discord.dispatch(chatInputInteraction("goodbot"));
-        await vi.waitFor(() => expect(discord.originalEdits(first)).toHaveLength(1));
+        await discord.originalEdit(await discord.dispatch(chatInputInteraction("bustin", [], inOtherGuild)));
+        await discord.originalEdit(await discord.dispatch(chatInputInteraction("goodbot")));
         const second = await discord.dispatch(chatInputInteraction("goodbot", [], inOtherGuild));
 
-        await vi.waitFor(() => expect(discord.originalEdits(second)).toEqual([
-            expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }),
-        ]));
+        expect(await discord.originalEdit(second)).toEqual(expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }));
         expect(services.guildId).toBe(IDS.guild);
     });
 

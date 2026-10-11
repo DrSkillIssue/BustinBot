@@ -1,4 +1,4 @@
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { Collection } from "@discordjs/collection";
 import { Client, Events, GatewayIntentBits, type Interaction, type Message } from "discord.js";
 import {
@@ -32,12 +32,20 @@ import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 const API = "/api/v10";
 const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
 
+function toDiscordRequest(method: string, path: string, body: unknown): DiscordRequest {
+    return {
+        method,
+        path: decodeURIComponent(path.split("?")[0] ?? "").replace(API, ""),
+        body: typeof body === "string" && body ? JSON.parse(body) : undefined,
+    };
+}
+
 // A route matcher for a path prefix, written as a regular expression so a failed expectation names the route
 function startingWith(prefix: string): RegExp {
     return new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 }
 
-// A Discord REST request with its JSON body parsed
+// A Discord REST request with its route decoded (e.g. messages/@original) and its JSON body parsed
 export interface DiscordRequest {
     method: string;
     path: string;
@@ -91,6 +99,7 @@ class TestGateway implements IShardingStrategy {
 export class DiscordHarness {
     readonly api: Interceptable;
     private gateway: TestGateway | undefined;
+    private readonly arrivals = new EventEmitter<{ request: [DiscordRequest] }>();
 
     private constructor(readonly client: Client) {
         this.api = mockAgent().get("https://discord.com");
@@ -150,7 +159,7 @@ export class DiscordHarness {
     async dispatch(payload: APIInteraction): Promise<Interaction> {
         this.api
             .intercept({ path: startingWith(`${API}/interactions/${payload.id}/${payload.token}/callback`), method: "POST" })
-            .reply(({ path, body }) => {
+            .reply(this.answered(({ path, body }) => {
                 if (!new URL(path, "https://discord.com").searchParams.has("with_response")) {
                     return { statusCode: 204 };
                 }
@@ -160,16 +169,16 @@ export class DiscordHarness {
                     interaction: { id: payload.id, type: payload.type, response_message_loading: false, response_message_ephemeral: false },
                 };
                 return { statusCode: 200, data: type === InteractionResponseType.Modal ? response : { ...response, resource: { type } }, responseOptions: JSON_RESPONSE };
-            });
+            }));
         // Edits and follow-ups go to the interaction's webhook for as long as its token is valid
         const webhook = `${API}/webhooks/${IDS.application}/${payload.token}`;
         this.api
             .intercept({ path: startingWith(`${webhook}/messages/`), method: "PATCH" })
-            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE }))
+            .reply(this.answered(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE })))
             .persist();
         this.api
             .intercept({ path: new RegExp(`${startingWith(webhook).source}(\\?|$)`), method: "POST" })
-            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE }))
+            .reply(this.answered(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE })))
             .persist();
 
         const created = new Promise<Interaction>((resolve) => {
@@ -202,7 +211,7 @@ export class DiscordHarness {
     acceptMessages(channelId: string): void {
         this.api
             .intercept({ path: `${API}/channels/${channelId}/messages`, method: "POST" })
-            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body, { channel_id: channelId }), responseOptions: JSON_RESPONSE }))
+            .reply(this.answered(({ body }) => ({ statusCode: 200, data: this.messageFrom(body, { channel_id: channelId }), responseOptions: JSON_RESPONSE })))
             .persist();
     }
 
@@ -210,23 +219,41 @@ export class DiscordHarness {
     acceptCommandSync(guildId: string): void {
         this.api
             .intercept({ path: `${API}/applications/${IDS.application}/guilds/${guildId}/commands`, method: "PUT" })
-            .reply(({ body }) => {
+            .reply(this.answered(({ body }) => {
                 const commands: object[] = JSON.parse(String(body));
                 const stored = commands.map((command) => ({ ...command, id: nextId(), application_id: IDS.application, guild_id: guildId, version: nextId() }));
                 return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
-            })
+            }))
             .persist();
     }
 
-    // Every Discord REST request the bot made since it became ready, with routes decoded (e.g. messages/@original)
+    // Every Discord REST request the bot made since it became ready
     requests(): DiscordRequest[] {
         return (mockAgent().getCallHistory()?.calls() ?? [])
             .filter((call) => call.origin === "https://discord.com")
-            .map((call) => ({
-                method: call.method,
-                path: decodeURIComponent(call.path.split("?")[0] ?? "").replace(API, ""),
-                body: call.body ? JSON.parse(call.body) : undefined,
-            }));
+            .map((call) => toDiscordRequest(call.method, call.path, call.body));
+    }
+
+    // The first request to a route, whether it already reached Discord or arrives later. For work the bot does in
+    // its own event handlers, which a test cannot await: the request arriving is the event to wait for.
+    request(method: string, path: string): Promise<DiscordRequest> {
+        const matches = (request: DiscordRequest) => request.method === method && request.path === path;
+        const seen = this.requests().find(matches);
+        if (seen) return Promise.resolve(seen);
+        return new Promise((resolve) => {
+            const listener = (request: DiscordRequest) => {
+                if (!matches(request)) return;
+                this.arrivals.off("request", listener);
+                resolve(request);
+            };
+            this.arrivals.on("request", listener);
+        });
+    }
+
+    // The first edit to an interaction's original response, once it arrives
+    async originalEdit(interaction: Interaction): Promise<unknown> {
+        const { body } = await this.request("PATCH", `/webhooks/${IDS.application}/${interaction.token}/messages/@original`);
+        return body;
     }
 
     // Initial responses Discord received for an interaction (reply, defer, modal, update)
@@ -262,6 +289,14 @@ export class DiscordHarness {
         return this.requests()
             .filter((request) => request.method === method && request.path === path)
             .map((request) => request.body);
+    }
+
+    // Wraps a route's reply so each request it answers is announced to tests waiting for it
+    private answered<T>(reply: (options: MockInterceptor.MockResponseCallbackOptions) => T) {
+        return (options: MockInterceptor.MockResponseCallbackOptions): T => {
+            this.arrivals.emit("request", toDiscordRequest(options.method, options.path, options.body));
+            return reply(options);
+        };
     }
 
     private send(payload: GatewayDispatchPayload): void {
