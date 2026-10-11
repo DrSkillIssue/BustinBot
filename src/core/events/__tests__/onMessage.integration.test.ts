@@ -42,7 +42,7 @@ describe("prefix commands", () => {
     });
 
     test("tells the member when a command fails", async ({ discord, services }) => {
-        vi.spyOn(console, "error").mockImplementation(() => {});
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
         const failing: Command = {
             name: "fail",
             description: "Always fails",
@@ -57,6 +57,7 @@ describe("prefix commands", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
             expect.objectContaining({ content: "There was an error executing that command." }),
         ]);
+        expect(error).toHaveBeenCalledWith("[Command Error]: fail", expect.objectContaining({ message: "boom" }));
     });
 
     test("survives Discord rejecting the error reply", async ({ discord, services }) => {

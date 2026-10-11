@@ -4,6 +4,7 @@ import { KeywordRepository } from '../KeywordRepo.js';
 
 const test = base.extend('repo', ({ db }) => new KeywordRepository(db, 'guild-1'));
 
+
 afterEach(() => {
     vi.restoreAllMocks();
 });
@@ -33,11 +34,12 @@ describe('KeywordRepository', () => {
     });
 
     test('ignores usage of a keyword that does not exist', async ({ repo }) => {
-        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         await repo.markKeywordUsed('missing', 'event-1');
 
         expect(await repo.getKeywordById('missing')).toBeNull();
+        expect(warn).toHaveBeenCalledWith('[KeywordRepo] Keyword missing not found');
     });
 
     test('picks only from keywords outside the most recently used ones', async ({ repo, db }) => {

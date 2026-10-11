@@ -68,7 +68,7 @@ describe("slash command routing", () => {
     });
 
     test("replies with a private error when a command fails before responding", async ({ discord, services }) => {
-        vi.spyOn(console, "error").mockImplementation(() => {});
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
         const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("probe"));
 
         await handleInteraction(interaction, new Map([["probe", command(async () => {
@@ -78,6 +78,7 @@ describe("slash command routing", () => {
         expect(discord.callbacks(interaction)).toEqual([
             { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "There was an error executing that command.", flags: MessageFlags.Ephemeral }) },
         ]);
+        expect(error).toHaveBeenCalledWith("[Slash Command Error]: probe", expect.objectContaining({ message: "boom" }));
     });
 });
 
