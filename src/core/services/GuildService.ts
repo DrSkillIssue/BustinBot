@@ -66,8 +66,9 @@ export class GuildService {
         const mergedBase: Omit<Guild, "updatedBy" | "updatedAt"> = {
             id: guildId,
             toggles: {
-                taskScheduler: existing?.toggles?.taskScheduler ?? false,
-                leaguesEnabled: existing?.toggles?.leaguesEnabled ?? false,
+                taskScheduler: false,
+                leaguesEnabled: false,
+                ...(existing?.toggles ?? {}),
                 ...(data.toggles ?? {}),
             },
             roles: {
@@ -116,59 +117,18 @@ export class GuildService {
     async updateToggle(guildId: string, key: string, enabled: boolean, userId: string): Promise<void> {
         await this.repo.updateToggle(guildId, key, enabled, userId);
 
+        // The repository writes only this field, so mirror that in the cache rather than rebuilding the guild.
+        // An uncached guild is left alone; the next get() loads the stored document including this change.
         const existing = this.cache.get(guildId);
-        const defaultTaskSettings = DEFAULT_TASK_SETTINGS;
-        const mentionSuppressedUntilMs = existing?.mentionSuppressedUntilMs;
-
-        const toggles = {
-            ...(existing?.toggles ?? {}),
+        if (existing) {
             // Extract last part of key if nested (e.g. "toggles.leaguesEnabled")
-            [key.split(".").pop()!]: enabled,
-        };
-
-        const merged: Guild = {
-            id: guildId,
-            toggles: {
-                taskScheduler: existing?.toggles?.taskScheduler ?? false,
-                leaguesEnabled: existing?.toggles?.leaguesEnabled ?? false,
-                [key.split(".").pop()!]: enabled,
-            },
-            roles: existing?.roles ?? {
-                admin: process.env.ADMIN_ROLE_NAME || "BustinBot Admin",
-                movieAdmin: "",
-                movieUser: "",
-                taskAdmin: "",
-                taskUser: "",
-                taskChampionFirst: "",
-                taskChampionSecond: "",
-                taskChampionThird: "",
-            },
-            channels: existing?.channels ?? {
-                announcements: "",
-                botArchive: "",
-                botLog: "",
-                taskChannel: "",
-                taskVerification: "",
-                movieNight: "",
-                movieVC: "",
-            },
-            taskSettings: {
-                ...defaultTaskSettings,
-                ...(existing?.taskSettings ?? {}),
-                championRoles: {
-                    ...defaultTaskSettings.championRoles,
-                    ...(existing?.taskSettings?.championRoles ?? {}),
-                },
-            },
-            setupComplete: existing?.setupComplete ?? { core: false, movie: false, task: false },
-            ...(mentionSuppressedUntilMs !== undefined
-                ? { mentionSuppressedUntilMs }
-                : {}),
-            updatedBy: userId,
-            updatedAt: new Date() as any,
-        };
-
-        this.cache.set(guildId, merged);
+            const toggleName = key.split(".").pop()!;
+            this.cache.set(guildId, {
+                ...existing,
+                toggles: { ...existing.toggles, [toggleName]: enabled },
+                updatedBy: userId,
+            });
+        }
 
         console.log(`[GuildService] Toggled ${key} ${enabled ? "on" : "off"} for ${guildId}`);
     }
