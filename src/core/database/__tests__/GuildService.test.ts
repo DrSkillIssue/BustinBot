@@ -159,6 +159,23 @@ describe("GuildService", () => {
     expect(service["cache"].get("123")?.toggles.taskLeaderboard).toBe(false);
   });
 
+  it("merges an update onto the stored guild when it is not cached", async () => {
+    repo.getGuild.mockResolvedValue(baseGuild);
+
+    await service.update("123", { timezone: "Australia/Melbourne" });
+
+    expect(repo.getGuild).toHaveBeenCalledWith("123");
+    expect(repo.updateGuild).toHaveBeenCalledWith(
+      "123",
+      expect.objectContaining({
+        timezone: "Australia/Melbourne",
+        roles: baseGuild.roles,
+        channels: baseGuild.channels,
+        setupComplete: baseGuild.setupComplete,
+      })
+    );
+  });
+
   it("loads all guilds and caches them", async () => {
     repo.getAllGuilds.mockResolvedValue([baseGuild]);
 

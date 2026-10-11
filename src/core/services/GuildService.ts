@@ -35,7 +35,9 @@ export class GuildService {
     }
 
     async update(guildId: string, data: Partial<Guild>): Promise<void> {
-        const existing = this.cache.get(guildId);
+        // Merge onto the stored guild, not just the cache: the write below replaces every field it contains,
+        // so building from defaults on a cache miss would blank out the saved roles, channels and setup state.
+        const existing = await this.get(guildId);
         const mentionSuppressedUntilMs =
             data.mentionSuppressedUntilMs ??
             existing?.mentionSuppressedUntilMs;
