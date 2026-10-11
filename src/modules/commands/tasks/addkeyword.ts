@@ -21,11 +21,12 @@ const addkeyword: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const repo = services.repos?.keywordRepo;
         if (!repo) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: "Keyword repository unavailable.",
-                flags: 1 << 6,
             });
             return;
         }
@@ -36,24 +37,21 @@ const addkeyword: Command = {
         );
 
         if (existing) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: `The keyword **"${word}"** already exists in the database.`,
-                flags: 1 << 6,
             });
             return;
         }
 
         try {
             await repo.addKeyword(word);
-            await interaction.reply({
+            await interaction.editReply({
                 content: `Keyword **"${word}"** has been added successfully!`,
-                flags: 1 << 6
             });
         } catch (err) {
             console.error("[AddKeyword] Failed to add keyword:", err);
-            await interaction.reply({
+            await interaction.editReply({
                 content: "Failed to add keyword. Check logs for details.",
-                flags: 1 << 6
             });
         }
     },

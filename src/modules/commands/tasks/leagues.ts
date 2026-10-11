@@ -15,20 +15,20 @@ const leagues: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const repo = services.repos?.guildRepo;
         if (!repo) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: "Guild repository unavailable.",
-                flags: 1 << 6,
             });
             return;
         }
 
         const guildId = interaction.guildId;
         if (!guildId) {
-            await interaction.reply({
+            await interaction.editReply({
                 content: "This command must be used inside a server.",
-                flags: 1 << 6
             });
             return;
         }
@@ -43,9 +43,8 @@ const leagues: Command = {
 
         const status = newState ? '**enabled**' : '**disabled**';
 
-        await interaction.reply({
+        await interaction.editReply({
             content: `Leagues tasks have been ${status}.`,
-            flags: 1 << 6
         });
 
         console.log(`[Leagues Toggle] ${interaction.guild?.name ?? guildId}: ${status}`);

@@ -27,7 +27,8 @@ describe('tasktoggle command', () => {
             toggles: { taskScheduler: initialState, taskLeaderboard: initialState },
         });
 
-        const reply = vi.fn().mockResolvedValue(undefined);
+        const deferReply = vi.fn().mockResolvedValue(undefined);
+        const editReply = vi.fn().mockResolvedValue(undefined);
         const options = {
             getSubcommand: vi.fn().mockReturnValue(subcommand),
         };
@@ -36,7 +37,8 @@ describe('tasktoggle command', () => {
             guildId: 'guild-123',
             user: { id: 'user-999' },
             client: { tag: 'TestClient' },
-            reply,
+            deferReply,
+            editReply,
             options,
         } as any;
     }
@@ -49,7 +51,7 @@ describe('tasktoggle command', () => {
         expect(guilds.updateToggle).toHaveBeenCalledWith('guild-123', 'toggles.taskScheduler', true, 'user-999');
         expect(initTaskScheduler).toHaveBeenCalledWith(interaction.client, services);
         expect(stopTaskScheduler).not.toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith(
+        expect(interaction.editReply).toHaveBeenCalledWith(
             expect.objectContaining({ content: expect.stringContaining('enabled') })
         );
     });
@@ -62,7 +64,7 @@ describe('tasktoggle command', () => {
         expect(guilds.updateToggle).toHaveBeenCalledWith('guild-123', 'toggles.taskScheduler', false, 'user-999');
         expect(stopTaskScheduler).toHaveBeenCalled();
         expect(initTaskScheduler).not.toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith(
+        expect(interaction.editReply).toHaveBeenCalledWith(
             expect.objectContaining({ content: expect.stringContaining('disabled') })
         );
     });
@@ -73,7 +75,7 @@ describe('tasktoggle command', () => {
         await tasktoggle.execute({ interaction, services });
 
         expect(guilds.updateToggle).toHaveBeenCalledWith('guild-123', 'toggles.taskLeaderboard', true, 'user-999');
-        expect(interaction.reply).toHaveBeenCalledWith(
+        expect(interaction.editReply).toHaveBeenCalledWith(
             expect.objectContaining({ content: expect.stringContaining('enabled') })
         );
     });
@@ -84,7 +86,7 @@ describe('tasktoggle command', () => {
         await tasktoggle.execute({ interaction, services });
 
         expect(guilds.updateToggle).toHaveBeenCalledWith('guild-123', 'toggles.taskLeaderboard', false, 'user-999');
-        expect(interaction.reply).toHaveBeenCalledWith(
+        expect(interaction.editReply).toHaveBeenCalledWith(
             expect.objectContaining({ content: expect.stringContaining('disabled') })
         );
     });

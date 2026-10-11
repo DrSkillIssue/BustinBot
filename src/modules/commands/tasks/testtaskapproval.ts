@@ -35,14 +35,16 @@ const testtaskapproval: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const taskRepo = services.repos.taskRepo;
         if (!taskRepo) {
-            await interaction.reply({ content: '❌ Task repository unavailable.', flags: 1 << 6 });
+            await interaction.editReply({ content: '❌ Task repository unavailable.' });
             return;
         }
 
         if (!services.tasks) {
-            await interaction.reply({ content: '❌ Task service unavailable.', flags: 1 << 6 });
+            await interaction.editReply({ content: '❌ Task service unavailable.' });
             return;
         }
 
@@ -57,13 +59,13 @@ const testtaskapproval: Command = {
         if (taskIdArg) {
             taskEvent = await taskRepo.getTaskEventById(taskIdArg);
             if (!taskEvent) {
-                await interaction.reply({ content: `❌ Task event \`${taskIdArg}\` not found. This expects an event ID (e.g. \`test-PVM001-123456\`), not a task ID. Run \`/testtask\` first, then use the ID from the embed footer.`, flags: 1 << 6 });
+                await interaction.editReply({ content: `❌ Task event \`${taskIdArg}\` not found. This expects an event ID (e.g. \`test-PVM001-123456\`), not a task ID. Run \`/testtask\` first, then use the ID from the embed footer.` });
                 return;
             }
         } else {
             taskEvent = await taskRepo.getLatestTaskEvent();
             if (!taskEvent) {
-                await interaction.reply({ content: '❌ No task events found. Run `/testtask` first to create one.', flags: 1 << 6 });
+                await interaction.editReply({ content: '❌ No task events found. Run `/testtask` first to create one.' });
                 return;
             }
         }
@@ -81,13 +83,12 @@ const testtaskapproval: Command = {
         const guildConfig = await services.guilds.get(services.guildId);
         const verificationChannelId = guildConfig?.channels?.taskVerification;
 
-        await interaction.reply({
+        await interaction.editReply({
             content: `✅ Test submission posted to <#${verificationChannelId ?? 'unknown'}>.\n` +
                 `**Task:** ${taskName}\n` +
                 `**User:** <@${userId}>\n` +
                 `**Tier hint:** ${tier}\n` +
                 `**Submission ID:** \`${submission.id}\``,
-            flags: 1 << 6,
         });
     },
 };

@@ -39,6 +39,8 @@ const tasktoggle: Command = {
     }) {
         if (!interaction || !services) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const guildId = interaction.guildId!;
         const guildService = services.guilds;
 
@@ -61,16 +63,14 @@ const tasktoggle: Command = {
             if (newState) {
                 // Enable scheduler
                 initTaskScheduler(interaction.client, services);
-                await interaction.reply({
+                await interaction.editReply({
                     content: `✅ Task scheduler **enabled** and started for this guild.`,
-                    flags: 1 << 6,
                 });
             } else {
                 // Disable scheduler
                 stopTaskScheduler();
-                await interaction.reply({
+                await interaction.editReply({
                     content: `⏹️ Task scheduler **disabled** and stopped for this guild.`,
-                    flags: 1 << 6,
                 });
             }
             return;
@@ -87,16 +87,15 @@ const tasktoggle: Command = {
                 interaction.user.id
             );
 
-            await interaction.reply({
+            await interaction.editReply({
                 content: newState
                     ? "🏆 Periodic leaderboard automation **enabled**."
                     : "🧊 Periodic leaderboard automation **disabled** (read-only mode).",
-                flags: 1 << 6,
             });
             return;
         }
 
-        await interaction.reply({ content: "Unknown tasktoggle option.", flags: 1 << 6 });
+        await interaction.editReply({ content: "Unknown tasktoggle option." });
     },
 };
 
