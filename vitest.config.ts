@@ -31,6 +31,8 @@ export default defineConfig({
                     },
                     // Every file shares the one emulator database and clears it between tests
                     fileParallelism: false,
+                    // Projects with different worker limits must run as separate groups; unit tests run first
+                    sequence: { groupOrder: 1 },
                 },
             },
         ],
