@@ -1,10 +1,40 @@
 import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import type { RepliableInteraction } from "discord.js";
+import type { MessageComponentInteraction } from "discord.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
 const PAGE_SIZE = 25;
-const sessions = new Map<string, { selected: Set<string>; page: number }>();
+const MAX_SELECTED = 5;
+
+interface ManualPollSelection {
+    selected: Set<string>;
+    page: number;
+}
+
+// The movies each admin has picked so far for a poll they are putting together. Each guild has its own.
+export class ManualPollSelections {
+    private readonly selections = new Map<string, ManualPollSelection>();
+
+    get(userId: string): ManualPollSelection {
+        let selection = this.selections.get(userId);
+        if (!selection) {
+            selection = { selected: new Set<string>(), page: 0 };
+            this.selections.set(userId, selection);
+        }
+        return selection;
+    }
+
+    select(userId: string, movieIds: string[]): void {
+        const selection = this.get(userId);
+        for (const id of movieIds) {
+            if (selection.selected.size < MAX_SELECTED) selection.selected.add(id);
+        }
+    }
+
+    clear(userId: string): void {
+        this.selections.delete(userId);
+    }
+}
 
 function getPaginatedMovies(page: number, movies: Movie[]) {
     const start = page * PAGE_SIZE;
@@ -17,7 +47,9 @@ function normalizeLabel(title: string): string {
 }
 
 
-export async function showMovieManualPollMenu(services: ServiceContainer, interaction: RepliableInteraction) {
+// Shows the menu for picking a poll's movies, in place of the message the interaction came from. The interaction
+// has been deferred, since the movie list is read first.
+export async function showMovieManualPollMenu(services: ServiceContainer, interaction: MessageComponentInteraction) {
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
         await interaction.followUp({
@@ -38,9 +70,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
         return;
     }
 
-    const userId = interaction.user.id;
-    const session = sessions.get(userId) ?? { selected: new Set<string>(), page: 0 };
-    sessions.set(userId, session);
+    const session = services.manualPolls.get(interaction.user.id);
 
     const pageMovies = getPaginatedMovies(session.page, allMovies);
 
@@ -55,7 +85,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
     });
 
     const alreadySelected = session.selected.size;
-    const remaining = Math.max(0, 5 - alreadySelected);
+    const remaining = Math.max(0, MAX_SELECTED - alreadySelected);
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId("movie_poll_manual_select")
@@ -123,33 +153,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
         controlRow,
     ];
 
-    if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ content, components });
-    } else if ("update" in interaction) {
-        await interaction.update({ content, components });
-    } else {
-        await interaction.reply({ content, components, flags: 1 << 6 });
-    }
-}
-
-export function getManualPollSession(userId: string) {
-    return sessions.get(userId);
-}
-
-export function clearManualPollSession(userId: string) {
-    sessions.delete(userId);
-}
-
-export function updateManualPollSelection(userId: string, selectedIds: string[]) {
-    const session = sessions.get(userId);
-    if (!session) return;
-
-    // If the user is selecting on this page, merge new selections
-    for (const id of selectedIds) {
-        if (session.selected.size < 5) {
-            session.selected.add(id);
-        }
-    }
+    await interaction.editReply({ content, components });
 }
 
 export async function changeManualPollPage(
@@ -163,9 +167,7 @@ export async function changeManualPollPage(
     const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
     if (!allMovies.length) return;
 
-    const session = sessions.get(userId);
-    if (session) {
-        const totalPages = Math.ceil(allMovies.length / PAGE_SIZE);
-        session.page = Math.max(0, Math.min(session.page + delta, totalPages - 1));
-    }
+    const session = services.manualPolls.get(userId);
+    const totalPages = Math.ceil(allMovies.length / PAGE_SIZE);
+    session.page = Math.max(0, Math.min(session.page + delta, totalPages - 1));
 }

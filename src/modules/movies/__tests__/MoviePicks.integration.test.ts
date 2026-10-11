@@ -1,5 +1,5 @@
-import { ComponentType, MessageFlags, PermissionFlagsBits, type APIEmbed, type APIMessageTopLevelComponent } from "discord-api-types/v10";
-import type { ButtonInteraction, StringSelectMenuInteraction } from "discord.js";
+import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
+import type { ButtonInteraction } from "discord.js";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import {
@@ -14,7 +14,6 @@ import {
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 import type { Movie } from "../../../models/Movie.js";
 import { pollMovieWithList } from "../MoviePolls.js";
-import { showMovieManualPollMenu } from "../MovieManualPoll.js";
 import { addMovieWithStats } from "../MovieService.js";
 
 const SUBMITTER = "100000000000000036";
@@ -28,9 +27,23 @@ async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[])
     return stored;
 }
 
-function buttonIds(components: APIMessageTopLevelComponent[] | null | undefined): string[] {
-    return (components ?? []).flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
-        .flatMap((button) => ("custom_id" in button ? [button.custom_id] : []));
+// The buttons and menus in a message's rows, as Discord received them
+type Rows = readonly unknown[] | null | undefined;
+
+function components(rows: Rows): { custom_id: string; disabled: boolean }[] {
+    return (rows ?? [])
+        .flatMap((row) => (typeof row === "object" && row !== null && "components" in row && Array.isArray(row.components) ? row.components : []))
+        .flatMap((component: unknown) => (typeof component === "object" && component !== null && "custom_id" in component && typeof component.custom_id === "string"
+            ? [{ custom_id: component.custom_id, disabled: "disabled" in component && component.disabled === true }]
+            : []));
+}
+
+function buttonIds(rows: Rows): string[] {
+    return components(rows).map((component) => component.custom_id);
+}
+
+function button(rows: Rows, customId: string) {
+    return components(rows).find((component) => component.custom_id === customId);
 }
 
 afterEach(() => {
@@ -135,35 +148,70 @@ describe("choosing the movie for movie night", () => {
     });
 });
 
-describe("the manual poll menu", () => {
-    test("lists the unwatched movies and enables Confirm once two are selected", async ({ discord, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
-        const command = await discord.dispatch(buttonInteraction("movie_poll_manual")) as ButtonInteraction;
-        await command.deferReply({ flags: MessageFlags.Ephemeral });
+describe("/pickmovie", () => {
+    const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 
-        await showMovieManualPollMenu(services, command);
-        const select = await discord.dispatch(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"])) as StringSelectMenuInteraction;
-        const { updateManualPollSelection } = await import("../MovieManualPoll.js");
-        updateManualPollSelection(IDS.user, select.values);
-        await showMovieManualPollMenu(services, select);
+    test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, services }) => {
+        await storeMovies(services, [{ title: "Inception" }]);
+        const command = await slash("pickmovie", [], movieAdmin);
+        const offered = buttonIds(discord.originalEdits(command)[0]?.components);
+        const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
-        const [menu] = discord.originalEdits(command);
-        expect(JSON.stringify(menu?.components)).toContain('"label":"1. Inception"');
-        expect(JSON.stringify(menu?.components)).not.toContain("Heat");
-        expect(JSON.stringify(menu?.components)).toMatch(/"custom_id":"movie_poll_manual_confirm","label":"Confirm","style":3,"disabled":true/);
-        expect(JSON.stringify(discord.callbacks(select))).toMatch(/"custom_id":"movie_poll_manual_confirm","label":"Confirm","style":3,"disabled":false/);
+        const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, movieAdmin));
+        const random = await interact(buttonInteraction("movie_pick_random", pickMessage, movieAdmin));
+        const pollRandom = await interact(buttonInteraction("movie_poll_random", pickMessage, movieAdmin));
+
+        expect(offered).toEqual(["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"]);
+        expect(discord.modal(choose)?.custom_id).toBe("movie_pick_choose_modal");
+        expect(discord.originalEdits(random)).toEqual([expect.objectContaining({ content: "A random movie has been selected:", embeds: [expect.objectContaining({ title: "🎲 Inception" })] })]);
+        expect(JSON.stringify(discord.callbacks(pollRandom))).toContain('"custom_id":"movie_poll_random_count"');
     });
 
-    test("says there is nothing to poll when every movie has been watched", async ({ discord, services }) => {
+    test("builds a poll from the movies picked in the manual menu", async ({ discord, interact, services }) => {
+        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
+        const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
+        discord.acceptMessages(IDS.channel);
+
+        const open = await interact(buttonInteraction("movie_poll_manual", pickMessage, movieAdmin));
+        const choose = await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, movieAdmin));
+        const confirm = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
+
+        const menu = JSON.stringify(discord.originalEdits(open)[0]?.components);
+        expect(menu).toContain('"label":"1. Inception"');
+        expect(menu).not.toContain("Heat");
+        expect(button(discord.originalEdits(open)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: true });
+        expect(button(discord.originalEdits(choose)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: false });
+        expect(discord.originalEdits(confirm)).toEqual([expect.objectContaining({ content: "Poll confirmed and posted!" })]);
+        expect((await services.repos.movieRepo!.getActivePoll())?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
+    });
+
+    test("answers a menu choice when every movie has been watched", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception", watched: true }]);
-        const command = await discord.dispatch(buttonInteraction("movie_poll_manual")) as ButtonInteraction;
-        await command.deferReply({ flags: MessageFlags.Ephemeral });
 
-        await showMovieManualPollMenu(services, command);
+        const choose = await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1"], apiMessage({ flags: MessageFlags.Ephemeral }), movieAdmin));
 
-        expect(discord.requests().filter((request) => request.method === "POST" && request.path.includes("/webhooks/"))).toEqual([
+        expect(discord.callbacks(choose)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
+        expect(discord.requests().filter((request) => request.method === "POST" && request.path === `/webhooks/${IDS.application}/${choose.token}`)).toEqual([
             expect.objectContaining({ body: expect.objectContaining({ content: "No active movies found." }) }),
         ]);
+    });
+});
+
+describe("/listmovies", () => {
+    test("pages through the unwatched movies with buttons that keep working", async ({ discord, interact, slash, services }) => {
+        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat" }, { title: "Alien" }, { title: "Jaws", watched: true }]);
+
+        const command = await slash("listmovies");
+        const [firstPage] = discord.originalEdits(command);
+        const next = await interact(buttonInteraction("listmovies|next|1", apiMessage({ flags: MessageFlags.Ephemeral })));
+
+        expect(firstPage?.embeds?.map((embed) => embed.title)).toEqual(["1. Inception", "2. Arrival", "3. Heat"]);
+        expect(buttonIds(firstPage?.components)).toEqual(["listmovies|start|0", "listmovies|prev|-1", "listmovies|next|1", "listmovies|end|1"]);
+        expect(discord.callbacks(next)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
+        const [secondPage] = discord.originalEdits(next);
+        expect(secondPage?.embeds?.map((embed) => embed.title)).toEqual(["4. Alien"]);
+        expect(button(secondPage?.components, "listmovies|end|1")).toMatchObject({ disabled: true });
+        expect(button(secondPage?.components, "listmovies|prev|0")).toMatchObject({ disabled: false });
     });
 });
 
