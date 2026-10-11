@@ -1,0 +1,159 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { TaskRepository } from '../TaskRepo.js';
+import { TaskCategory } from '../../../models/Task.js';
+import { SubmissionStatus } from '../../../models/TaskSubmission.js';
+import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
+import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
+
+const db = getEmulatorFirestore();
+const repo = new TaskRepository(db, 'guild-1');
+
+beforeEach(async () => {
+    await clearEmulatorFirestore();
+});
+
+describe('TaskRepository tasks', () => {
+    it('creates, reads and lists tasks by category', async () => {
+        await repo.createTask(buildTask({ id: 'PVM001', category: TaskCategory.PvM }));
+        await repo.createTask(buildTask({ id: 'SKL001', category: TaskCategory.Skilling }));
+
+        expect(await repo.getTaskById('PVM001')).toMatchObject({ id: 'PVM001' });
+        expect(await repo.getTaskById('missing')).toBeNull();
+        expect((await repo.getAllTasks()).map((task) => task.id).sort()).toEqual(['PVM001', 'SKL001']);
+        expect((await repo.getTasksByCategory(TaskCategory.Skilling)).map((task) => task.id)).toEqual(['SKL001']);
+    });
+
+    it('seeds more tasks than fit in one Firestore batch and deletes them all', async () => {
+        const tasks = Array.from({ length: 501 }, (_, index) => buildTask({ id: `TASK${index}` }));
+
+        await repo.seedTasks(tasks);
+        expect(await repo.getAllTasks()).toHaveLength(501);
+
+        await repo.deleteAllTasks();
+        expect(await repo.getAllTasks()).toEqual([]);
+    });
+
+    it('adjusts a task\'s selection weight', async () => {
+        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
+
+        await repo.incrementWeight('PVM001', 1);
+        await repo.incrementWeight('PVM001', -2);
+
+        expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 49 });
+    });
+});
+
+describe('TaskRepository polls', () => {
+    it('finds the active poll and the latest poll for a category', async () => {
+        await repo.createTaskPoll(buildTaskPoll({ id: 'old', createdAt: new Date('2026-01-04T00:00:00.000Z'), isActive: false }));
+        await repo.createTaskPoll(buildTaskPoll({ id: 'new', createdAt: new Date('2026-01-11T00:00:00.000Z') }));
+        await repo.createTaskPoll(buildTaskPoll({ id: 'skilling', category: TaskCategory.Skilling }));
+
+        expect((await repo.getActiveTaskPollByCategory(TaskCategory.PvM))?.id).toBe('new');
+        expect((await repo.getLatestTaskPollByCategory(TaskCategory.PvM))?.id).toBe('new');
+        expect(await repo.getTaskPollById('old')).toMatchObject({ id: 'old', isActive: false });
+        expect(await repo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
+    });
+
+    it('closes polls and clears them all', async () => {
+        await repo.createTaskPoll(buildTaskPoll());
+
+        await repo.closeTaskPoll('poll-1');
+        expect(await repo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
+
+        await repo.clearTaskPolls();
+        expect(await repo.getTaskPollById('poll-1')).toBeNull();
+    });
+
+    it('records votes and reports whether each was the voter\'s first', async () => {
+        await repo.createTaskPoll(buildTaskPoll());
+
+        const first = await repo.voteInPollOnce('poll-1', 'user-1', 'PVM001');
+        const changed = await repo.voteInPollOnce('poll-1', 'user-1', 'PVM002');
+
+        expect(first.firstTime).toBe(true);
+        expect(changed.firstTime).toBe(false);
+        expect((await repo.getTaskPollById('poll-1'))?.votes).toEqual({ 'user-1': 'PVM002' });
+    });
+
+    it('counts every vote when voters vote at the same time', async () => {
+        await repo.createTaskPoll(buildTaskPoll());
+
+        await Promise.all(
+            Array.from({ length: 5 }, (_, voter) => repo.voteInPollOnce('poll-1', `user-${voter}`, 'PVM001'))
+        );
+
+        expect(Object.keys((await repo.getTaskPollById('poll-1'))?.votes ?? {})).toHaveLength(5);
+    });
+});
+
+describe('TaskRepository events', () => {
+    it('stores events and finds the latest and those ending in a range', async () => {
+        await repo.createTaskEvent(buildTaskEvent({
+            id: 'week-1', createdAt: new Date('2026-01-05T00:00:00.000Z'), endTime: new Date('2026-01-12T00:00:00.000Z'),
+        }));
+        await repo.createTaskEvent(buildTaskEvent({
+            id: 'week-2', createdAt: new Date('2026-01-12T00:00:00.000Z'), endTime: new Date('2026-01-19T00:00:00.000Z'),
+        }));
+
+        expect(await repo.getTaskEventById('week-1')).toMatchObject({ id: 'week-1' });
+        expect((await repo.getLatestTaskEvent())?.id).toBe('week-2');
+        expect((await repo.getTaskEventsBetween(new Date('2026-01-13T00:00:00.000Z'), new Date('2026-01-31T00:00:00.000Z')))
+            .map((event) => event.id)).toEqual(['week-2']);
+    });
+
+    it('adds and removes completed users without duplicates', async () => {
+        await repo.createTaskEvent(buildTaskEvent({ id: 'week-1' }));
+
+        await repo.addCompletedUser('week-1', 'user-1');
+        await repo.addCompletedUser('week-1', 'user-1');
+        await repo.addCompletedUser('week-1', 'user-2');
+        await repo.removeCompletedUser('week-1', 'user-1');
+
+        expect((await repo.getTaskEventById('week-1'))?.completedUserIds).toEqual(['user-2']);
+    });
+});
+
+describe('TaskRepository submissions', () => {
+    it('finds submissions by id, event and user', async () => {
+        await repo.createSubmission(buildTaskSubmission({ id: 'a', userId: 'user-1', taskEventId: 'week-1' }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'b', userId: 'user-2', taskEventId: 'week-1' }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'c', userId: 'user-1', taskEventId: 'week-2' }));
+
+        expect(await repo.getSubmissionById('a')).toMatchObject({ userId: 'user-1' });
+        expect(await repo.getSubmissionById('missing')).toBeNull();
+        expect((await repo.getSubmissionsForTask('week-1')).map((s) => s.id).sort()).toEqual(['a', 'b']);
+        expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id).sort()).toEqual(['a', 'c']);
+    });
+
+    it('records the reviewer and status of a submission', async () => {
+        await repo.createSubmission(buildTaskSubmission({ id: 'a' }));
+
+        await repo.updateSubmissionStatus('a', SubmissionStatus.Silver, 'admin-1');
+
+        expect(await repo.getSubmissionById('a')).toMatchObject({ status: 'silver', reviewedBy: 'admin-1' });
+    });
+
+    it('returns the most recently reviewed tiered submission for a user and event', async () => {
+        await repo.createSubmission(buildTaskSubmission({ id: 'bronze', status: SubmissionStatus.Pending }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'rejected', status: SubmissionStatus.Pending }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'gold', status: SubmissionStatus.Pending }));
+        await repo.updateSubmissionStatus('bronze', SubmissionStatus.Bronze, 'admin-1');
+        await repo.updateSubmissionStatus('gold', SubmissionStatus.Gold, 'admin-1');
+        await repo.updateSubmissionStatus('rejected', SubmissionStatus.Rejected, 'admin-1');
+
+        expect((await repo.getSubmissionByUserAndTask('user-1', 'PVM001-20260105'))?.id).toBe('gold');
+        expect(await repo.getSubmissionByUserAndTask('user-2', 'PVM001-20260105')).toBeNull();
+    });
+});
+
+describe('TaskRepository feedback', () => {
+    it('stores feedback and filters it by task and event', async () => {
+        await repo.addFeedback({ id: 'f1', taskId: 'PVM001', eventId: 'week-1', userId: 'user-1', vote: 'up' });
+        await repo.addFeedback({ id: 'f2', taskId: 'PVM001', eventId: 'week-2', userId: 'user-2', vote: 'down' });
+        await repo.addFeedback({ id: 'f3', taskId: 'PVM002', eventId: 'week-1', userId: 'user-1', vote: 'up' });
+
+        expect((await repo.getFeedbackForTask('PVM001')).map((f) => f.id).sort()).toEqual(['f1', 'f2']);
+        expect((await repo.getFeedbackForTask('PVM001', 'week-2')).map((f) => f.id)).toEqual(['f2']);
+    });
+});
