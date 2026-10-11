@@ -3,6 +3,8 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction } from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
+import { BotStatsService } from "../core/services/BotStatsService.js";
+import { BotRepository } from "../core/database/BotRepo.js";
 import { loadCommands } from "../core/services/CommandService.js";
 import { handleInteraction } from "../core/events/onInteraction.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
@@ -30,7 +32,9 @@ export const test = base
     })
     .extend("services", async ({ db }) => {
         await new GuildRepository(db).initGuild(buildGuild().id, buildGuild());
-        return createServiceContainer(db, buildGuild().id);
+        const botStats = new BotStatsService(new BotRepository(db));
+        await botStats.init();
+        return createServiceContainer(db, buildGuild().id, botStats);
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
     .extend("slash", ({ discord, services, commands }) =>

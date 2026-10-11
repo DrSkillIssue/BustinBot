@@ -7,7 +7,9 @@ import { describe, expect, test, vi } from "../tests/fixtures.js";
 import { server } from "../tests/setup.js";
 import { startBot } from "../bot.js";
 import { DiscordHarness } from "../tests/discord/harness.js";
-import { IDS, chatInputInteraction } from "../tests/discord/payloads.js";
+import { IDS, apiGuild, apiTextChannel, chatInputInteraction } from "../tests/discord/payloads.js";
+import { GuildRepository } from "../core/database/GuildRepo.js";
+import { buildGuild } from "../tests/fakes/builders.js";
 
 const commandsDir = path.join(import.meta.dirname, "../modules/commands");
 const run = promisify(execFile);
@@ -54,6 +56,34 @@ describe("startBot", () => {
 
         expect(error).toHaveBeenCalledWith("Failed to sync guild slash commands:", expect.objectContaining({ status: 403 }));
         await vi.waitFor(() => expect(discord.originalEdits(interaction)).toHaveLength(1));
+        expect(services.guildId).toBe(IDS.guild);
+    });
+
+    test("reports bot-wide praise counts the same in every guild", async ({ db, services, onTestFinished }) => {
+        const otherGuild = "100000000000000011";
+        const otherChannel = "100000000000000021";
+        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { announcements: otherChannel } }));
+        const discord = DiscordHarness.create();
+        onTestFinished(() => discord.destroy());
+
+        await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
+        discord.connect();
+        discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
+        const inOtherGuild = {
+            guild_id: otherGuild,
+            channel_id: otherChannel,
+            channel: { id: otherChannel, type: 0 as const, guild_id: otherGuild, name: "general" },
+        };
+        // The other guild is already in use before anyone praises the bot
+        const earlier = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("bustin", [], inOtherGuild));
+        await vi.waitFor(() => expect(discord.originalEdits(earlier)).toHaveLength(1));
+        const first = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("goodbot"));
+        await vi.waitFor(() => expect(discord.originalEdits(first)).toHaveLength(1));
+        const second = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("goodbot", [], inOtherGuild));
+
+        await vi.waitFor(() => expect(discord.originalEdits(second)).toEqual([
+            expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }),
+        ]));
         expect(services.guildId).toBe(IDS.guild);
     });
 

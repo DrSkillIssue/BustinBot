@@ -73,6 +73,11 @@ export class DiscordHarness {
         this.gateway(GatewayDispatchEvents.GuildCreate, guild);
     }
 
+    // The bot joining another guild after it is ready
+    addGuild(guild: GatewayGuildCreateDispatchData): void {
+        this.gateway(GatewayDispatchEvents.GuildCreate, guild);
+    }
+
     // Delivers an interaction the way the gateway does and returns the discord.js object created for it
     async dispatch<T extends Interaction>(payload: APIInteraction): Promise<T> {
         const created = new Promise<T>((resolve) => {

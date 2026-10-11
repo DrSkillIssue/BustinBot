@@ -8,6 +8,9 @@ import { handleTaskInteraction } from './modules/tasks/TaskInteractionHandler.js
 import { registerGuildCommands } from './utils/registerCommands.js';
 import { scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
 import { createServiceContainer } from './core/services/ServiceFactory.js';
+import type { ServiceContainer } from './core/services/ServiceContainer.js';
+import { BotStatsService } from './core/services/BotStatsService.js';
+import { BotRepository } from './core/database/BotRepo.js';
 import { GuildRepository } from './core/database/GuildRepo.js';
 import { initTaskScheduler } from './modules/tasks/TaskScheduler.js';
 import { handleMovieInteraction } from './modules/movies/MovieInteractionHandler.js';
@@ -33,10 +36,14 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     const guildConfigs = await guildRepo.getAllGuilds();
     console.log(`Found ${guildConfigs.length} guild(s) in Firestore.`);
 
-    const servicesByGuild = new Map<string, Awaited<ReturnType<typeof createServiceContainer>>>();
-    const getServices = async (guildId: string) => {
+    // Bot-wide stats are shared by every guild so counts stay consistent across them
+    const botStats = new BotStatsService(new BotRepository(db));
+    await botStats.init();
+
+    const servicesByGuild = new Map<string, ServiceContainer>();
+    const getServices = (guildId: string): ServiceContainer => {
         if (!servicesByGuild.has(guildId)) {
-            const services = await createServiceContainer(db, guildId);
+            const services = createServiceContainer(db, guildId, botStats);
             servicesByGuild.set(guildId, services);
         }
         return servicesByGuild.get(guildId)!;
@@ -60,7 +67,7 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     client.on('messageCreate', async (message) => {
         try {
             if (message.channel.type === 1) {
-                let services: Awaited<ReturnType<typeof createServiceContainer>> | undefined;
+                let services: ServiceContainer | undefined;
 
                 for (const existingServices of servicesByGuild.values()) {
                     if (existingServices.tasks.hasPendingTask(message.author.id)) {
@@ -72,12 +79,12 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
                 if (!services) {
                     // Fall back to the guild the DM originated from (if tracked) or the primary guild.
                     const fallbackGuild = message.guildId ?? primaryGuildId;
-                    services = await getServices(fallbackGuild);
+                    services = getServices(fallbackGuild);
                 }
 
                 await handleDirectMessage(message, client, services);
             } else if (message.guildId) {
-                const services = await getServices(message.guildId);
+                const services = getServices(message.guildId);
                 await handleMessage(message, commands, services);
             }
         } catch (error) {
@@ -89,7 +96,7 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     client.on('interactionCreate', async (interaction) => {
         try {
             const guildId = interaction.guildId ?? primaryGuildId;
-            const guildServices = await getServices(guildId);
+            const guildServices = getServices(guildId);
 
             await handleInteraction(interaction, commands, guildServices);
             await handleMovieInteraction(interaction, guildServices);
@@ -102,13 +109,13 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     // Ready event
     client.once('clientReady', async () => {
         console.log(`Logged in as ${client.user?.tag}!`);
-        const primaryServices = await createServiceContainer(db, primaryGuildId);
+        const primaryServices = getServices(primaryGuildId);
         await scheduleActivePollClosure(primaryServices, client);
 
         for (const guild of guildConfigs) {
             if (guild.toggles?.taskScheduler) {
                 console.log(`[Startup] Starting Task Scheduler for ${guild.id}`);
-                const guildServices = await getServices(guild.id);
+                const guildServices = getServices(guild.id);
                 initTaskScheduler(client, guildServices);
             }
         }
