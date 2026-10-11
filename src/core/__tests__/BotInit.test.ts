@@ -89,5 +89,8 @@ describe('Bot startup smoke test', () => {
 
         // ---- Run main index (startup) ----
         await expect(import('../../index.js')).resolves.not.toThrow();
+
+        // Startup continues asynchronously after import; wait for its final step before teardown
+        await vi.waitFor(() => expect(mockClient.login).toHaveBeenCalledWith('token'));
     }, 10000);
 });
