@@ -37,6 +37,7 @@ export async function handleTaskInteraction(
                 });
                 await interaction.editReply(payload);
             } catch (err) {
+                console.error("[TaskInteractions] Failed to build the leaderboard:", err);
                 try {
                     await interaction.editReply({
                         content: "Leaderboard initialisation failed. Please use /reportbug if it continues.",

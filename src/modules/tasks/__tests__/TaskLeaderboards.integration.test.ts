@@ -8,6 +8,7 @@ import {
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
+import { buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
@@ -39,6 +40,18 @@ describe("TaskLeaderboards initialisation", () => {
         delete services.repos.userRepo;
 
         await expect(ensureTaskLeaderboardsInitialized(services)).rejects.toThrow("Leaderboard initialisation failed");
+    });
+});
+
+describe("the leaderboard buttons", () => {
+    test("log why the leaderboard couldn't be built and tell the member", async ({ discord, interact, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        delete services.repos.userRepo;
+
+        const click = await interact(buttonInteraction("task-leaderboard|lifetime"));
+
+        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Leaderboard initialisation failed. Please use /reportbug if it continues." })]);
+        expect(error).toHaveBeenCalledWith("[TaskInteractions] Failed to build the leaderboard:", expect.objectContaining({ message: expect.stringContaining("Leaderboard initialisation failed") }));
     });
 });
 
