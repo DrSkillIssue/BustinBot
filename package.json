@@ -4,6 +4,9 @@
   "type": "module",
   "description": "**BustinBot** is a general-purpose Discord bot designed to enhance community engagement through a modular approach. The bot features submodules for specific functionalities, making it easy to expand and customize for various needs. Currently, the bot includes a **Movie Night Manager** and **Weekly Task Manager** to help organize and manage movie nights for your Discord server.",
   "main": "index.js",
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "cron-parser": "^5.4.0",
     "csv-parse": "^6.1.0",
@@ -37,6 +40,7 @@
   "homepage": "https://github.com/dossyb/BustinBot#readme",
   "devDependencies": {
     "@types/luxon": "^3.7.1",
+    "@types/node": "^24.19.2",
     "@types/uuid": "^11.0.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
