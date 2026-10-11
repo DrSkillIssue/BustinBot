@@ -2,7 +2,8 @@ import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskEvent, buildTaskPoll } from "../../../tests/fakes/builders.js";
+import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -30,7 +31,9 @@ describe("the update task form", () => {
     test("saves the task and redraws its running event and open poll, keeping their completions and votes", async ({ discord, interact, services }) => {
         const tasks = services.repos.taskRepo!;
         await storeRunningEvent(services);
-        await tasks.addCompletedUser("PVM001-week", "100000000000000031");
+        // A completion approved after the event was posted
+        await tasks.createSubmission(buildTaskSubmission({ id: "approved", userId: "100000000000000031", taskEventId: "PVM001-week" }));
+        await tasks.reviewSubmission({ submissionId: "approved", reviewedBy: IDS.user, decision: SubmissionStatus.Bronze });
         await tasks.createTaskPoll(buildTaskPoll({
             id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" })],
             votes: { "100000000000000032": "PVM001" }, endsAt: new Date(Date.now() + HOUR),
@@ -44,7 +47,8 @@ describe("the update task form", () => {
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Task **PVM001** updated successfully." })]);
         expect(await tasks.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Vorkath", type: TaskType.KC, amtBronze: 5, amtSilver: 10, amtGold: 150000 });
         expect(await tasks.getTaskEventById("PVM001-week")).toMatchObject({
-            task: { taskName: "Kill {amount} Vorkath" }, amounts: { bronze: 5, silver: 10, gold: 150000 }, completedUserIds: ["100000000000000031"],
+            task: { taskName: "Kill {amount} Vorkath" }, amounts: { bronze: 5, silver: 10, gold: 150000 },
+            completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: ["100000000000000031"],
         });
         expect(await tasks.getTaskPollById(pollMessage)).toMatchObject({ votes: { "100000000000000032": "PVM001" }, options: [{ id: "PVM001", taskName: "Kill {amount} Vorkath" }, { id: "PVM002" }] });
         expect(discord.messageEdits(IDS.channel, eventMessage)).toHaveLength(1);

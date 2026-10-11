@@ -2,7 +2,7 @@ import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
-import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
+import { SubmissionStatus, TIERS, highestTier, isTier, tierRank, type SubmissionReview, type SubmissionReviewOutcome, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { TaskFeedback, TaskFeedbackOutcome } from "../../models/TaskFeedback.js";
 import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
@@ -120,24 +120,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         await this.eventsCollection.doc(taskEventId).update({ task, amounts });
     }
 
-    async addCompletedUser(taskEventId: string, userId: string): Promise<void> {
-        await this.eventsCollection.doc(taskEventId).set(
-            {
-                completedUserIds: FieldValue.arrayUnion(userId),
-            },
-            { merge: true }
-        );
-    }
-
-    async removeCompletedUser(taskEventId: string, userId: string): Promise<void> {
-        await this.eventsCollection.doc(taskEventId).set(
-            {
-                completedUserIds: FieldValue.arrayRemove(userId),
-            },
-            { merge: true }
-        );
-    }
-
     private get submissionsCollection() {
         return this.guildCollection('taskSubmissions', taskSubmissionConverter);
     }
@@ -161,28 +143,48 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return snapshot.docs.map(doc => doc.data());
     }
 
-    async getSubmissionByUserAndTask(userId: string, taskEventId: string): Promise<TaskSubmission | null> {
-        const snapshot = await this.submissionsCollection
+    // A member's approved submissions for a task event
+    private approvedSubmissions(userId: string, taskEventId: string) {
+        return this.submissionsCollection
             .where('userId', '==', userId)
             .where('taskEventId', '==', taskEventId)
-            .where('status', 'in', [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold])
-            .orderBy('reviewedAt', 'desc')
-            .limit(1)
-            .get();
-
-        return snapshot.docs[0]?.data() ?? null;
+            .where('status', 'in', [...TIERS]);
     }
 
-    async updateSubmissionStatus(
-        submissionId: string,
-        status: "pending" | "approved" | "rejected" | "bronze" | "silver" | "gold",
-        reviewedBy: string
-    ): Promise<void> {
-        const docRef = this.submissionsCollection.doc(submissionId);
-        await docRef.update({
-            status,
-            reviewedBy,
-            reviewedAt: new Date(),
+    // Records an admin's decision on a pending submission. In one transaction, so a submission is reviewed once
+    // however many admins confirm at the same moment, and an approval above the tier the member held moves the
+    // task's completion counts from the old tier to the new one.
+    async reviewSubmission(review: SubmissionReview): Promise<SubmissionReviewOutcome> {
+        const submissionRef = this.submissionsCollection.doc(review.submissionId);
+
+        return this.db.runTransaction(async (transaction) => {
+            const submission = (await transaction.get(submissionRef)).data();
+            if (!submission) return { result: "notFound" };
+            if (submission.status !== SubmissionStatus.Pending) return { result: "alreadyReviewed", submission };
+
+            const approved = await transaction.get(this.approvedSubmissions(submission.userId, submission.taskEventId));
+            const heldTier = highestTier(approved.docs.map(doc => doc.data().status));
+
+            const reviewed: TaskSubmission = {
+                ...submission,
+                status: review.decision,
+                reviewedBy: review.reviewedBy,
+                reviewedAt: new Date(),
+                ...(review.decision === SubmissionStatus.Rejected
+                    ? { rejectionReason: review.rejectionReason }
+                    : { prizeRolls: 1 }),
+            };
+            transaction.set(submissionRef, reviewed);
+
+            if (isTier(review.decision) && tierRank(review.decision) > tierRank(heldTier)) {
+                transaction.update(this.eventsCollection.doc(submission.taskEventId), {
+                    [`completionCounts.${review.decision}`]: FieldValue.increment(1),
+                    ...(heldTier ? { [`completionCounts.${heldTier}`]: FieldValue.increment(-1) } : {}),
+                    completedUserIds: FieldValue.arrayUnion(submission.userId),
+                });
+            }
+
+            return { result: "reviewed", submission: reviewed, heldTier };
         });
     }
 

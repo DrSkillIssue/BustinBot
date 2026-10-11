@@ -7,6 +7,7 @@ import { TaskCategory } from '../../models/Task.js';
 import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 import { refreshTaskPollMessage } from './HandleTaskPoll.js';
+import { isTextChannel } from '../../utils/ChannelUtils.js';
 
 // The task and the day it started, plus a random part so the same task can start more than once a day
 function generateTaskEventId(taskId: string): string {
@@ -15,6 +16,20 @@ function generateTaskEventId(taskId: string): string {
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(now.getUTCDate()).padStart(2, '0');
     return `${taskId}-${yyyy}${mm}${dd}-${randomUUID().slice(0, 8)}`;
+}
+
+// Redraws a task event's post from the event as stored, e.g. after its task or completion counts change
+export async function refreshTaskEventMessage(client: Client, event: TaskEvent): Promise<void> {
+    if (!event.messageId || !event.channelId) return;
+
+    const channel = await client.channels.fetch(event.channelId).catch(() => null);
+    if (!channel || !isTextChannel(channel)) {
+        throw new Error(`Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`);
+    }
+
+    const message = await channel.messages.fetch(event.messageId);
+    const { embeds, components, files } = buildTaskEventEmbed(event);
+    await message.edit({ embeds, components, files });
 }
 
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {

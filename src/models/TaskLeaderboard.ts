@@ -1,3 +1,5 @@
+import type { SubmissionTier } from "./TaskSubmission.js";
+
 export type TaskLeaderboardId = "lifetime" | "periodic";
 
 export interface TaskLeaderboardEntry {
@@ -9,6 +11,14 @@ export interface TaskTierCounts {
     bronze: number;
     silver: number;
     gold: number;
+}
+
+// A member reaching a higher tier on a task: the points it adds and the tier it replaces, if they held one
+export interface TaskTierChange {
+    userId: string;
+    points: number;
+    from: SubmissionTier | null;
+    to: SubmissionTier;
 }
 
 export interface TaskLeaderboardPeriod {

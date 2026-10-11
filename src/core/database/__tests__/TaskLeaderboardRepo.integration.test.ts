@@ -1,6 +1,7 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { TaskLeaderboardRepository } from '../TaskLeaderboardRepo.js';
 import type { TaskLeaderboard } from '../../../models/TaskLeaderboard.js';
+import { SubmissionStatus } from '../../../models/TaskSubmission.js';
 
 const test = base.extend('repo', ({ db }) => new TaskLeaderboardRepository(db, 'guild-1'));
 
@@ -34,17 +35,36 @@ describe('TaskLeaderboardRepository', () => {
         expect(stored?.pendingPeriod).toBeNull();
     });
 
-    test('increments points and tier counts per user', async ({ repo }) => {
+    test('keeps a leaderboard that already exists when asked to create it', async ({ repo }) => {
+        await repo.createLeaderboard(buildLeaderboard({ points: { 'user-1': 3 } }));
+
+        await repo.createLeaderboard(buildLeaderboard());
+
+        expect(await repo.getLeaderboard('periodic')).toMatchObject({ points: { 'user-1': 3 } });
+    });
+
+    test('adds points and moves tier counts when a member reaches a higher tier', async ({ repo }) => {
         await repo.createLeaderboard(buildLeaderboard());
 
         await repo.incrementPoints('periodic', 'user-1', 3);
-        await repo.incrementPoints('periodic', 'user-1', 3);
-        await repo.incrementTierCount('periodic', 'user-1', 'silver', 1);
-        await repo.incrementTierCount('periodic', 'user-1', 'bronze', -1);
+        await repo.recordTierChange('periodic', { userId: 'user-1', points: 1, from: null, to: SubmissionStatus.Bronze });
+        await repo.recordTierChange('periodic', { userId: 'user-1', points: 2, from: SubmissionStatus.Bronze, to: SubmissionStatus.Silver });
 
         expect(await repo.getLeaderboard('periodic')).toMatchObject({
             points: { 'user-1': 6 },
-            tierCounts: { 'user-1': { silver: 1, bronze: -1 } },
+            tierCounts: { 'user-1': { bronze: 0, silver: 1 } },
+        });
+    });
+
+    test('records a tier change in the pending period', async ({ repo }) => {
+        const period = { length: 4, eventIds: ['week-5'], startedAt: '2026-02-02T00:00:00.000Z', index: 2 };
+        await repo.createLeaderboard(buildLeaderboard({ pendingPeriod: { period, points: {}, tierCounts: {} } }));
+
+        await repo.recordTierChange('periodic', { userId: 'user-1', points: 6, from: null, to: SubmissionStatus.Gold }, 'pendingPeriod');
+
+        expect(await repo.getLeaderboard('periodic')).toMatchObject({
+            points: {},
+            pendingPeriod: { period, points: { 'user-1': 6 }, tierCounts: { 'user-1': { gold: 1 } } },
         });
     });
 

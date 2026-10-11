@@ -55,3 +55,33 @@ export interface TaskSubmission {
     // Flag if submission is a duplicate of one already approved
     alreadyApproved?: boolean;
 }
+
+// The tiers a submission can be approved at, lowest first
+export const TIERS = [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold] as const;
+export type SubmissionTier = typeof TIERS[number];
+
+export function isTier(status: SubmissionStatus): status is SubmissionTier {
+    return (TIERS as readonly SubmissionStatus[]).includes(status);
+}
+
+// How a tier ranks: 0 for no tier, then 1 for bronze up to 3 for gold
+export function tierRank(tier: SubmissionTier | null): number {
+    return tier ? TIERS.indexOf(tier) + 1 : 0;
+}
+
+// The highest tier among a member's submissions for a task, if any was approved
+export function highestTier(statuses: SubmissionStatus[]): SubmissionTier | null {
+    return statuses.filter(isTier).reduce<SubmissionTier | null>((best, tier) => (tierRank(tier) > tierRank(best) ? tier : best), null);
+}
+
+// An admin's decision on a pending submission
+export type SubmissionReview = { submissionId: string; reviewedBy: string } & (
+    | { decision: SubmissionTier }
+    | { decision: SubmissionStatus.Rejected; rejectionReason: string }
+);
+
+// What reviewing a submission did. heldTier is the tier the member held for the task before this review.
+export type SubmissionReviewOutcome =
+    | { result: "notFound" }
+    | { result: "alreadyReviewed"; submission: TaskSubmission }
+    | { result: "reviewed"; submission: TaskSubmission; heldTier: SubmissionTier | null };
