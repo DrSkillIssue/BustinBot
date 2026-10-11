@@ -35,10 +35,9 @@ import {
     type RESTPostAPIChannelMessageJSONBody,
     type RESTPatchAPIWebhookWithTokenMessageJSONBody,
 } from "discord-api-types/v10";
-import type { Interceptable } from "undici";
+import type { Interceptable, MockAgent } from "undici";
 import type { MockInterceptor } from "undici/types/mock-interceptor.js";
 import { clientOptions } from "../../clientOptions.js";
-import { mockAgent } from "../http.js";
 import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 
 const API = "/api/v10";
@@ -133,19 +132,19 @@ export class DiscordHarness {
     private gateway: TestGateway | undefined;
     private readonly arrivals = new EventEmitter<{ request: [DiscordRequest] }>();
 
-    private constructor(readonly client: Client) {
-        this.api = mockAgent().get("https://discord.com");
+    private constructor(readonly client: Client, private readonly http: MockAgent) {
+        this.api = http.get("https://discord.com");
     }
 
-    // A client logged in to its guild, ready to receive events
-    static async start(guild: GatewayGuildCreateDispatchData = apiGuild()): Promise<DiscordHarness> {
-        const harness = DiscordHarness.create(guild);
+    // A client logged in to its guild, ready to receive events. Discord's API is answered by the test's MockAgent.
+    static async start(http: MockAgent, guild: GatewayGuildCreateDispatchData = apiGuild()): Promise<DiscordHarness> {
+        const harness = DiscordHarness.create(http, guild);
         await harness.connect();
         return harness;
     }
 
     // A client that has not logged in yet, for wiring the bot's event handlers before READY arrives
-    static create(guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
+    static create(http: MockAgent, guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
         let harness: DiscordHarness | undefined;
         // Configured as the bot's own client is, so events reach it just as they reach the bot
         const client = new Client({
@@ -158,7 +157,7 @@ export class DiscordHarness {
                 },
             },
         });
-        harness = new DiscordHarness(client);
+        harness = new DiscordHarness(client, http);
         return harness;
     }
 
@@ -176,7 +175,7 @@ export class DiscordHarness {
         await this.client.login("test-token");
         await ready;
         // Only requests the bot makes from here on are of interest to tests
-        mockAgent().clearCallHistory();
+        this.http.clearCallHistory();
     }
 
     // The bot joining another guild after it is ready
@@ -345,7 +344,7 @@ export class DiscordHarness {
     // Discord's CDN serving a file attached to a message, so the bot can download it to post it elsewhere
     serveAttachment(attachment: APIAttachment, contents: Uint8Array = PNG): void {
         const { origin, pathname } = new URL(attachment.url);
-        mockAgent()
+        this.http
             .get(origin)
             .intercept({ path: startingWith(pathname), method: "GET" })
             .reply(200, Buffer.from(contents), { headers: { "content-type": attachment.content_type ?? "application/octet-stream" } })
@@ -428,7 +427,7 @@ export class DiscordHarness {
 
     // Every Discord REST request the bot made since it became ready
     requests(): DiscordRequest[] {
-        return (mockAgent().getCallHistory()?.calls() ?? [])
+        return (this.http.getCallHistory()?.calls() ?? [])
             .filter((call) => call.origin === "https://discord.com")
             .map((call) => toDiscordRequest(call.method, call.path, call.body));
     }

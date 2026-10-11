@@ -1,7 +1,7 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { mockAgent } from "../../../tests/http.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie } from "../../../tests/fakes/builders.js";
@@ -13,15 +13,15 @@ const title = (value: string) => ({ type: 3, name: "title", value });
 const resultsMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // TMDb answering a search
-function tmdbSearch(query: string, results: object[]): void {
-    mockAgent().get("https://api.themoviedb.org")
+function tmdbSearch(http: MockAgent, query: string, results: object[]): void {
+    http.get("https://api.themoviedb.org")
         .intercept({ path: `/3/search/movie?api_key=test-key&query=${encodeURIComponent(query)}`, method: "GET" })
         .reply(200, { results }, JSON_RESPONSE);
 }
 
 // TMDb answering for one movie's details and credits
-function tmdbMovie(movie: typeof matrix, runtime: number, director: string): void {
-    const tmdb = mockAgent().get("https://api.themoviedb.org");
+function tmdbMovie(http: MockAgent, movie: typeof matrix, runtime: number, director: string): void {
+    const tmdb = http.get("https://api.themoviedb.org");
     tmdb.intercept({ path: `/3/movie/${movie.id}?api_key=test-key&language=en-US`, method: "GET" })
         .reply(200, { ...movie, runtime, vote_average: 8.2, genres: [{ id: 1, name: "Action" }] }, JSON_RESPONSE);
     tmdb.intercept({ path: `/3/movie/${movie.id}/credits?api_key=test-key&language=en-US`, method: "GET" })
@@ -41,10 +41,10 @@ beforeEach(() => {
 });
 
 describe("/addmovie", () => {
-    test("shows TMDb's results and adds the one the member picks", async ({ discord, slash, interact, services }) => {
+    test("shows TMDb's results and adds the one the member picks", async ({ discord, slash, interact, services, http }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        tmdbSearch("The Matrix", [matrix, reloaded]);
-        tmdbMovie(matrix, 136, "Lana Wachowski");
+        tmdbSearch(http, "The Matrix", [matrix, reloaded]);
+        tmdbMovie(http, matrix, 136, "Lana Wachowski");
 
         const command = await slash("addmovie", [title("The Matrix")]);
         const [results] = discord.originalEdits(command);
@@ -59,11 +59,11 @@ describe("/addmovie", () => {
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ moviesAdded: 1 });
     });
 
-    test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services }) => {
+    test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: "100000000000000099" }));
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
-        tmdbMovie(reloaded, 138, "Lana Wachowski");
+        tmdbMovie(http, reloaded, 138, "Lana Wachowski");
 
         const duplicate = await interact(buttonInteraction("addmovie|select|603", resultsMessage));
         const rewatch = await interact(buttonInteraction("addmovie|select|604", resultsMessage));
@@ -74,9 +74,9 @@ describe("/addmovie", () => {
         expect(discord.originalEdits(rewatch)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "Added: The Matrix Reloaded" })] })]);
     });
 
-    test("stops a member at three movies in the list, unless they are a movie admin", async ({ discord, slash, services }) => {
+    test("stops a member at three movies in the list, unless they are a movie admin", async ({ discord, slash, services, http }) => {
         await storeOwnMovies(services, 3);
-        tmdbSearch("The Matrix", [matrix]);
+        tmdbSearch(http, "The Matrix", [matrix]);
 
         const member = await slash("addmovie", [title("The Matrix")], { member: asMember() });
         const admin = await slash("addmovie", [title("The Matrix")], { member: asMember([IDS.roles.movieAdmin]) });
@@ -87,13 +87,13 @@ describe("/addmovie", () => {
         expect(discord.originalEdits(admin)[0]?.embeds).toHaveLength(1);
     });
 
-    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, db }) => {
+    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, db, http }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
         const uncachedGuild = "100000000000000012";
         await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild }));
         discord.guild(apiGuild({ id: uncachedGuild }));
         await storeOwnMovies(services, 3);
-        tmdbSearch("The Matrix", [matrix]);
+        tmdbSearch(http, "The Matrix", [matrix]);
 
         const command = await interact(chatInputInteraction("addmovie", [title("The Matrix")], {
             guild_id: uncachedGuild,

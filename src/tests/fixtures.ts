@@ -2,6 +2,7 @@ import path from "node:path";
 import type { Interaction, Message } from "discord.js";
 import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData, GatewayVoiceStateUpdateDispatchData } from "discord-api-types/v10";
 import { test as base } from "vitest";
+import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
 import { BotStatsService } from "../core/services/BotStatsService.js";
 import { BotRepository } from "../core/database/BotRepo.js";
@@ -15,8 +16,9 @@ import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulato
 import { buildGuild } from "./fakes/builders.js";
 
 // The one test API for the suite. Fixtures are created only when a test asks for them:
-// - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by the
-//   test's MockAgent (src/tests/http.ts)
+// - http: the test's own undici MockAgent, answering only the requests the test declares; one the test expected but
+//   the bot never made fails the test
+// - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by `http`
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
 // - commands: the bot's real slash command registry
@@ -25,8 +27,27 @@ import { buildGuild } from "./fakes/builders.js";
 // - prefix: sends a channel message through the real prefix command handler
 // - voice: delivers a member's voice state change and hands it to the guild's movie attendance, as the bot does
 export const test = base
-    .extend("discord", async ({}, { onCleanup }) => {
-        const discord = await DiscordHarness.start();
+    .extend("http", ({}, { onCleanup }) => {
+        const offline = getGlobalDispatcher();
+        const agent = new MockAgent({ enableCallHistory: true });
+        agent.disableNetConnect();
+        if (process.env.FIRESTORE_EMULATOR_HOST) agent.enableNetConnect(process.env.FIRESTORE_EMULATOR_HOST);
+        setGlobalDispatcher(agent);
+        onCleanup(async () => {
+            setGlobalDispatcher(offline);
+            // Routes registered to be used once are responses the test expected the bot to ask for; persistent
+            // routes may go unused. (undici's own assertNoPendingInterceptors counts unused persistent routes too.)
+            const unused = agent.pendingInterceptors().filter((interceptor) => !interceptor.persist);
+            await agent.close();
+            if (unused.length) {
+                const routes = unused.map(({ method, origin, path }) => `${method} ${origin}${String(path)}`).join("\n");
+                throw new Error(`Expected requests were never made:\n${routes}`);
+            }
+        });
+        return agent;
+    })
+    .extend("discord", async ({ http }, { onCleanup }) => {
+        const discord = await DiscordHarness.start(http);
         onCleanup(() => discord.destroy());
         return discord;
     })

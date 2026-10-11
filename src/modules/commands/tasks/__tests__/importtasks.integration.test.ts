@@ -1,7 +1,6 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
-import { mockAgent } from "../../../../tests/http.js";
-import { IDS, apiMember, chatInputInteraction, nextId } from "../../../../tests/discord/payloads.js";
+import { IDS, apiAttachment, apiMember, chatInputInteraction } from "../../../../tests/discord/payloads.js";
 import { buildTask } from "../../../../tests/fakes/builders.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -13,15 +12,14 @@ const CSV = [
 
 // /importtasks with an uploaded file, as Discord delivers it with the attachment resolved
 function importWith(filename: string) {
-    const id = nextId();
-    const url = `https://cdn.discordapp.com/attachments/${IDS.channel}/${id}/${filename}`;
+    const attachment = apiAttachment({ filename, size: CSV.length, content_type: "text/csv" });
     const interaction = chatInputInteraction(
         "importtasks",
-        [{ type: ApplicationCommandOptionType.Attachment, name: "file", value: id }],
+        [{ type: ApplicationCommandOptionType.Attachment, name: "file", value: attachment.id }],
         admin,
-        { attachments: { [id]: { id, filename, size: CSV.length, url, proxy_url: url } } },
+        { attachments: { [attachment.id]: attachment } },
     );
-    return { interaction, path: new URL(url).pathname };
+    return { interaction, attachment };
 }
 
 describe("/importtasks", () => {
@@ -29,7 +27,7 @@ describe("/importtasks", () => {
         const tasks = services.repos.taskRepo;
         await tasks.createTask(buildTask({ id: "PVM001", taskName: "Already stored" }));
         const upload = importWith("tasks.csv");
-        mockAgent().get("https://cdn.discordapp.com").intercept({ path: upload.path, method: "GET" }).reply(200, CSV);
+        discord.serveAttachment(upload.attachment, Buffer.from(CSV));
 
         const interaction = await interact(upload.interaction);
 
@@ -46,9 +44,9 @@ describe("/importtasks", () => {
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Please upload a valid CSV file." })]);
     });
 
-    test("reports a failed download", async ({ discord, interact }) => {
+    test("reports a failed download", async ({ discord, interact, http }) => {
         const upload = importWith("tasks.csv");
-        mockAgent().get("https://cdn.discordapp.com").intercept({ path: upload.path, method: "GET" }).reply(404, "Not Found");
+        http.get("https://cdn.discordapp.com").intercept({ path: new URL(upload.attachment.url).pathname, method: "GET" }).reply(404, "Not Found");
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
         const interaction = await interact(upload.interaction);

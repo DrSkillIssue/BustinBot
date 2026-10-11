@@ -16,8 +16,8 @@ const commandsDir = path.join(import.meta.dirname, "../modules/commands");
 const run = promisify(execFile);
 
 describe("startBot", () => {
-    test("answers slash commands that arrive through the gateway", async ({ db, services, onTestFinished }) => {
-        const discord = DiscordHarness.create();
+    test("answers slash commands that arrive through the gateway", async ({ db, http, services, onTestFinished }) => {
+        const discord = DiscordHarness.create(http);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
@@ -27,8 +27,8 @@ describe("startBot", () => {
         expect(services.guildId).toBe(interaction.guildId);
     });
 
-    test("syncs each slash command once to the primary guild when sync is enabled", async ({ db, services, commands, onTestFinished }) => {
-        const discord = DiscordHarness.create();
+    test("syncs each slash command once to the primary guild when sync is enabled", async ({ db, http, services, commands, onTestFinished }) => {
+        const discord = DiscordHarness.create(http);
         discord.acceptCommandSync(IDS.guild);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } }));
@@ -40,8 +40,8 @@ describe("startBot", () => {
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("keeps starting when Discord rejects the command sync", async ({ db, services, onTestFinished }) => {
-        const discord = DiscordHarness.create();
+    test("keeps starting when Discord rejects the command sync", async ({ db, http, services, onTestFinished }) => {
+        const discord = DiscordHarness.create(http);
         discord.api
             .intercept({ path: `/api/v10/applications/${IDS.application}/guilds/${IDS.guild}/commands`, method: "PUT" })
             .reply(403, { code: 50001, message: "Missing Access" }, { headers: { "content-type": "application/json" } });
@@ -56,11 +56,11 @@ describe("startBot", () => {
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("reports bot-wide praise counts the same in every guild", async ({ db, services, onTestFinished }) => {
+    test("reports bot-wide praise counts the same in every guild", async ({ db, http, services, onTestFinished }) => {
         const otherGuild = "100000000000000011";
         const otherChannel = "100000000000000021";
         await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { announcements: otherChannel } }));
-        const discord = DiscordHarness.create();
+        const discord = DiscordHarness.create(http);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
@@ -79,10 +79,10 @@ describe("startBot", () => {
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("stops every scheduled job and disconnects when shut down", async ({ db }) => {
+    test("stops every scheduled job and disconnects when shut down", async ({ db, http }) => {
         await new GuildRepository(db).initGuild(IDS.guild, buildGuild({ toggles: { taskScheduler: true, leaguesEnabled: false } }));
         vi.spyOn(console, "log").mockImplementation(() => {});
-        const discord = DiscordHarness.create();
+        const discord = DiscordHarness.create(http);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
         await discord.connect();
@@ -94,8 +94,8 @@ describe("startBot", () => {
         expect(discord.client.isReady()).toBe(false);
     });
 
-    test("lets a command that is already running finish when shut down", async ({ db, services }) => {
-        const discord = DiscordHarness.create();
+    test("lets a command that is already running finish when shut down", async ({ db, http, services }) => {
+        const discord = DiscordHarness.create(http);
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
         await discord.connect();
 
@@ -107,7 +107,7 @@ describe("startBot", () => {
         expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
-    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, services }) => {
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services }) => {
         const otherGuild = "100000000000000011";
         const otherChannel = "100000000000000021";
         await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { taskVerification: otherChannel } }));
@@ -117,7 +117,7 @@ describe("startBot", () => {
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
         await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: new Date(Date.now() - 60_000) });
         await otherTasks.saveSubmissionDraft({ userId: IDS.user, taskEventId: event.id, createdAt: new Date() });
-        const discord = DiscordHarness.create();
+        const discord = DiscordHarness.create(http);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
         discord.acceptMessages(otherChannel);
@@ -136,8 +136,8 @@ describe("startBot", () => {
         expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 
-    test("refuses to start when no guild is configured and no fallback is given", async ({ db, onTestFinished }) => {
-        const discord = DiscordHarness.create();
+    test("refuses to start when no guild is configured and no fallback is given", async ({ db, http, onTestFinished }) => {
+        const discord = DiscordHarness.create(http);
         onTestFinished(() => discord.destroy());
 
         await expect(startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }))
