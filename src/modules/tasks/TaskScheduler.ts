@@ -121,7 +121,10 @@ export async function getDefaultChannel(client: Client, services: ServiceContain
     if (!guildId || !channelId) return null;
 
     const guild = await client.guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
+    const channel = await guild.channels.fetch(channelId).catch((err) => {
+        console.warn(`[TaskScheduler] Can't reach the task channel ${channelId} in ${guildId}:`, err);
+        return null;
+    });
     return channel?.isTextBased() ? (channel as TextChannel) : null;
 }
 

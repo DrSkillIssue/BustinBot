@@ -83,4 +83,16 @@ describe("the task channel", () => {
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
     });
+
+    test("is reported missing when the configured channel no longer exists", async ({ discord, services }) => {
+        const deleted = "100000000000000099";
+        await services.guilds.update(IDS.guild, { channels: { ...buildGuild().channels, taskChannel: deleted } });
+        discord.api
+            .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
+            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        expect(await getDefaultChannel(discord.client, services)).toBeNull();
+        expect(warn).toHaveBeenCalledWith(`[TaskScheduler] Can't reach the task channel ${deleted} in ${IDS.guild}:`, expect.objectContaining({ code: 10003 }));
+    });
 });
