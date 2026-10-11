@@ -67,6 +67,9 @@ function startingWith(prefix: string): RegExp {
     return new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 }
 
+// A message the bot sent or edited, with the names of the files it attached (multipart requests)
+export type SentMessage = RESTPostAPIChannelMessageJSONBody & { files?: string[] };
+
 // A Discord REST request with its route decoded (e.g. messages/@original) and its JSON body parsed
 export interface DiscordRequest {
     method: string;
@@ -244,6 +247,22 @@ export class DiscordHarness {
             .persist();
     }
 
+    // Discord accepting edits to messages in a channel, answering with the edited message
+    acceptMessageEdits(channelId: string): void {
+        this.api
+            .intercept({ path: startingWith(`${API}/channels/${channelId}/messages/`), method: "PATCH" })
+            .reply(this.answered(({ path, body }) => {
+                const messageId = path.split("?")[0]!.split("/").at(-1)!;
+                return { statusCode: 200, data: this.messageFrom(body, { id: messageId, channel_id: channelId }), responseOptions: JSON_RESPONSE };
+            }))
+            .persist();
+    }
+
+    // Edits made to a message
+    messageEdits(channelId: string, messageId: string): SentMessage[] {
+        return this.bodies("PATCH", `/channels/${channelId}/messages/${messageId}`);
+    }
+
     // Discord accepting a bulk overwrite of a guild's slash commands, answering with the stored commands
     acceptCommandSync(guildId: string): void {
         this.api
@@ -391,7 +410,7 @@ export class DiscordHarness {
         return this.bodies("PUT", `/applications/${IDS.application}/guilds/${guildId}/commands`);
     }
 
-    messagesSentTo(channelId: string): RESTPostAPIChannelMessageJSONBody[] {
+    messagesSentTo(channelId: string): SentMessage[] {
         return this.bodies("POST", `/channels/${channelId}/messages`);
     }
 
