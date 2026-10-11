@@ -14,7 +14,7 @@ function tmdbApiKey(): string {
 }
 
 // TMDb Response Types
-interface TMDbSearchResult {
+export interface TMDbSearchResult {
     id: number;
     title: string;
     release_date?: string;

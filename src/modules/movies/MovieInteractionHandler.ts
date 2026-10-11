@@ -3,6 +3,7 @@ import { handleMoviePickChooseModalSubmit, handleConfirmRandomMovie, handleRerol
 import { handleMovieNightDate, handleMovieNightTime } from "./MovieScheduler.js";
 import { showMovieManualPollMenu } from "./MovieManualPoll.js";
 import { MOVIE_LIST_BUTTON, buildMovieListPage, movieListButtonPage } from "./MovieList.js";
+import { ADD_MOVIE_BUTTON, handleAddMovieButton } from "./MovieSelector.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
 export async function handleMovieInteraction(
@@ -48,6 +49,11 @@ export async function handleMovieInteraction(
 
         if (["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"].includes(customId)) {
             await handlePickMovieButton(services, interaction);
+            return;
+        }
+
+        if (customId.startsWith(ADD_MOVIE_BUTTON)) {
+            await handleAddMovieButton(services, interaction);
             return;
         }
 
