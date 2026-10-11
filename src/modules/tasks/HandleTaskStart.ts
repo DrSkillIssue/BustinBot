@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Client, TextChannel } from 'discord.js';
 import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
@@ -7,12 +8,13 @@ import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 import { refreshTaskPollMessage } from './HandleTaskPoll.js';
 
+// The task and the day it started, plus a random part so the same task can start more than once a day
 function generateTaskEventId(taskId: string): string {
     const now = new Date();
     const yyyy = now.getUTCFullYear();
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(now.getUTCDate()).padStart(2, '0');
-    return `${taskId}-${yyyy}${mm}${dd}`;
+    return `${taskId}-${yyyy}${mm}${dd}-${randomUUID().slice(0, 8)}`;
 }
 
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {
@@ -187,7 +189,15 @@ export async function startTaskEventForCategory(
     event.messageId = sentMessage.id;
     event.channelId = (channel as TextChannel).id;
 
-    await taskEvents.storeTaskEvent(event);
+    // A post without its stored event would take submissions for nothing, so it goes if the event can't be saved
+    try {
+        await taskEvents.storeTaskEvent(event);
+    } catch (err) {
+        await sentMessage.delete().catch((deleteErr) => {
+            console.warn(`[TaskStart] Failed to remove the post for unsaved event ${taskEventId}:`, deleteErr);
+        });
+        throw err;
+    }
 
     try {
         await registerPeriodicTaskEvent(services, taskEventId);
