@@ -1,12 +1,12 @@
-import { db } from "./firestore.js";
+import type { Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IPrizeDrawRepository } from "./interfaces/IPrizeDrawRepo.js";
 import type { PrizeDraw } from "../../models/PrizeDraw.js";
 import { TaskCategory } from "../../models/Task.js";
 
 export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implements IPrizeDrawRepository {
-    constructor(guildId: string) {
-        super(guildId, 'prizeDraws');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'prizeDraws');
     }
 
     async createPrizeDraw(draw: PrizeDraw): Promise<void> {
@@ -29,7 +29,7 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
 
     async clearPrizeDraws(): Promise<void> {
         const snapshot = await this.collection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }

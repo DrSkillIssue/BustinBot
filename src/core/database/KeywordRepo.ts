@@ -1,12 +1,11 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import { db } from "./firestore.js";
 import type { Keyword } from "../../models/Keyword.js";
 import type { IKeywordRepository } from "./interfaces/IKeywordRepo.js";
 
 export class KeywordRepository extends GuildScopedRepository<Keyword> implements IKeywordRepository {
-    constructor(guildId: string) {
-        super(guildId, 'keywords');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'keywords');
     }
 
     async getAllKeywords(): Promise<Keyword[]> {
@@ -73,7 +72,7 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
 
     async resetAllUsage(): Promise<void> {
         const snapshot = await this.collection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
 
         snapshot.docs.forEach((doc) => {
             batch.update(doc.ref, {

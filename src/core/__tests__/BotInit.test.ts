@@ -20,7 +20,7 @@ describe('Bot startup smoke test', () => {
             })),
             get: vi.fn().mockResolvedValue({ docs: [] }),
         }));
-        vi.doMock('../database/firestore', () => ({ db: { collection: collectionMock } }));
+        vi.doMock('../database/firestore', () => ({ createFirestore: () => ({ collection: collectionMock }) }));
 
         const mockClient = {
             on: vi.fn(),

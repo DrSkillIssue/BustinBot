@@ -10,18 +10,19 @@ import { MovieRepository } from "../database/MovieRepo.js";
 import { GuildRepository } from "../database/GuildRepo.js";
 import { GuildService } from "./GuildService.js";
 import type { ServiceContainer } from "./ServiceContainer.js";
+import type { Firestore } from "firebase-admin/firestore";
 import { UserRepository } from "../database/UserRepo.js";
 import { TaskLeaderboardRepository } from "../database/TaskLeaderboardRepo.js";
 
-export async function createServiceContainer(guildId: string): Promise<ServiceContainer> {
-    const botRepo = new BotRepository();
-    const guildRepo = new GuildRepository();
-    const taskRepo = new TaskRepository(guildId);
-    const prizeRepo = new PrizeDrawRepository(guildId);
-    const keywordRepo = new KeywordRepository(guildId);
-    const movieRepo = new MovieRepository(guildId);
-    const userRepo = new UserRepository(guildId);
-    const taskLeaderboardRepo = new TaskLeaderboardRepository(guildId);
+export async function createServiceContainer(db: Firestore, guildId: string): Promise<ServiceContainer> {
+    const botRepo = new BotRepository(db);
+    const guildRepo = new GuildRepository(db);
+    const taskRepo = new TaskRepository(db, guildId);
+    const prizeRepo = new PrizeDrawRepository(db, guildId);
+    const keywordRepo = new KeywordRepository(db, guildId);
+    const movieRepo = new MovieRepository(db, guildId);
+    const userRepo = new UserRepository(db, guildId);
+    const taskLeaderboardRepo = new TaskLeaderboardRepository(db, guildId);
 
     const botStats = new BotStatsService(botRepo);
     await botStats.init();

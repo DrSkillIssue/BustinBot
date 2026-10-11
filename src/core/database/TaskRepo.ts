@@ -1,6 +1,5 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import { db } from "./firestore.js";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
@@ -10,8 +9,8 @@ import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
 import type { TaskCategory } from "../../models/Task.js";
 
 export class TaskRepository extends GuildScopedRepository<Task> implements ITaskRepository {
-    constructor(guildId: string) {
-        super(guildId, 'tasks');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'tasks');
     }
 
     // Fetch single task by ID
@@ -64,7 +63,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     private get pollsCollection() {
-        return db.collection(`guilds/${this.guildId}/taskPolls`);
+        return this.db.collection(`guilds/${this.guildId}/taskPolls`);
     }
 
     async createTaskPoll(poll: TaskPoll): Promise<void> {
@@ -134,13 +133,13 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
 
     async clearTaskPolls(): Promise<void> {
         const snapshot = await this.pollsCollection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
     private get eventsCollection() {
-        return db.collection(`guilds/${this.guildId}/taskEvents`);
+        return this.db.collection(`guilds/${this.guildId}/taskEvents`);
     }
 
     async createTaskEvent(event: TaskEvent): Promise<void> {
@@ -191,7 +190,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     private get submissionsCollection() {
-        return db.collection(`guilds/${this.guildId}/taskSubmissions`);
+        return this.db.collection(`guilds/${this.guildId}/taskSubmissions`);
     }
 
     async createSubmission(submission: TaskSubmission): Promise<void> {
@@ -243,7 +242,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     private get feedbackCollection() {
-        return db.collection(`guilds/${this.guildId}/taskFeedback`);
+        return this.db.collection(`guilds/${this.guildId}/taskFeedback`);
     }
 
     async addFeedback(feedback: TaskFeedback): Promise<void> {
@@ -259,7 +258,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
 
     async deleteAllTasks(): Promise<void> {
         const snapshot = await this.collection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
     }
@@ -267,7 +266,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     async seedTasks(tasks: Task[]): Promise<void> {
         // Firestore caps a batch at 500 writes
         for (let start = 0; start < tasks.length; start += 500) {
-            const batch = db.batch();
+            const batch = this.db.batch();
             tasks.slice(start, start + 500).forEach(task => {
                 batch.set(this.collection.doc(task.id), task);
             });
@@ -277,7 +276,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
 
     async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: TaskPoll; }> {
         const pollRef = this.pollsCollection.doc(pollId);
-        return db.runTransaction(async (tx) => {
+        return this.db.runTransaction(async (tx) => {
             const snap = await tx.get(pollRef);
             if (!snap.exists) throw new Error("Poll not found.");
             const poll = snap.data() as TaskPoll;

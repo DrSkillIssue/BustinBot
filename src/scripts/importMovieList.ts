@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { db } from "../core/database/firestore.js";
+import { createFirestore } from "../core/database/firestore.js";
 import { fetchMovieDetails, fetchMovieDetailsById } from "../modules/movies/MovieService.js";
 import { Timestamp } from "firebase-admin/firestore";
 import "dotenv/config";
+
+const db = createFirestore();
 
 interface LegacyMovie {
     name: string;

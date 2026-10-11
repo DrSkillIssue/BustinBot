@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import "dotenv/config";
+import { createFirestore } from "../core/database/firestore.js";
 import { TaskRepository } from "../core/database/TaskRepo.js";
 import { importTasks, parseTasksCsv } from "../modules/tasks/TaskImport.js";
 
@@ -13,7 +14,7 @@ if (!guildId) {
   process.exit(1);
 }
 
-importTasks(new TaskRepository(guildId), parseTasksCsv(fs.readFileSync(filePath, "utf-8")))
+importTasks(new TaskRepository(createFirestore(), guildId), parseTasksCsv(fs.readFileSync(filePath, "utf-8")))
   .then(({ newCount, skipped, total }) => {
     console.log(
       `📥 Finished processing ${total} rows for guild ${guildId} (new: ${newCount}, skipped: ${skipped})`

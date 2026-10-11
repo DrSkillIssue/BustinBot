@@ -34,7 +34,7 @@ vi.mock('firebase-admin/firestore', () => {
 
 const { incrementMock, serverTimestampMock, timestampNowMock, timestampFromMillisMock } = firebaseHoist;
 
-import { db } from '../firestore.js';
+import type { Firestore } from 'firebase-admin/firestore';
 import { GuildScopedRepository } from '../CoreRepo.js';
 import { BotRepository } from '../BotRepo.js';
 import { KeywordRepository } from '../KeywordRepo.js';
@@ -56,7 +56,9 @@ type FirestoreCollection = {
     limit?: ReturnType<typeof vi.fn>;
 };
 
-const mockDb = vi.mocked(db);
+// Stub Firestore passed straight into the repositories
+const mockDb = { collection: vi.fn(), batch: vi.fn() };
+const db = mockDb as unknown as Firestore;
 
 function createDocSnapshot(data: any, exists = true) {
     return {
@@ -112,7 +114,7 @@ afterEach(() => {
 describe('GuildScopedRepository base behaviour', () => {
     class TestRepo extends GuildScopedRepository<{ id: string; value: number }> {
         constructor() {
-            super('guild-123', 'testCollection');
+            super(db, 'guild-123', 'testCollection');
         }
     }
 
@@ -152,7 +154,7 @@ describe('BotRepository', () => {
     it('retrieves bot stats', async () => {
         const expected = { commandsRun: 5 };
         const doc = setupBotDoc(true, expected);
-        const repo = new BotRepository();
+        const repo = new BotRepository(db);
 
         await expect(repo.getBotStats()).resolves.toEqual(expected);
         expect(doc.get).toHaveBeenCalled();
@@ -161,7 +163,7 @@ describe('BotRepository', () => {
     it('initialises stats when missing', async () => {
         const defaults = { commandsRun: 0 } as any;
         const doc = setupBotDoc(false, defaults);
-        const repo = new BotRepository();
+        const repo = new BotRepository(db);
 
         await repo.initBotStats(defaults);
         expect(doc.set).toHaveBeenCalledWith(defaults);
@@ -169,7 +171,7 @@ describe('BotRepository', () => {
 
     it('resets stats and increments counters', async () => {
         const doc = setupBotDoc(true, {});
-        const repo = new BotRepository();
+        const repo = new BotRepository(db);
 
         await repo.resetAllStats();
         expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -201,7 +203,7 @@ describe('BotRepository', () => {
 
     it('updates guild metrics and timestamps', async () => {
         const doc = setupBotDoc(true, {});
-        const repo = new BotRepository();
+        const repo = new BotRepository(db);
 
         await repo.updateGuildStats(5, 10, 20);
         expect(doc.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -238,7 +240,7 @@ describe('KeywordRepository', () => {
     it('adds and retrieves keywords', async () => {
         const keywords = [{ id: 'hello_world', word: 'Hello World' }];
         const collection = setupKeywordCollection(keywords);
-        const repo = new KeywordRepository(guildId);
+        const repo = new KeywordRepository(db, guildId);
 
         await expect(repo.getAllKeywords()).resolves.toEqual(keywords);
         expect(collection.get).toHaveBeenCalled();
@@ -269,7 +271,7 @@ describe('KeywordRepository', () => {
             doc: vi.fn((id: string) => (id === 'rare' ? doc : missingDoc)),
         });
 
-        const repo = new KeywordRepository(guildId);
+        const repo = new KeywordRepository(db, guildId);
 
         timestampNowMock.mockReturnValueOnce({ toMillis: () => 200 });
         await repo.markKeywordUsed('rare', 'event-1');
@@ -289,7 +291,7 @@ describe('KeywordRepository', () => {
             word: `Word ${i}`,
             lastUsedAt: { toMillis: () => 100 - i },
         }));
-        const repo = new KeywordRepository(guildId);
+        const repo = new KeywordRepository(db, guildId);
         vi.spyOn(repo, 'getAllKeywords').mockResolvedValue(keywords as any);
 
         vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -306,7 +308,7 @@ describe('KeywordRepository', () => {
         const batchCommit = vi.fn().mockResolvedValue(undefined);
         mockDb.batch.mockReturnValue({ update: batchUpdate, commit: batchCommit } as any);
 
-        const repo = new KeywordRepository(guildId);
+        const repo = new KeywordRepository(db, guildId);
         await repo.resetAllUsage();
 
         expect(batchUpdate).toHaveBeenCalledTimes(2);
@@ -334,7 +336,7 @@ describe('UserRepository', () => {
 
     it('manages user documents and defaults', async () => {
         const collection = setupUserCollection([{ userId: 'user-1', commandsRun: 1 }]);
-        const repo = new UserRepository(guildId);
+        const repo = new UserRepository(db, guildId);
 
         await expect(repo.getAllUsers()).resolves.toEqual([{ userId: 'user-1', commandsRun: 1 }]);
         await expect(repo.getUserById('user-1')).resolves.toEqual({ userId: 'user-1', commandsRun: 1 });
@@ -360,7 +362,7 @@ describe('UserRepository', () => {
         const batchCommit = vi.fn().mockResolvedValue(undefined);
         mockDb.batch.mockReturnValue({ delete: batchDelete, commit: batchCommit } as any);
 
-        const repo = new UserRepository(guildId);
+        const repo = new UserRepository(db, guildId);
         await repo.clearAllUsers();
 
         expect(batchDelete).toHaveBeenCalledTimes(2);
@@ -374,7 +376,7 @@ describe('UserRepository', () => {
             doc: vi.fn((id: string) => (id === 'existing' ? docExists : docMissing)),
         });
 
-        const repo = new UserRepository(guildId);
+        const repo = new UserRepository(db, guildId);
 
         await repo.incrementStat('existing', 'tasksCompletedBronze', 2);
         expect(docExists.update).toHaveBeenCalledWith(expect.objectContaining({

@@ -13,7 +13,6 @@ export default defineConfig({
     },
     test: {
         environment: "node",
-        setupFiles: ["./src/tests/setup.ts"],
         coverage: { provider: "v8", reporter: ["text", "html"] },
     },
 });

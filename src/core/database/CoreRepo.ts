@@ -1,18 +1,18 @@
-import { db } from "./firestore.js";
-import { CollectionReference } from "firebase-admin/firestore";
-import type { DocumentData } from "firebase-admin/firestore";
+import type { CollectionReference, DocumentData, Firestore } from "firebase-admin/firestore";
 
 export abstract class GuildScopedRepository<T extends DocumentData> {
+    protected readonly db: Firestore;
     protected guildId: string;
     protected collectionName: string;
 
-    constructor(guildId: string, collectionName: string) {
+    constructor(db: Firestore, guildId: string, collectionName: string) {
+        this.db = db;
         this.guildId = guildId;
         this.collectionName = collectionName;
     }
 
     protected get collection(): CollectionReference<T> {
-        return db.collection(`guilds/${this.guildId}/${this.collectionName}`) as CollectionReference<T>;
+        return this.db.collection(`guilds/${this.guildId}/${this.collectionName}`) as CollectionReference<T>;
     }
 
     async getAll(): Promise<T[]> {

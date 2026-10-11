@@ -1,5 +1,4 @@
-import { db } from "./firestore.js";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { IGuildRepository } from "./interfaces/IGuildRepo.js";
 import type { Guild } from "../../models/Guild.js";
 
@@ -22,7 +21,11 @@ function isAllowedGuild(guildId: string): boolean {
 }
 
 export class GuildRepository implements IGuildRepository {
-    private readonly collection = db.collection('guilds');
+    constructor(private readonly db: Firestore) {}
+
+    private get collection() {
+        return this.db.collection('guilds');
+    }
 
     async getGuild(guildId: string): Promise<Guild | null> {
         if (!isAllowedGuild(guildId)) {

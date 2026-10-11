@@ -46,6 +46,7 @@ const client = new Client({
         { handleMovieInteraction },
         { initMovieScheduler },
         { SchedulerStatusReporter },
+        { createFirestore },
     ] = await Promise.all([
         import('./core/events/onMessage.js'),
         import('./core/events/onInteraction.js'),
@@ -59,16 +60,18 @@ const client = new Client({
         import('./modules/movies/MovieInteractionHandler.js'),
         import('./modules/movies/MovieScheduler.js'),
         import('./core/services/SchedulerStatusReporter.js'),
+        import('./core/database/firestore.js'),
     ]);
 
-    const guildRepo = new GuildRepository();
+    const db = createFirestore();
+    const guildRepo = new GuildRepository(db);
     const guildConfigs = await guildRepo.getAllGuilds();
     console.log(`Found ${guildConfigs.length} guild(s) in Firestore.`);
 
     const servicesByGuild = new Map<string, Awaited<ReturnType<typeof createServiceContainer>>>();
     const getServices = async (guildId: string) => {
         if (!servicesByGuild.has(guildId)) {
-            const services = await createServiceContainer(guildId);
+            const services = await createServiceContainer(db, guildId);
             servicesByGuild.set(guildId, services);
         }
         return servicesByGuild.get(guildId)!;
@@ -151,7 +154,7 @@ const client = new Client({
     // Ready event
     client.once('clientReady', async () => {
         console.log(`Logged in as ${client.user?.tag}!`);
-        const primaryServices = await createServiceContainer(primaryGuildId);
+        const primaryServices = await createServiceContainer(db, primaryGuildId);
         await scheduleActivePollClosure(primaryServices, client);
 
         for (const guild of guildConfigs) {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Firestore } from 'firebase-admin/firestore';
 
 const botRepoInstance = { name: 'botRepo' };
 const taskRepoInstance = { name: 'taskRepo' };
@@ -7,6 +8,7 @@ const keywordRepoInstance = { name: 'keywordRepo' };
 const movieRepoInstance = { name: 'movieRepo' };
 const guildRepoInstance = { name: 'guildRepo' };
 const userRepoInstance = { name: 'userRepo' };
+const taskLeaderboardRepoInstance = { name: 'taskLeaderboardRepo' };
 
 const BotRepository = vi.fn(function () { return botRepoInstance; });
 const TaskRepository = vi.fn(function () { return taskRepoInstance; });
@@ -15,6 +17,7 @@ const KeywordRepository = vi.fn(function () { return keywordRepoInstance; });
 const MovieRepository = vi.fn(function () { return movieRepoInstance; });
 const GuildRepository = vi.fn(function () { return guildRepoInstance; });
 const UserRepository = vi.fn(function () { return userRepoInstance; });
+const TaskLeaderboardRepository = vi.fn(function () { return taskLeaderboardRepoInstance; });
 
 vi.mock('../../database/BotRepo', () => ({ BotRepository }));
 vi.mock('../../database/TaskRepo', () => ({ TaskRepository }));
@@ -22,7 +25,8 @@ vi.mock('../../database/PrizeDrawRepo', () => ({ PrizeDrawRepository }));
 vi.mock('../../database/KeywordRepo', () => ({ KeywordRepository }));
 vi.mock('../../database/MovieRepo', () => ({ MovieRepository }));
 vi.mock('../../database/GuildRepo', () => ({ GuildRepository }));
-vi.mock('core/database/UserRepo', () => ({ UserRepository }));
+vi.mock('../../database/UserRepo', () => ({ UserRepository }));
+vi.mock('../../database/TaskLeaderboardRepo', () => ({ TaskLeaderboardRepository }));
 
 const botStatsInit = vi.fn().mockResolvedValue(undefined);
 const BotStatsService = vi.fn(function () { return { init: botStatsInit }; });
@@ -44,13 +48,22 @@ describe('createServiceContainer', () => {
     it('constructs repositories and services with initialised bot stats', async () => {
         const { createServiceContainer } = await import('../ServiceFactory.js');
 
-        const services = await createServiceContainer('guild-42');
+        const db = {} as Firestore;
 
-        expect(BotRepository).toHaveBeenCalledTimes(1);
-        expect(GuildRepository).toHaveBeenCalledTimes(1);
-        expect(TaskRepository).toHaveBeenCalledWith('guild-42');
-        expect(PrizeDrawRepository).toHaveBeenCalledWith('guild-42');
-        expect(keywordRepoInstance).toBeDefined();
+        const services = await createServiceContainer(db, 'guild-42');
+
+        expect(BotRepository).toHaveBeenCalledWith(db);
+        expect(GuildRepository).toHaveBeenCalledWith(db);
+        for (const GuildScopedRepository of [
+            TaskRepository,
+            PrizeDrawRepository,
+            KeywordRepository,
+            MovieRepository,
+            UserRepository,
+            TaskLeaderboardRepository,
+        ]) {
+            expect(GuildScopedRepository).toHaveBeenCalledWith(db, 'guild-42');
+        }
 
         expect(BotStatsService).toHaveBeenCalledWith(botRepoInstance);
         expect(botStatsInit).toHaveBeenCalled();
@@ -73,6 +86,7 @@ describe('createServiceContainer', () => {
                 keywordRepo: keywordRepoInstance,
                 guildRepo: guildRepoInstance,
                 userRepo: userRepoInstance,
+                taskLeaderboardRepo: taskLeaderboardRepoInstance,
             }),
         }));
     });

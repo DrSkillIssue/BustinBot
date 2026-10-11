@@ -7,14 +7,11 @@ const incrementMock = vi.fn((amount: number) => ({ __increment: amount }));
 const collectionMock = vi.fn();
 const batchMock = vi.fn();
 
-// 🔥 vitest-friendly ESM mocks
-
-vi.mock("../firestore", () => ({
-    db: {
-        collection: vi.fn((path: string) => collectionMock(path)),
-        batch: batchMock,
-    },
-}));
+// Stub Firestore passed straight into the repositories
+const stubDb = {
+    collection: vi.fn((path: string) => collectionMock(path)),
+    batch: batchMock,
+};
 
 vi.mock("firebase-admin/firestore", () => ({
     Timestamp: {
@@ -148,7 +145,7 @@ beforeEach(() => {
 // --- Tests ---
 describe("TaskRepository Firestore interactions", () => {
     it("writes task polls to guild-scoped collection", async () => {
-        const repo = new TaskRepository("guild-123");
+        const repo = new TaskRepository(stubDb, "guild-123");
         const poll = {
             id: "poll-abc",
             type: "task",
@@ -172,7 +169,7 @@ describe("TaskRepository Firestore interactions", () => {
     });
 
     it("queries task events between dates with Timestamp filters", async () => {
-        const repo = new TaskRepository("guild-123");
+        const repo = new TaskRepository(stubDb, "guild-123");
         const start = new Date("2025-01-01T00:00:00Z");
         const end = new Date("2025-01-07T00:00:00Z");
 
@@ -199,7 +196,7 @@ describe("TaskRepository Firestore interactions", () => {
 
 describe("TaskLeaderboardRepository Firestore interactions", () => {
     it("replaces complete score maps so stale period scores are cleared", async () => {
-        const repo = new TaskLeaderboardRepository("guild-123");
+        const repo = new TaskLeaderboardRepository(stubDb, "guild-123");
         const replacement = { points: {}, tierCounts: {} };
 
         await repo.updateLeaderboard("periodic", replacement);
@@ -213,7 +210,7 @@ describe("TaskLeaderboardRepository Firestore interactions", () => {
 
 describe("PrizeDrawRepository Firestore interactions", () => {
     it("updates winners and winnerId in guild prize draw collection", async () => {
-        const repo = new PrizeDrawRepository("guild-xyz");
+        const repo = new PrizeDrawRepository(stubDb, "guild-xyz");
         const prizeStub = createCollectionStub("guilds/guild-xyz/prizeDraws");
         collectionStubs["guilds/guild-xyz/prizeDraws"] = prizeStub;
 
@@ -240,7 +237,7 @@ describe("PrizeDrawRepository Firestore interactions", () => {
 
 describe("BotRepository Firestore interactions", () => {
     it("increments command counters on the global stats document", async () => {
-        const repo = new BotRepository();
+        const repo = new BotRepository(stubDb);
 
         await repo.incrementCommand("support");
 

@@ -1,12 +1,11 @@
-import { db } from "./firestore.js";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { IUserRepository } from "./interfaces/IUserRepo.js";
 import type { UserStats } from "../../models/UserStats.js";
 
 export class UserRepository extends GuildScopedRepository<UserStats> implements IUserRepository {
-    constructor(guildId: string) {
-        super(guildId, 'userStats');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'userStats');
     }
 
     private createDefaultUserStats(userId: string): UserStats {
@@ -59,7 +58,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
 
     async clearAllUsers(): Promise<void> {
         const snapshot = await this.collection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }

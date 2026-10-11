@@ -1,4 +1,4 @@
-import { db } from "./firestore.js";
+import type { Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IMovieRepository } from "./interfaces/IMovieRepo.js";
 import type { Movie } from "../../models/Movie.js";
@@ -7,8 +7,8 @@ import type { MovieEvent } from "../../models/MovieEvent.js";
 import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 
 export class MovieRepository extends GuildScopedRepository<Movie> implements IMovieRepository {
-    constructor(guildId: string) {
-        super(guildId, 'movies');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'movies');
     }
 
     async getAllMovies(): Promise<Movie[]> {
@@ -30,7 +30,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     private get pollsCollection() {
-        return db.collection(`guilds/${this.guildId}/moviePolls`);
+        return this.db.collection(`guilds/${this.guildId}/moviePolls`);
     }
 
     async createPoll(poll: MoviePoll): Promise<void> {
@@ -75,13 +75,13 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
 
     async clearPolls(): Promise<void> {
         const snapshot = await this.pollsCollection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
     private get eventsCollection() {
-        return db.collection(`guilds/${this.guildId}/movieEvents`);
+        return this.db.collection(`guilds/${this.guildId}/movieEvents`);
     }
 
     async createMovieEvent(event: MovieEvent): Promise<void> {
@@ -127,14 +127,14 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
 
     async clearEvents(): Promise<void> {
         const snapshot = await this.eventsCollection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
     async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: MoviePoll; }> {
         const pollRef = this.pollsCollection.doc(pollId);
-        return db.runTransaction(async (tx) => {
+        return this.db.runTransaction(async (tx) => {
             const snap = await tx.get(pollRef);
             if (!snap.exists) throw new Error("Poll not found.");
             const poll = snap.data() as MoviePoll;
