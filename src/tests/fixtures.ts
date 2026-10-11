@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ChatInputCommandInteraction, Interaction, Message } from "discord.js";
+import type { Interaction, Message } from "discord.js";
 import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
@@ -15,7 +15,8 @@ import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulato
 import { buildGuild } from "./fakes/builders.js";
 
 // The one test API for the suite. Fixtures are created only when a test asks for them:
-// - discord: a real discord.js client fed raw Discord payloads, with Discord's REST API served by msw
+// - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by the
+//   test's MockAgent (src/tests/http.ts)
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
 // - commands: the bot's real slash command registry
@@ -24,7 +25,7 @@ import { buildGuild } from "./fakes/builders.js";
 // - prefix: sends a channel message through the real prefix command handler
 export const test = base
     .extend("discord", async ({}, { onCleanup }) => {
-        const discord = DiscordHarness.start();
+        const discord = await DiscordHarness.start();
         onCleanup(() => discord.destroy());
         return discord;
     })
@@ -41,8 +42,8 @@ export const test = base
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
     .extend("interact", ({ discord, services, commands }) =>
-        async <T extends Interaction = Interaction>(payload: APIInteraction): Promise<T> => {
-            const interaction = await discord.dispatch<T>(payload);
+        async (payload: APIInteraction): Promise<Interaction> => {
+            const interaction = await discord.dispatch(payload);
             await routeInteraction(interaction, discord.client, commands, services);
             return interaction;
         }
@@ -52,7 +53,7 @@ export const test = base
             name: string,
             options: APIApplicationCommandInteractionDataOption[] = [],
             overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
-        ): Promise<ChatInputCommandInteraction> => interact<ChatInputCommandInteraction>(chatInputInteraction(name, options, overrides))
+        ): Promise<Interaction> => interact(chatInputInteraction(name, options, overrides))
     )
     .extend("prefix", ({ discord, services, commands }) =>
         async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {

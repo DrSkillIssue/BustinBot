@@ -1,108 +1,237 @@
-import { Client, GatewayIntentBits, type Interaction, type Message, type RESTOptions } from "discord.js";
+import { once } from "node:events";
+import { Collection } from "@discordjs/collection";
+import { Client, Events, GatewayIntentBits, type Interaction, type Message } from "discord.js";
 import {
+    WebSocketShardEvents,
+    WebSocketShardStatus,
+    type IShardingStrategy,
+    type WebSocketManager,
+} from "@discordjs/ws";
+import {
+    ApplicationFlags,
     GatewayDispatchEvents,
+    GatewayOpcodes,
     InteractionResponseType,
+    type APIGatewayBotInfo,
     type APIInteraction,
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
+    type GatewayDispatchPayload,
     type GatewayGuildCreateDispatchData,
     type GatewayMessageCreateDispatchData,
+    type GatewayReadyDispatchData,
     type RESTPostAPIInteractionCallbackJSONBody,
+    type RESTPostAPIInteractionCallbackWithResponseResult,
+    type RESTPutAPIApplicationGuildCommandsJSONBody,
 } from "discord-api-types/v10";
-import { http, HttpResponse, type JsonBodyType } from "msw";
-import { server } from "../setup.js";
+import type { Interceptable } from "undici";
+import type { MockInterceptor } from "undici/types/mock-interceptor.js";
+import { mockAgent } from "../http.js";
 import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 
-const API = "https://discord.com/api/v10";
+const API = "/api/v10";
+const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
 
+// A route matcher for a path prefix, written as a regular expression so a failed expectation names the route
+function startingWith(prefix: string): RegExp {
+    return new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+}
+
+// A Discord REST request with its JSON body parsed
 export interface DiscordRequest {
     method: string;
     path: string;
-    body: unknown;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed JSON, typed by the accessor that reads it
+    body: any;
 }
 
-// The parts of discord.js's gateway handling the harness drives directly. They are private in the typings,
-// so they are reached in exactly one place here rather than throughout the tests.
-interface GatewayInternals {
-    handlePacket(packet: { t: GatewayDispatchEvents; d: unknown }, shard: { id: number; checkReady(): void }): boolean;
-    triggerClientReady(): void;
-}
+// Stands in for @discordjs/ws's sharding strategy, the documented extension point discord.js offers through
+// `ws.buildStrategy` (the same seam @discordjs/ws's own tests use). Instead of opening sockets it emits gateway
+// events on discord.js's WebSocketManager, which handles them exactly as it handles events from a real connection.
+class TestGateway implements IShardingStrategy {
+    private sequence = 0;
 
-const SHARD = { id: 0, checkReady() {} };
+    constructor(private readonly manager: WebSocketManager, private readonly guild: GatewayGuildCreateDispatchData) {}
 
-// A real discord.js client with no gateway connection: Discord events are fed in as raw gateway packets and every
-// REST call is answered by msw handlers that behave like Discord's API and record what was sent.
-export class DiscordHarness {
-    readonly requests: DiscordRequest[] = [];
-    private readonly acknowledged = new Set<string>();
-
-    private constructor(readonly client: Client<true>) {}
-
-    // A connected client in a guild, ready to receive interactions
-    static start(guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
-        const harness = DiscordHarness.create();
-        harness.connect(guild);
-        return harness;
-    }
-
-    // A client that has not connected yet, for wiring event handlers before the gateway's READY arrives
-    static create(): DiscordHarness {
-        const client = new Client({
-            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
-            // Send REST requests through the global fetch so msw can intercept them, as @discordjs/rest documents.
-            // Its option is typed with undici 6's RequestInit while Node 24's fetch is typed by undici-types 7, so the
-            // two declarations of the same fetch API don't overlap until @discordjs/rest moves to undici 7.
-            rest: { makeRequest: fetch as unknown as RESTOptions["makeRequest"] },
-        });
-        client.rest.setToken("test-token");
-
-        const harness = new DiscordHarness(client as Client<true>);
-        server.use(...harness.handlers());
-        return harness;
-    }
-
-    // Replays what the gateway sends on login: READY, the client becoming ready, then the guild
-    connect(guild: GatewayGuildCreateDispatchData = apiGuild()): void {
-        this.gateway(GatewayDispatchEvents.Ready, {
+    // Discord answers IDENTIFY with READY, listing the bot's guilds as unavailable, then sends GUILD_CREATE for each
+    connect(): void {
+        const ready: GatewayReadyDispatchData = {
             v: 10,
             user: apiUser({ id: IDS.bot, username: "BustinBot", bot: true }),
-            guilds: [],
+            guilds: [{ id: this.guild.id, unavailable: true }],
             session_id: "session",
             resume_gateway_url: "wss://gateway.discord.gg",
-            application: { id: IDS.application, flags: 0 },
+            // BustinBot registers global slash commands, which Discord reports with this flag
+            application: { id: IDS.application, flags: ApplicationFlags.ApplicationCommandBadge, flags_new: String(ApplicationFlags.ApplicationCommandBadge) },
+        };
+        this.manager.emit(WebSocketShardEvents.Ready, { data: ready, shardId: 0 });
+        this.dispatch({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.Ready, s: 0, d: ready });
+        this.dispatch({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.GuildCreate, s: 0, d: this.guild });
+    }
+
+    dispatch(payload: GatewayDispatchPayload): void {
+        this.sequence += 1;
+        this.manager.emit(WebSocketShardEvents.Dispatch, { data: { ...payload, s: this.sequence }, shardId: 0 });
+    }
+
+    spawn(): void {}
+
+    destroy(): void {}
+
+    send(): void {}
+
+    fetchStatus(): Collection<number, WebSocketShardStatus> {
+        return new Collection([[0, WebSocketShardStatus.Ready]]);
+    }
+}
+
+// A real discord.js client that logs in through a test gateway, with Discord's REST API answered by the test's
+// MockAgent. Each interaction gets the routes Discord provides for it; any other request a test expects the bot to
+// make is declared on `api`, undici's interceptor for discord.com.
+export class DiscordHarness {
+    readonly api: Interceptable;
+    private gateway: TestGateway | undefined;
+
+    private constructor(readonly client: Client) {
+        this.api = mockAgent().get("https://discord.com");
+    }
+
+    // A client logged in to its guild, ready to receive events
+    static async start(guild: GatewayGuildCreateDispatchData = apiGuild()): Promise<DiscordHarness> {
+        const harness = DiscordHarness.create(guild);
+        await harness.connect();
+        return harness;
+    }
+
+    // A client that has not logged in yet, for wiring the bot's event handlers before READY arrives
+    static create(guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
+        let harness: DiscordHarness | undefined;
+        const client = new Client({
+            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
+            ws: {
+                buildStrategy: (manager) => {
+                    const gateway = new TestGateway(manager, guild);
+                    if (harness) harness.gateway = gateway;
+                    return gateway;
+                },
+            },
         });
-        (this.client.ws as unknown as GatewayInternals).triggerClientReady();
-        this.gateway(GatewayDispatchEvents.GuildCreate, guild);
+        harness = new DiscordHarness(client);
+        return harness;
+    }
+
+    // Logs in the way the bot does: discord.js fetches the gateway address, connects, and becomes ready once the
+    // guild has arrived
+    async connect(): Promise<void> {
+        const gatewayBot: APIGatewayBotInfo = {
+            url: "wss://gateway.discord.gg",
+            shards: 1,
+            session_start_limit: { total: 1000, remaining: 1000, reset_after: 0, max_concurrency: 1 },
+        };
+        this.api.intercept({ path: `${API}/gateway/bot`, method: "GET" }).reply(200, gatewayBot, JSON_RESPONSE);
+
+        const ready = once(this.client, Events.ClientReady);
+        await this.client.login("test-token");
+        await ready;
+        // Only requests the bot makes from here on are of interest to tests
+        mockAgent().clearCallHistory();
     }
 
     // The bot joining another guild after it is ready
-    addGuild(guild: GatewayGuildCreateDispatchData): void {
-        this.gateway(GatewayDispatchEvents.GuildCreate, guild);
+    async addGuild(guild: GatewayGuildCreateDispatchData): Promise<void> {
+        const created = once(this.client, Events.GuildCreate);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.GuildCreate, s: 0, d: guild });
+        await created;
     }
 
-    // Delivers an interaction the way the gateway does and returns the discord.js object created for it
-    async dispatch<T extends Interaction>(payload: APIInteraction): Promise<T> {
-        const created = new Promise<T>((resolve) => {
-            this.client.once("interactionCreate", (interaction) => resolve(interaction as T));
+    // Delivers an interaction the way the gateway does and returns the discord.js object created for it.
+    // Discord accepts exactly one initial response per interaction, so its callback route answers once: a second
+    // response fails the request, and an interaction left unanswered fails the test.
+    async dispatch(payload: APIInteraction): Promise<Interaction> {
+        this.api
+            .intercept({ path: startingWith(`${API}/interactions/${payload.id}/${payload.token}/callback`), method: "POST" })
+            .reply(({ path, body }) => {
+                if (!new URL(path, "https://discord.com").searchParams.has("with_response")) {
+                    return { statusCode: 204 };
+                }
+                const callback: RESTPostAPIInteractionCallbackJSONBody = JSON.parse(String(body));
+                const { type } = callback;
+                const response: RESTPostAPIInteractionCallbackWithResponseResult = {
+                    interaction: { id: payload.id, type: payload.type, response_message_loading: false, response_message_ephemeral: false },
+                };
+                return { statusCode: 200, data: type === InteractionResponseType.Modal ? response : { ...response, resource: { type } }, responseOptions: JSON_RESPONSE };
+            });
+        // Edits and follow-ups go to the interaction's webhook for as long as its token is valid
+        const webhook = `${API}/webhooks/${IDS.application}/${payload.token}`;
+        this.api
+            .intercept({ path: startingWith(`${webhook}/messages/`), method: "PATCH" })
+            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE }))
+            .persist();
+        this.api
+            .intercept({ path: new RegExp(`${startingWith(webhook).source}(\\?|$)`), method: "POST" })
+            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body), responseOptions: JSON_RESPONSE }))
+            .persist();
+
+        const created = new Promise<Interaction>((resolve) => {
+            const listener = (interaction: Interaction) => {
+                if (interaction.id !== payload.id) return;
+                this.client.off(Events.InteractionCreate, listener);
+                resolve(interaction);
+            };
+            this.client.on(Events.InteractionCreate, listener);
         });
-        this.gateway(GatewayDispatchEvents.InteractionCreate, payload);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.InteractionCreate, s: 0, d: payload });
         return created;
     }
 
     // Delivers a message the way the gateway does and returns the discord.js Message created for it
     async sendMessage(payload: GatewayMessageCreateDispatchData): Promise<Message> {
         const created = new Promise<Message>((resolve) => {
-            this.client.once("messageCreate", resolve);
+            const listener = (message: Message) => {
+                if (message.id !== payload.id) return;
+                this.client.off(Events.MessageCreate, listener);
+                resolve(message);
+            };
+            this.client.on(Events.MessageCreate, listener);
         });
-        this.gateway(GatewayDispatchEvents.MessageCreate, payload);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.MessageCreate, s: 0, d: payload });
         return created;
+    }
+
+    // Discord accepting messages the bot posts in a channel, answering with the created message
+    acceptMessages(channelId: string): void {
+        this.api
+            .intercept({ path: `${API}/channels/${channelId}/messages`, method: "POST" })
+            .reply(({ body }) => ({ statusCode: 200, data: this.messageFrom(body, { channel_id: channelId }), responseOptions: JSON_RESPONSE }))
+            .persist();
+    }
+
+    // Discord accepting a bulk overwrite of a guild's slash commands, answering with the stored commands
+    acceptCommandSync(guildId: string): void {
+        this.api
+            .intercept({ path: `${API}/applications/${IDS.application}/guilds/${guildId}/commands`, method: "PUT" })
+            .reply(({ body }) => {
+                const commands: object[] = JSON.parse(String(body));
+                const stored = commands.map((command) => ({ ...command, id: nextId(), application_id: IDS.application, guild_id: guildId, version: nextId() }));
+                return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
+            })
+            .persist();
+    }
+
+    // Every Discord REST request the bot made since it became ready, with routes decoded (e.g. messages/@original)
+    requests(): DiscordRequest[] {
+        return (mockAgent().getCallHistory()?.calls() ?? [])
+            .filter((call) => call.origin === "https://discord.com")
+            .map((call) => ({
+                method: call.method,
+                path: decodeURIComponent(call.path.split("?")[0] ?? "").replace(API, ""),
+                body: call.body ? JSON.parse(call.body) : undefined,
+            }));
     }
 
     // Initial responses Discord received for an interaction (reply, defer, modal, update)
     callbacks(interaction: Interaction): RESTPostAPIInteractionCallbackJSONBody[] {
-        return this.requests
-            .filter((request) => request.path === `/interactions/${interaction.id}/${interaction.token}/callback`)
-            .map((request) => request.body as RESTPostAPIInteractionCallbackJSONBody);
+        return this.bodies("POST", `/interactions/${interaction.id}/${interaction.token}/callback`);
     }
 
     // The form Discord was asked to open for an interaction, if any
@@ -113,92 +242,36 @@ export class DiscordHarness {
 
     // Edits to an interaction's original response (editReply)
     originalEdits(interaction: Interaction): unknown[] {
-        return this.requests
-            .filter((request) => request.method === "PATCH" && request.path === `/webhooks/${IDS.application}/${interaction.token}/messages/@original`)
-            .map((request) => request.body);
+        return this.bodies("PATCH", `/webhooks/${IDS.application}/${interaction.token}/messages/@original`);
     }
 
     // Slash command lists sent to Discord for a guild
-    guildCommandUpdates(guildId: string): unknown[] {
-        return this.requests
-            .filter((request) => request.method === "PUT" && request.path === `/applications/${IDS.application}/guilds/${guildId}/commands`)
-            .map((request) => request.body);
+    guildCommandUpdates(guildId: string): RESTPutAPIApplicationGuildCommandsJSONBody[] {
+        return this.bodies("PUT", `/applications/${IDS.application}/guilds/${guildId}/commands`);
     }
 
     messagesSentTo(channelId: string): unknown[] {
-        return this.requests
-            .filter((request) => request.method === "POST" && request.path === `/channels/${channelId}/messages`)
-            .map((request) => request.body);
+        return this.bodies("POST", `/channels/${channelId}/messages`);
     }
 
     destroy(): Promise<void> {
         return this.client.destroy();
     }
 
-    private gateway(event: GatewayDispatchEvents, data: unknown): void {
-        (this.client.ws as unknown as GatewayInternals).handlePacket({ t: event, d: data }, SHARD);
+    private bodies(method: string, path: string) {
+        return this.requests()
+            .filter((request) => request.method === method && request.path === path)
+            .map((request) => request.body);
     }
 
-    private async record(request: Request): Promise<DiscordRequest> {
-        const text = await request.text();
-        const recorded = {
-            method: request.method,
-            // Decoded so tests can match readable routes such as messages/@original
-            path: decodeURIComponent(new URL(request.url).pathname).replace("/api/v10", ""),
-            body: text ? JSON.parse(text) : undefined,
-        };
-        this.requests.push(recorded);
-        return recorded;
+    private send(payload: GatewayDispatchPayload): void {
+        if (!this.gateway) throw new Error("The client has not connected to the gateway yet.");
+        this.gateway.dispatch(payload);
     }
 
-    private messageFrom(body: unknown, overrides: Partial<APIMessage> = {}): JsonBodyType {
-        const { content, embeds, components } = (body ?? {}) as Partial<APIMessage>;
-        return apiMessage({ content: content ?? "", embeds: embeds ?? [], components: components ?? [], ...overrides }) as JsonBodyType;
-    }
-
-    private handlers() {
-        return [
-            // Discord accepts exactly one initial response per interaction (error 40060 otherwise)
-            http.post(`${API}/interactions/:id/:token/callback`, async ({ request, params }) => {
-                const { body } = await this.record(request);
-                const id = String(params.id);
-                if (this.acknowledged.has(id)) {
-                    return HttpResponse.json({ code: 40060, message: "Interaction has already been acknowledged." }, { status: 400 });
-                }
-                this.acknowledged.add(id);
-
-                if (new URL(request.url).searchParams.get("with_response") !== "true") {
-                    return new HttpResponse(null, { status: 204 });
-                }
-                const type = (body as RESTPostAPIInteractionCallbackJSONBody).type;
-                return HttpResponse.json({
-                    interaction: { id, type, activity_instance_id: null, response_message_id: null, response_message_loading: false, response_message_ephemeral: false },
-                    resource: type === InteractionResponseType.Modal ? undefined : { type },
-                });
-            }),
-            http.patch(`${API}/webhooks/:applicationId/:token/messages/:messageId`, async ({ request }) => {
-                const { body } = await this.record(request);
-                return HttpResponse.json(this.messageFrom(body));
-            }),
-            http.post(`${API}/webhooks/:applicationId/:token`, async ({ request }) => {
-                const { body } = await this.record(request);
-                return HttpResponse.json(this.messageFrom(body));
-            }),
-            // Bulk-overwriting commands returns the stored commands, each with an id
-            http.put(`${API}/applications/:applicationId/guilds/:guildId/commands`, async ({ request, params }) => {
-                const { body } = await this.record(request);
-                return HttpResponse.json((body as object[]).map((command) => ({
-                    ...command,
-                    id: nextId(),
-                    application_id: String(params.applicationId),
-                    guild_id: String(params.guildId),
-                    version: nextId(),
-                })));
-            }),
-            http.post(`${API}/channels/:channelId/messages`, async ({ request, params }) => {
-                const { body } = await this.record(request);
-                return HttpResponse.json(this.messageFrom(body, { channel_id: String(params.channelId) }));
-            }),
-        ];
+    private messageFrom(body: unknown, overrides: Partial<APIMessage> = {}): APIMessage {
+        const sent: Partial<APIMessage> = JSON.parse(String(body));
+        const { content, embeds, components } = sent;
+        return apiMessage({ content: content ?? "", embeds: embeds ?? [], components: components ?? [], ...overrides });
     }
 }

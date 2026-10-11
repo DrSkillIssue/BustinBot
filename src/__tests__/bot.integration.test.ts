@@ -1,10 +1,7 @@
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ChatInputCommandInteraction } from "discord.js";
-import { http, HttpResponse } from "msw";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
-import { server } from "../tests/setup.js";
 import { startBot } from "../bot.js";
 import { DiscordHarness } from "../tests/discord/harness.js";
 import { IDS, apiGuild, apiTextChannel, chatInputInteraction } from "../tests/discord/payloads.js";
@@ -20,8 +17,8 @@ describe("startBot", () => {
         onTestFinished(() => discord.destroy());
 
         await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
-        discord.connect();
-        const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("bustin"));
+        await discord.connect();
+        const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
         await vi.waitFor(() => expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
@@ -33,9 +30,11 @@ describe("startBot", () => {
         const discord = DiscordHarness.create();
         onTestFinished(() => discord.destroy());
 
+        discord.acceptCommandSync(IDS.guild);
+
         await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } });
 
-        const [synced] = discord.guildCommandUpdates(IDS.guild) as { name: string }[][];
+        const [synced] = discord.guildCommandUpdates(IDS.guild);
         const names = synced!.map((command) => command.name);
         expect(new Set(names).size).toBe(names.length);
         expect(names.sort()).toEqual([...new Set([...commands.values()].map((command) => command.name))].sort());
@@ -45,14 +44,14 @@ describe("startBot", () => {
     test("keeps starting when Discord rejects the command sync", async ({ db, services, onTestFinished }) => {
         const discord = DiscordHarness.create();
         onTestFinished(() => discord.destroy());
-        server.use(http.put("https://discord.com/api/v10/applications/:applicationId/guilds/:guildId/commands", () =>
-            HttpResponse.json({ code: 50001, message: "Missing Access" }, { status: 403 })
-        ));
+        discord.api
+            .intercept({ path: `/api/v10/applications/${IDS.application}/guilds/${IDS.guild}/commands`, method: "PUT" })
+            .reply(403, { code: 50001, message: "Missing Access" }, { headers: { "content-type": "application/json" } });
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
         await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } });
-        discord.connect();
-        const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("bustin"));
+        await discord.connect();
+        const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
         expect(error).toHaveBeenCalledWith("Failed to sync guild slash commands:", expect.objectContaining({ status: 403 }));
         await vi.waitFor(() => expect(discord.originalEdits(interaction)).toHaveLength(1));
@@ -67,19 +66,19 @@ describe("startBot", () => {
         onTestFinished(() => discord.destroy());
 
         await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
-        discord.connect();
-        discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
+        await discord.connect();
+        await discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
         const inOtherGuild = {
             guild_id: otherGuild,
             channel_id: otherChannel,
             channel: { id: otherChannel, type: 0 as const, guild_id: otherGuild, name: "general" },
         };
         // The other guild is already in use before anyone praises the bot
-        const earlier = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("bustin", [], inOtherGuild));
+        const earlier = await discord.dispatch(chatInputInteraction("bustin", [], inOtherGuild));
         await vi.waitFor(() => expect(discord.originalEdits(earlier)).toHaveLength(1));
-        const first = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("goodbot"));
+        const first = await discord.dispatch(chatInputInteraction("goodbot"));
         await vi.waitFor(() => expect(discord.originalEdits(first)).toHaveLength(1));
-        const second = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction("goodbot", [], inOtherGuild));
+        const second = await discord.dispatch(chatInputInteraction("goodbot", [], inOtherGuild));
 
         await vi.waitFor(() => expect(discord.originalEdits(second)).toEqual([
             expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }),
