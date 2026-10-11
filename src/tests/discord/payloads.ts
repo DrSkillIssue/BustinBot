@@ -18,7 +18,9 @@ import {
     RoleFlags,
     type APIApplicationCommandInteractionDataOption,
     type APIChatInputApplicationCommandGuildInteraction,
+    type APIGuildMember,
     type APIGuildTextChannel,
+    type APIInteractionDataResolved,
     type APIInteractionGuildMember,
     type APIMessage,
     type APIMessageButtonInteractionData,
@@ -164,7 +166,8 @@ export function apiGuild(overrides: Partial<GatewayGuildCreateDispatchData> = {}
     };
 }
 
-export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): APIInteractionGuildMember {
+// A guild member as the REST API returns one
+export function apiGuildMember(overrides: Partial<APIGuildMember> = {}): APIGuildMember {
     return {
         user: apiUser(),
         roles: [],
@@ -172,11 +175,15 @@ export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): A
         deaf: false,
         mute: false,
         flags: NO_MEMBER_FLAGS,
-        permissions: "0",
         avatar: null,
         banner: null,
         ...overrides,
     };
+}
+
+// The member who invoked an interaction, which also carries their permissions in the channel
+export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): APIInteractionGuildMember {
+    return { ...apiGuildMember(), permissions: "0", ...overrides };
 }
 
 const interactionBase = {
@@ -196,17 +203,19 @@ function interactionChannel() {
     return { id: IDS.channel, type: ChannelType.GuildText as const, guild_id: IDS.guild, name: "general" };
 }
 
+// `resolved` carries the users, members and roles that user and role options refer to
 export function chatInputInteraction(
     name: string,
     options: APIApplicationCommandInteractionDataOption[] = [],
-    overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
+    overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {},
+    resolved?: APIInteractionDataResolved
 ): APIChatInputApplicationCommandGuildInteraction {
     return {
         ...interactionBase,
         id: nextId(),
         token: `token-${nextId()}`,
         type: InteractionType.ApplicationCommand,
-        data: { id: nextId(), name, type: ApplicationCommandType.ChatInput, options },
+        data: { id: nextId(), name, type: ApplicationCommandType.ChatInput, options, ...(resolved ? { resolved } : {}) },
         channel: interactionChannel(),
         channel_id: IDS.channel,
         member: apiMember(),

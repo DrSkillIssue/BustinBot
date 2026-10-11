@@ -13,6 +13,8 @@ import {
     GatewayOpcodes,
     InteractionResponseType,
     type APIGatewayBotInfo,
+    type APIGuildMember,
+    type APIRole,
     type APIInteraction,
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
@@ -227,6 +229,64 @@ export class DiscordHarness {
                 return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
             }))
             .persist();
+    }
+
+    // Discord listing a guild's roles
+    guildRoles(guildId: string, roles: APIRole[]): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/roles`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: roles, responseOptions: JSON_RESPONSE })))
+            .persist();
+    }
+
+    // Discord creating one role in a guild, answering with the role it made
+    roleCreated(guildId: string, role: APIRole): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/roles`, method: "POST" })
+            .reply(this.answered(() => ({ statusCode: 200, data: role, responseOptions: JSON_RESPONSE })));
+    }
+
+    // Discord editing one role, answering with the role as it now is
+    roleEdited(guildId: string, role: APIRole): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/roles/${role.id}`, method: "PATCH" })
+            .reply(this.answered(() => ({ statusCode: 200, data: role, responseOptions: JSON_RESPONSE })));
+    }
+
+    // Discord deleting one role
+    roleDeleted(guildId: string, roleId: string): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/roles/${roleId}`, method: "DELETE" })
+            .reply(this.answered(() => ({ statusCode: 204 })));
+    }
+
+    // A member Discord knows about; members a test doesn't declare get no answer
+    member(guildId: string, member: APIGuildMember): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/members/${member.user.id}`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: member, responseOptions: JSON_RESPONSE })))
+            .persist();
+    }
+
+    // Discord accepting roles being added to and removed from a member
+    acceptMemberRoleChanges(guildId: string, userId: string): void {
+        for (const method of ["PUT", "DELETE"]) {
+            this.api
+                .intercept({ path: startingWith(`${API}/guilds/${guildId}/members/${userId}/roles/`), method })
+                .reply(this.answered(() => ({ statusCode: 204 })))
+                .persist();
+        }
+    }
+
+    // Roles added to (PUT) or removed from (DELETE) members, as "userId:roleId"
+    memberRoleChanges(method: "PUT" | "DELETE"): string[] {
+        const prefix = /^\/guilds\/\d+\/members\/(\d+)\/roles\/(\d+)$/;
+        return this.requests()
+            .filter((request) => request.method === method)
+            .flatMap((request) => {
+                const match = prefix.exec(request.path);
+                return match ? [`${match[1]}:${match[2]}`] : [];
+            });
     }
 
     // Every Discord REST request the bot made since it became ready
