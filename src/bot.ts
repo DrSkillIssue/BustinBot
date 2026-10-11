@@ -1,11 +1,12 @@
-import type { Client } from 'discord.js';
+import type { Client, Interaction, Message } from 'discord.js';
+import cron from 'node-cron';
 import type { Firestore } from 'firebase-admin/firestore';
 import { loadCommands } from './core/services/CommandService.js';
 import { handleMessage } from './core/events/onMessage.js';
 import { routeInteraction } from './core/events/routeInteraction.js';
 import { handleDirectMessage } from './modules/tasks/TaskInteractions.js';
 import { registerGuildCommands } from './utils/registerCommands.js';
-import { scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
+import { cancelActivePollSchedule, scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
 import { createServiceContainer } from './core/services/ServiceFactory.js';
 import type { ServiceContainer } from './core/services/ServiceContainer.js';
 import { BotStatsService } from './core/services/BotStatsService.js';
@@ -25,7 +26,9 @@ export interface BotOptions {
 }
 
 // Wires the client to the bot's commands, services and schedulers. Logging in is left to the caller.
-export async function startBot(client: Client, { db, commandsDir, fallbackGuildId, commandSync }: BotOptions): Promise<void> {
+// Returns a function that shuts the bot down gracefully: it stops taking events, lets those being handled finish,
+// stops the schedulers started on ready and disconnects the client.
+export async function startBot(client: Client, { db, commandsDir, fallbackGuildId, commandSync }: BotOptions): Promise<() => Promise<void>> {
     console.log('Loading commands...');
     const commands = await loadCommands(commandsDir);
     console.log(`Loaded ${commands.size} commands.`);
@@ -61,8 +64,16 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
         }
     }
 
+    // Events being handled right now, so shutting down can let them finish
+    const inProgress = new Set<Promise<void>>();
+    const track = (work: Promise<void>) => {
+        inProgress.add(work);
+        void work.finally(() => inProgress.delete(work));
+    };
+
     // Register message handler
-    client.on('messageCreate', async (message) => {
+    const onMessageCreate = (message: Message) => track(handleMessageEvent(message));
+    const handleMessageEvent = async (message: Message) => {
         try {
             if (message.channel.type === 1) {
                 let services: ServiceContainer | undefined;
@@ -88,20 +99,26 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
         } catch (error) {
             console.error('Error handling message:', error);
         }
-    });
+    };
+    client.on('messageCreate', onMessageCreate);
 
     // Register interaction handler
-    client.on('interactionCreate', async (interaction) => {
+    const onInteractionCreate = (interaction: Interaction) => track(handleInteractionEvent(interaction));
+    const handleInteractionEvent = async (interaction: Interaction) => {
         try {
             const guildId = interaction.guildId ?? primaryGuildId;
             await routeInteraction(interaction, client, commands, getServices(guildId));
         } catch (error) {
             console.error('Error handling interaction:', error);
         }
-    });
+    };
+    client.on('interactionCreate', onInteractionCreate);
 
-    // Ready event
-    client.once('clientReady', async () => {
+    // Ready event. Its work is kept so shutting down can wait for it, rather than racing it and leaving behind
+    // schedulers started after the stop.
+    let initialised: Promise<void> | undefined;
+
+    const initialiseGuilds = async (): Promise<void> => {
         console.log(`Logged in as ${client.user?.tag}!`);
         const primaryServices = getServices(primaryGuildId);
         await scheduleActivePollClosure(primaryServices, client);
@@ -121,5 +138,23 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
         SchedulerStatusReporter.scheduleDailyLog(primaryServices);
 
         console.log('All guilds initialised.');
+    };
+
+    client.once('clientReady', () => {
+        initialised = initialiseGuilds().catch((err) => {
+            console.error('[Startup] Failed to start the schedulers:', err);
+        });
     });
+
+    return async () => {
+        // Take no new events, then let the ones being handled finish before anything they use is stopped
+        client.off('messageCreate', onMessageCreate);
+        client.off('interactionCreate', onInteractionCreate);
+        await Promise.all(inProgress);
+        await initialised;
+        // node-cron's own shutdown stops every scheduled job, waiting for any that is running to finish
+        await cron.shutdown();
+        cancelActivePollSchedule();
+        await client.destroy();
+    };
 }

@@ -66,12 +66,30 @@ async function main(): Promise<void> {
         partials: [Partials.Channel]
     });
 
-    await startBot(client, {
-        db: createFirestore(),
+    const db = createFirestore();
+    const shutdown = await startBot(client, {
+        db,
         commandsDir,
         fallbackGuildId: process.env.DISCORD_GUILD_ID ?? null,
         commandSync: resolveCommandSync(),
     });
+
+    // Hosts stop the bot with SIGINT (Ctrl+C in a console) or SIGTERM. Exit once cleanup is done instead of
+    // waiting for every pending timer, such as reminders scheduled days ahead.
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+        process.once(signal, () => {
+            console.log(`[Shutdown] ${signal} received; stopping BustinBot.`);
+            shutdown()
+                .then(() => db.terminate())
+                .then(
+                    () => process.exit(0),
+                    (err) => {
+                        console.error('[Shutdown] BustinBot did not stop cleanly:', err);
+                        process.exit(1);
+                    }
+                );
+        });
+    }
 
     await client.login(loginToken);
 }
