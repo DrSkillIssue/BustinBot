@@ -1,8 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes, TextChannel } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
+import { resolveMovieChannel } from "../../movies/MovieChannel.js";
 
 const cancelmovie: Command = {
     name: 'cancelmovie',
@@ -42,7 +43,7 @@ const cancelmovie: Command = {
                     const message = await fetchedChannel.messages.fetch(messageId);
                     return { channel: fetchedChannel as TextChannel, message };
                 } catch (err) {
-                    if ((err as any)?.code === 10008) {
+                    if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownMessage) {
                         continue;
                     }
                     throw err;
@@ -157,17 +158,8 @@ const cancelmovie: Command = {
                 }
             }
 
-            if (!targetChannel) {
-                targetChannel = guild.channels.cache.find(
-                    (ch) => ch.name === "movie-night" && ch.isTextBased()
-                ) as TextChannel | undefined;
-            }
-
-            if (targetChannel) {
-                await targetChannel.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
-            } else {
-                console.warn("[CancelMovie] Could not find movie night channel for cancellation notice.");
-            }
+            targetChannel ??= await resolveMovieChannel(interaction.client, services) ?? undefined;
+            await targetChannel?.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
         }
 
         await interaction.editReply({

@@ -1,8 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { finishMovieNight } from "../../movies/MovieLifecycle.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
+import { resolveMovieChannel } from "../../movies/MovieChannel.js";
 
 const endmovie: Command = {
     name: 'endmovie',
@@ -25,13 +26,9 @@ const endmovie: Command = {
             return;
         }
 
-        const guild = interaction.guild;
-        const channel = guild?.channels.cache.find(
-            (ch) => ch.name === 'movie-night' && ch.isTextBased()
-        ) as TextChannel | undefined;
-
-        if (result.finishedMovie && channel) {
-            await channel.send({
+        if (result.finishedMovie) {
+            const channel = await resolveMovieChannel(interaction.client, services);
+            await channel?.send({
                 content: `🎞️ Movie night has ended. Thanks for watching **${result.finishedMovie.title}**!`,
             });
         }
