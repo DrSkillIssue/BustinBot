@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, Message } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
@@ -34,47 +34,29 @@ const sendas: Command = {
             return;
         }
 
-        if (!interaction || !interaction.guild || !interaction.member || !services) {
-            await interaction?.reply?.({ content: 'Unable to verify your permissions.', flags: 1 << 6 });
+        // Only bot admins reach this: the router enforces the command's BotAdmin role
+        if (!interaction || !services) return;
+
+        await interaction.deferReply({ flags: 1 << 6 });
+
+        const channel = interaction.options.getChannel('channel', true);
+        const messageText = interaction.options.getString('message', true);
+
+        if (!('send' in channel)) {
+            await interaction.editReply({ content: 'Please select a valid text channel.' });
             return;
         }
 
-        const guildConfig = await services.guilds.requireConfig(interaction);
-        if (!guildConfig) return;
-
-        const member = await interaction.guild.members.fetch(interaction.user.id);
-        const adminRoleConfig = guildConfig.roles?.admin ?? process.env.ADMIN_ROLE_NAME;
-        const hasAdminRole =
-            !!adminRoleConfig &&
-            member.roles.cache.some((role) =>
-                /^\d+$/.test(adminRoleConfig)
-                    ? role.id === adminRoleConfig
-                    : role.name === adminRoleConfig
-            );
-        
-        if (!hasAdminRole) {
-            await interaction.reply({ content: 'You need the BustinBot Admin role to use this command.', flags: 1 << 6 });
-            return;
-        }
-
-        const channel = interaction.options.getChannel('channel');
-        const messageText = interaction.options.getString('message');
-
-        if (!channel || !('send' in channel)) {
-            await interaction.reply({ content: 'Please select a valid text channel.', flags: 1 << 6 });
-            return;
-        }
-
+        const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
         try {
-            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-            await (channel as TextChannel).send(withSuppressedMentions({
-                content: messageText || ''
-            }, suppressMentions));
-            await interaction.reply({ content: `Message sent in ${channel}.`, flags: 1 << 6 });
+            await channel.send(withSuppressedMentions({ content: messageText }, suppressMentions));
         } catch (error) {
             console.error('Error sending message:', error);
-            await interaction.reply({ content: 'Failed to send message.', flags: 1 << 6 });
+            await interaction.editReply({ content: 'Failed to send message.' });
+            return;
         }
+
+        await interaction.editReply({ content: `Message sent in ${channel}.` });
     }
 }
 
