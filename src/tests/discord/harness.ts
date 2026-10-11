@@ -37,7 +37,15 @@ export class DiscordHarness {
 
     private constructor(readonly client: Client<true>) {}
 
+    // A connected client in a guild, ready to receive interactions
     static start(guild: GatewayGuildCreateDispatchData = apiGuild()): DiscordHarness {
+        const harness = DiscordHarness.create();
+        harness.connect(guild);
+        return harness;
+    }
+
+    // A client that has not connected yet, for wiring event handlers before the gateway's READY arrives
+    static create(): DiscordHarness {
         const client = new Client({
             intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
             // Send REST requests through the global fetch so msw can intercept them. Node's fetch is undici's
@@ -48,8 +56,12 @@ export class DiscordHarness {
 
         const harness = new DiscordHarness(client as Client<true>);
         server.use(...harness.handlers());
+        return harness;
+    }
 
-        harness.gateway(GatewayDispatchEvents.Ready, {
+    // Replays what the gateway sends on login: READY, the client becoming ready, then the guild
+    connect(guild: GatewayGuildCreateDispatchData = apiGuild()): void {
+        this.gateway(GatewayDispatchEvents.Ready, {
             v: 10,
             user: apiUser({ id: IDS.bot, username: "BustinBot", bot: true }),
             guilds: [],
@@ -57,9 +69,8 @@ export class DiscordHarness {
             resume_gateway_url: "wss://gateway.discord.gg",
             application: { id: IDS.application, flags: 0 },
         });
-        (client.ws as unknown as GatewayInternals).triggerClientReady();
-        harness.gateway(GatewayDispatchEvents.GuildCreate, guild);
-        return harness;
+        (this.client.ws as unknown as GatewayInternals).triggerClientReady();
+        this.gateway(GatewayDispatchEvents.GuildCreate, guild);
     }
 
     // Delivers an interaction the way the gateway does and returns the discord.js object created for it
@@ -109,7 +120,8 @@ export class DiscordHarness {
         const text = await request.text();
         const recorded = {
             method: request.method,
-            path: new URL(request.url).pathname.replace("/api/v10", ""),
+            // Decoded so tests can match readable routes such as messages/@original
+            path: decodeURIComponent(new URL(request.url).pathname).replace("/api/v10", ""),
             body: text ? JSON.parse(text) : undefined,
         };
         this.requests.push(recorded);
