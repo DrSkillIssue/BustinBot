@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { DiscordError } from "../../../tests/discord/harness.js";
 import { handleMessage } from "../onMessage.js";
 import { CommandModule, CommandRole, type Command } from "../../../models/Command.js";
 import { IDS, apiMember, apiUser, messageCreate } from "../../../tests/discord/payloads.js";
@@ -64,9 +65,7 @@ describe("prefix commands", () => {
 
     test("survives Discord rejecting the error reply", async ({ discord, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages`, method: "POST" })
-            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
         const failing: Command = {
             name: "fail",
             description: "Always fails",

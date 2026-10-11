@@ -1,5 +1,6 @@
 import { ApplicationCommandOptionType, ChannelType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
 import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -25,7 +26,7 @@ describe("/sendas", () => {
 
         const interaction = await interact(sendas(general, "Hello, this is BustinBot!"));
 
-        expect(discord.callbacks(interaction)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: "Hello, this is BustinBot!" })]);
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: `Message sent in <#${IDS.channel}>.` })]);
     });
@@ -41,9 +42,7 @@ describe("/sendas", () => {
     });
 
     test("reports once when Discord won't post the message", async ({ discord, interact }) => {
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages`, method: "POST" })
-            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
         const interaction = await interact(sendas(general, "Hello"));

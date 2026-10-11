@@ -1,5 +1,5 @@
-import { ComponentType, type APIMessageTopLevelComponent } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
@@ -10,12 +10,6 @@ import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
 const HOUR = 60 * 60 * 1000;
 const options: Task[] = [buildTask({ id: "PVM001", shortName: "Zulrah" }), buildTask({ id: "PVM002", shortName: "Vorkath" }), buildTask({ id: "PVM003", shortName: "Hydra" })];
-
-// The custom ids of the voting buttons on a poll message, if it has any
-function voteButtons(components: APIMessageTopLevelComponent[] | null | undefined): string[] {
-    return (components ?? []).flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
-        .flatMap((button) => ("custom_id" in button ? [button.custom_id] : []));
-}
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
@@ -50,7 +44,7 @@ describe("posting the weekly task polls", () => {
         expect(announcement?.content).toContain("**New task polls are live!**");
         expect(polls).toHaveLength(3);
         for (const poll of polls) {
-            expect(voteButtons(poll.components)).toHaveLength(3);
+            expect(buttonsIn(poll.components)).toHaveLength(3);
             expect(poll.files).toEqual(["category_icon.png"]);
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
@@ -136,6 +130,6 @@ describe("closing a task poll", () => {
 
         expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.isActive).toBe(false);
         const [closedMessage] = discord.messageEdits(IDS.channel, poll.messageId);
-        expect(voteButtons(closedMessage?.components)).toEqual([]);
+        expect(buttonsIn(closedMessage?.components)).toEqual([]);
     });
 });

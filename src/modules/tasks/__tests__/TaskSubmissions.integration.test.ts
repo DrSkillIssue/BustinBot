@@ -1,8 +1,8 @@
-import { ComponentType, InteractionResponseType, MessageFlags, type APIAttachment, type APIMessageTopLevelComponent, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
+import { InteractionResponseType, MessageFlags, type APIAttachment, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import type { DiscordHarness } from "../../../tests/discord/harness.js";
+import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import {
@@ -30,16 +30,10 @@ const ARCHIVE = "100000000000000060";
 const reviewer = "100000000000000035";
 const admin = { member: apiMember({ user: apiUser({ id: reviewer, username: "admin" }), roles: [IDS.roles.taskAdmin] }) };
 
-// The custom ids of the buttons on a message
-function buttonIds(components: APIMessageTopLevelComponent[] | null | undefined): string[] {
-    return (components ?? []).flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
-        .flatMap((button) => ("custom_id" in button ? [button.custom_id] : []));
-}
-
-// The buttons the bot answered an interaction with
+// The custom ids of the buttons the bot answered an interaction with
 function offeredButtons(discord: DiscordHarness, interaction: Interaction): string[] {
     const [callback] = discord.callbacks(interaction);
-    return callback?.type === InteractionResponseType.ChannelMessageWithSource ? buttonIds(callback.data?.components) : [];
+    return callback?.type === InteractionResponseType.ChannelMessageWithSource ? buttonsIn(callback.data?.components).map((button) => button.customId) : [];
 }
 
 // This week's task, posted in the task channel
@@ -114,7 +108,7 @@ describe("submitting a task", () => {
 
         const click = await interact(buttonInteraction(`task-submit-${EVENT}`));
 
-        expect(discord.callbacks(click)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.callbacks(click)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Check your DMs to submit your screenshot(s) for **Kill Zulrah**!" })]);
         expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({
             content: "Please upload your screenshot(s) for **Kill Zulrah** and include any notes/comments in the same message.",
@@ -134,7 +128,7 @@ describe("submitting a task", () => {
             screenshotUrls: screenshots.map((screenshot) => screenshot.url), message: expect.any(String), screenshotMessage: expect.any(String),
         });
         const [details, posted] = discord.messagesSentTo(IDS.channel);
-        expect(buttonIds(details?.components)).toEqual(["bronze", "silver", "gold"].map((tier) => `approve_${tier}_${submission!.id}`).concat(`reject_${submission!.id}`));
+        expect(buttonsIn(details?.components).map((button) => button.customId)).toEqual(["bronze", "silver", "gold"].map((tier) => `approve_${tier}_${submission!.id}`).concat(`reject_${submission!.id}`));
         expect(posted).toMatchObject({ content: `Submission screenshots for <@${IDS.user}> — Kill Zulrah:`, files: ["before.png", "after.png"] });
         expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: "✅ Submission for **Kill Zulrah** received with 2 screenshots and sent for review!" })]);
         expect(await services.tasks.getSubmissionDraft(IDS.user)).toBeNull();
@@ -164,9 +158,7 @@ describe("submitting a task", () => {
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages`, method: "POST" })
-            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
         discord.acceptMessages(IDS.dm);
 
         await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
@@ -401,12 +393,8 @@ describe("approving a submission", () => {
         await storeEvent(services);
         await storePendingSubmission(services);
         // Registered first, so these answer before the routes that accept
-        discord.api
-            .intercept({ path: "/api/v10/users/@me/channels", method: "POST" })
-            .reply(403, { code: 50007, message: "Cannot send messages to this user" }, { headers: { "content-type": "application/json" } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${ARCHIVE}/messages`, method: "POST" })
-            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.refuseDirectMessages(IDS.user);
+        discord.refuse("POST", `/channels/${ARCHIVE}/messages`, DiscordError.missingPermissions);
         await acceptReviewEffects(discord, services);
 
         const confirm = await approve(discord, interact, "gold");
@@ -424,9 +412,7 @@ describe("approving a submission", () => {
         await storeEvent(services);
         await storePendingSubmission(services);
         // Registered first, so it answers before the route that serves the post
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages/${EVENT_POST}`, method: "GET" })
-            .reply(404, { code: 10008, message: "Unknown Message" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${IDS.channel}/messages/${EVENT_POST}`, DiscordError.unknownMessage);
         await acceptReviewEffects(discord, services);
 
         const confirm = await approve(discord, interact, "silver");
@@ -506,7 +492,7 @@ describe("rejecting a submission", () => {
         const form = await openRejectionForm(discord, interact);
         const submit = await interact(modalSubmitInteraction(form, { reason: "The keyword isn't visible" }, admin));
 
-        expect(discord.callbacks(submit)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.callbacks(submit)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "❌ Submission rejected and archived." })]);
         expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({
             status: SubmissionStatus.Rejected, rejectionReason: "The keyword isn't visible", reviewedBy: reviewer,
@@ -538,7 +524,7 @@ describe("rejecting a submission", () => {
     test("answers a form that names no submission once", async ({ discord, interact }) => {
         const submit = await interact(modalSubmitInteraction("reject_reason_", { reason: "" }, admin));
 
-        expect(discord.callbacks(submit)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.callbacks(submit)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Submission ID missing from interaction." })]);
     });
 });

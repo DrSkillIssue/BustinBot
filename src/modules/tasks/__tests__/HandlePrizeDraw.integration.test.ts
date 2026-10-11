@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
@@ -195,9 +196,7 @@ describe("announcing a prize draw winner", () => {
         await services.guilds.update(IDS.guild, { channels: { taskChannel: deleted } });
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: winner }));
         discord.user(apiUser({ id: winner, username: "lucky" }));
-        discord.api
-            .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(false);

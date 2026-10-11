@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
 import { startBot } from "../bot.js";
-import { DiscordHarness } from "../tests/discord/harness.js";
+import { DiscordError, DiscordHarness } from "../tests/discord/harness.js";
 import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
 import { TaskRepository } from "../core/database/TaskRepo.js";
@@ -42,9 +42,7 @@ describe("startBot", () => {
 
     test("keeps starting when Discord rejects the command sync", async ({ db, http, services, onTestFinished }) => {
         const discord = DiscordHarness.create(http);
-        discord.api
-            .intercept({ path: `/api/v10/applications/${IDS.application}/guilds/${IDS.guild}/commands`, method: "PUT" })
-            .reply(403, { code: 50001, message: "Missing Access" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("PUT", `/applications/${IDS.application}/guilds/${IDS.guild}/commands`, DiscordError.missingAccess);
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } }));

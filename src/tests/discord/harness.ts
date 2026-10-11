@@ -13,7 +13,10 @@ import {
     GatewayDispatchEvents,
     GatewayOpcodes,
     InteractionResponseType,
+    MessageFlags,
+    RESTJSONErrorCodes,
     type APIAttachment,
+    type APIChannel,
     type APIDMChannel,
     type APIGuild,
     type APIGatewayBotInfo,
@@ -41,6 +44,31 @@ import { clientOptions } from "../../clientOptions.js";
 import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
 
 const API = "/api/v10";
+// Discord's error responses: the HTTP status and the JSON error body it sends
+export const DiscordError = {
+    unknownChannel: { status: 404, body: { code: RESTJSONErrorCodes.UnknownChannel, message: "Unknown Channel" } },
+    unknownMessage: { status: 404, body: { code: RESTJSONErrorCodes.UnknownMessage, message: "Unknown Message" } },
+    missingAccess: { status: 403, body: { code: RESTJSONErrorCodes.MissingAccess, message: "Missing Access" } },
+    missingPermissions: { status: 403, body: { code: RESTJSONErrorCodes.MissingPermissions, message: "Missing Permissions" } },
+    cannotMessageUser: { status: 403, body: { code: RESTJSONErrorCodes.CannotSendMessagesToThisUser, message: "Cannot send messages to this user" } },
+} as const;
+
+// An ephemeral deferral: the bot's private "thinking…" response to an interaction
+export const PRIVATE_DEFERRAL = { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } };
+
+// The buttons and menus in a message's component rows, as Discord received them
+export function buttonsIn(rows: readonly unknown[] | null | undefined): { customId: string; label?: string; disabled: boolean }[] {
+    return (rows ?? [])
+        .flatMap((row) => (typeof row === "object" && row !== null && "components" in row && Array.isArray(row.components) ? row.components : []))
+        .flatMap((component: unknown) => (typeof component === "object" && component !== null && "custom_id" in component && typeof component.custom_id === "string"
+            ? [{
+                customId: component.custom_id,
+                ...("label" in component && typeof component.label === "string" ? { label: component.label } : {}),
+                disabled: "disabled" in component && component.disabled === true,
+            }]
+            : []));
+}
+
 // The 8-byte signature that opens every PNG file
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
@@ -190,6 +218,23 @@ export class DiscordHarness {
         const created = once(this.client, Events.GuildRoleCreate);
         this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.GuildRoleCreate, s: 0, d: { guild_id: guildId, role } });
         await created;
+    }
+
+    // Discord refusing a request with one of its errors. Registered before any route that accepts the same request,
+    // since the first matching route answers; persist when the bot is expected to ask more than once.
+    refuse(method: string, path: string, error: (typeof DiscordError)[keyof typeof DiscordError], { persist = false } = {}): void {
+        const route = this.api
+            .intercept({ path: `${API}${path}`, method })
+            .reply(this.answered(() => ({ statusCode: error.status, data: error.body, responseOptions: JSON_RESPONSE })));
+        if (persist) route.persist();
+    }
+
+    // A channel Discord knows about, for the bot to fetch when discord.js hasn't cached it
+    channel(channel: APIChannel): void {
+        this.api
+            .intercept({ path: `${API}/channels/${channel.id}`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: channel, responseOptions: JSON_RESPONSE })))
+            .persist();
     }
 
     // A channel being created in a guild, as the gateway announces it, so discord.js has it cached
@@ -359,6 +404,24 @@ export class DiscordHarness {
             .persist();
     }
 
+    // A member who doesn't accept DMs: Discord opens the DM channel, then refuses messages in it
+    refuseDirectMessages(userId: string): void {
+        const dmChannelId = nextId();
+        const dm: APIDMChannel = { id: dmChannelId, type: ChannelType.DM, name: null, last_message_id: null, recipients: [apiUser({ id: userId })] };
+        this.api
+            .intercept({
+                path: `${API}/users/@me/channels`,
+                method: "POST",
+                body: (body) => {
+                    const request: { recipient_id?: string } = JSON.parse(body);
+                    return request.recipient_id === userId;
+                },
+            })
+            .reply(this.answered(() => ({ statusCode: 200, data: dm, responseOptions: JSON_RESPONSE })))
+            .persist();
+        this.refuse("POST", `/channels/${dmChannelId}/messages`, DiscordError.cannotMessageUser, { persist: true });
+    }
+
     // Discord listing a guild's roles
     guildRoles(guildId: string, roles: APIRole[]): void {
         this.api
@@ -468,6 +531,11 @@ export class DiscordHarness {
     // Edits to an interaction's original response (editReply)
     originalEdits(interaction: Interaction): RESTPatchAPIWebhookWithTokenMessageJSONBody[] {
         return this.bodies("PATCH", `/webhooks/${IDS.application}/${interaction.token}/messages/@original`);
+    }
+
+    // Follow-up messages sent through an interaction's webhook (followUp)
+    followUps(interaction: Interaction): SentMessage[] {
+        return this.bodies("POST", `/webhooks/${IDS.application}/${interaction.token}`);
     }
 
     // Slash command lists sent to Discord for a guild

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import type { DiscordHarness } from "../../../tests/discord/harness.js";
+import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
@@ -102,10 +102,7 @@ describe("the weekly leaderboard update", () => {
         await storePeriodic(services, { points: { [winner]: 9 }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await setUpChampions(discord, services);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } })
-            .persist();
+        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel, { persist: true });
 
         await postPeriodicLeaderboardUpdate(discord.client, services);
         await postPeriodicLeaderboardUpdate(discord.client, services);
@@ -129,9 +126,7 @@ describe("/taskboard", () => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(services, {});
         await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel);
 
         const command = await slash("taskboard", [{ type: 1, name: "update" }], { member: { ...apiGuildMember({ user: apiUser() }), roles: [IDS.roles.admin], permissions: "0" } });
 
@@ -166,9 +161,7 @@ describe("the warning before a period ends", () => {
         await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
         await services.guilds.update(IDS.guild, { channels: { taskVerification: DELETED_CHANNEL } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel);
 
         await warnPendingLeaderboardFinalization(discord.client, services);
 

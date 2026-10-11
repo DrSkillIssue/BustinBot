@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ComponentType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
 import { IDS, apiMember } from "../../../tests/discord/payloads.js";
 import { packageVersion } from "../../../utils/version.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const announcements = JSON.parse(readFileSync(path.join(import.meta.dirname, "../../../../data/announcements.json"), "utf8"));
-const privateDeferral = { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } };
 
 describe("/announce", () => {
     test("posts this version's announcement in the announcement channel and confirms privately", async ({ discord, slash }) => {
@@ -15,7 +15,7 @@ describe("/announce", () => {
 
         const interaction = await slash("announce", [], admin);
 
-        expect(discord.callbacks(interaction)).toEqual([privateDeferral]);
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({
             flags: MessageFlags.IsComponentsV2,
             components: expect.arrayContaining([expect.objectContaining({
@@ -51,9 +51,7 @@ describe("/announce", () => {
     test("tells the admin when the configured channel can't be reached", async ({ discord, services, slash }) => {
         const deleted = "100000000000000099";
         await services.guilds.update(IDS.guild, { channels: { announcements: deleted } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
 
         const interaction = await slash("announce", [], admin);
 

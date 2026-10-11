@@ -1,5 +1,6 @@
 import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPIWebhookWithTokenMessageJSONBody } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
@@ -16,7 +17,6 @@ import { buildGuild } from "../../../tests/fakes/builders.js";
 
 const CHANNELS = { announce: "100000000000000201", log: "100000000000000202", archive: "100000000000000203" };
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
-const privateDeferral = { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } };
 
 // The select menus' custom ids and placeholders in a reply, row by row
 function menuPlaceholders(edit: RESTPatchAPIWebhookWithTokenMessageJSONBody | undefined): Record<string, string> {
@@ -28,7 +28,7 @@ describe("the setup commands", () => {
     test("/setup acknowledges privately first, then offers the channel pickers showing the current channels", async ({ discord, slash }) => {
         const interaction = await slash("setup", [], admin);
 
-        expect(discord.callbacks(interaction)).toEqual([privateDeferral]);
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
             setup_announce: "Channel for bot announcements (Current: #general)",
             setup_log: "Channel for errors and logs (Current: None)",
@@ -39,7 +39,7 @@ describe("the setup commands", () => {
     test("/moviesetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({ discord, slash }) => {
         const interaction = await slash("moviesetup", [], admin);
 
-        expect(discord.callbacks(interaction)).toEqual([privateDeferral]);
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
             moviesetup_admin_role: "Role for movie admin commands (Current: @Movie Admin)",
             moviesetup_user_role: "Role notified for movie nights (Current: None)",
@@ -51,7 +51,7 @@ describe("the setup commands", () => {
     test("/tasksetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({ discord, slash }) => {
         const interaction = await slash("tasksetup", [], admin);
 
-        expect(discord.callbacks(interaction)).toEqual([privateDeferral]);
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
             tasksetup_admin_role: "Role for approving submissions (Current: @Task Admin)",
             tasksetup_user_role: "Role notified about tasks (Current: None)",

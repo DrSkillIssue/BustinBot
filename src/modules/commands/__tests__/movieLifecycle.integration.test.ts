@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
@@ -91,9 +92,7 @@ describe("/cancelmovie", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "info").mockImplementation(() => {});
         await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, method: "GET" })
-            .reply(404, { code: 10008, message: "Unknown Message" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 
         await slash("cancelmovie", [], movieAdmin);

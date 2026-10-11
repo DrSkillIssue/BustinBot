@@ -36,13 +36,7 @@ describe("milestone roles", () => {
         await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedGold: 6 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
-        const dm = "100000000000000097";
-        discord.api
-            .intercept({ path: "/api/v10/users/@me/channels", method: "POST" })
-            .reply(200, { id: dm, type: 1, name: null, last_message_id: null, recipients: [apiUser({ id: member })] }, { headers: { "content-type": "application/json" } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${dm}/messages`, method: "POST" })
-            .reply(403, { code: 50007, message: "Cannot send messages to this user" }, { headers: { "content-type": "application/json" } });
+        discord.refuseDirectMessages(member);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         await applyTaskMilestoneRoles(discord.client, services, member);

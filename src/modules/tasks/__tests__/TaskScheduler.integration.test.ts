@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { ChannelType } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { DiscordError } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS } from "../../../tests/discord/payloads.js";
@@ -76,9 +77,7 @@ describe("the task channel", () => {
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
         const category = "100000000000000098";
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${category}`, method: "GET" })
-            .reply(200, { id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] }, { headers: { "content-type": "application/json" } });
+        discord.channel({ id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] });
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
     });
@@ -86,9 +85,7 @@ describe("the task channel", () => {
     test("is reported missing when the configured channel no longer exists", async ({ discord, services }) => {
         const deleted = "100000000000000099";
         await services.guilds.update(IDS.guild, { channels: { taskChannel: deleted } });
-        discord.api
-            .intercept({ path: `/api/v10/channels/${deleted}`, method: "GET" })
-            .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();

@@ -1,5 +1,5 @@
-import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
@@ -39,7 +39,7 @@ describe("the update task form", () => {
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
 
-        expect(discord.callbacks(submit)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.callbacks(submit)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Task **PVM001** updated successfully." })]);
         expect(await tasks.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Vorkath", type: TaskType.KC, amtBronze: 5, amtSilver: 10, amtGold: 150000 });
         expect(await tasks.getTaskEventById("PVM001-week")).toMatchObject({

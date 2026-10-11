@@ -68,8 +68,8 @@ describe("/addmovie", () => {
         const duplicate = await interact(buttonInteraction("addmovie|select|603", resultsMessage));
         const rewatch = await interact(buttonInteraction("addmovie|select|604", resultsMessage));
 
-        expect(discord.requests().filter((request) => request.method === "POST" && request.path === `/webhooks/${IDS.application}/${duplicate.token}`)).toEqual([
-            expect.objectContaining({ body: expect.objectContaining({ content: "**The Matrix** is already in the movie list (added by <@100000000000000099>). Please choose a different result." }) }),
+        expect(discord.followUps(duplicate)).toEqual([
+            expect.objectContaining({ content: "**The Matrix** is already in the movie list (added by <@100000000000000099>). Please choose a different result." }),
         ]);
         expect(discord.originalEdits(rewatch)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "Added: The Matrix Reloaded" })] })]);
     });

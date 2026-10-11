@@ -1,11 +1,10 @@
-import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask } from "../../../tests/fakes/builders.js";
 
-const privateDeferral = { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } };
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({ discord, interact, services }) => {
@@ -13,7 +12,7 @@ describe("task feedback buttons", () => {
 
         const click = await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
-        expect(discord.callbacks(click)).toEqual([privateDeferral]);
+        expect(discord.callbacks(click)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thanks for your feedback!" })]);
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
     });

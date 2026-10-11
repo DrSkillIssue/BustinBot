@@ -1,7 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { ApplicationCommandOptionType, type APIApplicationCommandInteractionDataOption, type APIRole } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
-import type { DiscordHarness } from "../../../../tests/discord/harness.js";
+import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
 import { IDS, apiGuild, apiGuildMember, apiMember, apiRole, apiUser, chatInputInteraction } from "../../../../tests/discord/payloads.js";
 import { buildUserStats } from "../../../../tests/fakes/builders.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
@@ -141,9 +141,7 @@ describe("/taskroles delete", () => {
         const gold = apiRole({ name: "Gold Champion" });
         serveRoles(discord, [gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
-        discord.api
-            .intercept({ path: `/api/v10/guilds/${IDS.guild}/roles/${gold.id}`, method: "DELETE" })
-            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.refuse("DELETE", `/guilds/${IDS.guild}/roles/${gold.id}`, DiscordError.missingPermissions);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         const interaction = await slash("taskroles", sub("delete", [text("role", `<@&${gold.id}>`)]), taskAdmin);

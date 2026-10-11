@@ -1,6 +1,7 @@
 import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import type { ButtonInteraction } from "discord.js";
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import {
     IDS,
@@ -27,25 +28,6 @@ async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[])
     return stored;
 }
 
-// The buttons and menus in a message's rows, as Discord received them
-type Rows = readonly unknown[] | null | undefined;
-
-function components(rows: Rows): { custom_id: string; disabled: boolean }[] {
-    return (rows ?? [])
-        .flatMap((row) => (typeof row === "object" && row !== null && "components" in row && Array.isArray(row.components) ? row.components : []))
-        .flatMap((component: unknown) => (typeof component === "object" && component !== null && "custom_id" in component && typeof component.custom_id === "string"
-            ? [{ custom_id: component.custom_id, disabled: "disabled" in component && component.disabled === true }]
-            : []));
-}
-
-function buttonIds(rows: Rows): string[] {
-    return components(rows).map((component) => component.custom_id);
-}
-
-function button(rows: Rows, customId: string) {
-    return components(rows).find((component) => component.custom_id === customId);
-}
-
 describe("a movie poll", () => {
     test("is posted with a button per movie, leaving out watched ones, and stored", async ({ discord, services }) => {
         const movies = await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
@@ -56,7 +38,7 @@ describe("a movie poll", () => {
 
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Poll confirmed and posted!" })]);
         const posted = discord.messagesSentTo(IDS.channel).find((message) => message.content?.startsWith("📊 **Vote for the next movie night pick!**"));
-        expect(buttonIds(posted?.components)).toEqual(["movie_vote_0", "movie_vote_1"]);
+        expect(buttonsIn(posted?.components).map((button) => button.customId)).toEqual(["movie_vote_0", "movie_vote_1"]);
         expect(posted?.embeds?.map((embed) => embed.title)).toEqual(["Inception", "Arrival"]);
         const poll = await services.repos.movieRepo.getActivePoll();
         expect(poll).toMatchObject({ isActive: true, channelId: IDS.channel, messageId: expect.any(String) });
@@ -150,7 +132,7 @@ describe("/pickmovie", () => {
     test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, services }) => {
         await storeMovies(services, [{ title: "Inception" }]);
         const command = await slash("pickmovie", [], movieAdmin);
-        const offered = buttonIds(discord.originalEdits(command)[0]?.components);
+        const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
         const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
         const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, movieAdmin));
@@ -175,8 +157,8 @@ describe("/pickmovie", () => {
         const menu = JSON.stringify(discord.originalEdits(open)[0]?.components);
         expect(menu).toContain('"label":"1. Inception"');
         expect(menu).not.toContain("Heat");
-        expect(button(discord.originalEdits(open)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: true });
-        expect(button(discord.originalEdits(choose)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: false });
+        expect(buttonsIn(discord.originalEdits(open)[0]?.components).find((button) => button.customId === "movie_poll_manual_confirm")).toMatchObject({ disabled: true });
+        expect(buttonsIn(discord.originalEdits(choose)[0]?.components).find((button) => button.customId === "movie_poll_manual_confirm")).toMatchObject({ disabled: false });
         expect(discord.originalEdits(confirm)).toEqual([expect.objectContaining({ content: "Poll confirmed and posted!" })]);
         expect((await services.repos.movieRepo.getActivePoll())?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
@@ -187,8 +169,8 @@ describe("/pickmovie", () => {
         const choose = await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1"], apiMessage({ flags: MessageFlags.Ephemeral }), movieAdmin));
 
         expect(discord.callbacks(choose)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
-        expect(discord.requests().filter((request) => request.method === "POST" && request.path === `/webhooks/${IDS.application}/${choose.token}`)).toEqual([
-            expect.objectContaining({ body: expect.objectContaining({ content: "No active movies found." }) }),
+        expect(discord.followUps(choose)).toEqual([
+            expect.objectContaining({ content: "No active movies found." }),
         ]);
     });
 });
@@ -202,12 +184,12 @@ describe("/listmovies", () => {
         const next = await interact(buttonInteraction("listmovies|next|1", apiMessage({ flags: MessageFlags.Ephemeral })));
 
         expect(firstPage?.embeds?.map((embed) => embed.title)).toEqual(["1. Inception", "2. Arrival", "3. Heat"]);
-        expect(buttonIds(firstPage?.components)).toEqual(["listmovies|start|0", "listmovies|prev|-1", "listmovies|next|1", "listmovies|end|1"]);
+        expect(buttonsIn(firstPage?.components).map((button) => button.customId)).toEqual(["listmovies|start|0", "listmovies|prev|-1", "listmovies|next|1", "listmovies|end|1"]);
         expect(discord.callbacks(next)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         const [secondPage] = discord.originalEdits(next);
         expect(secondPage?.embeds?.map((embed) => embed.title)).toEqual(["4. Alien"]);
-        expect(button(secondPage?.components, "listmovies|end|1")).toMatchObject({ disabled: true });
-        expect(button(secondPage?.components, "listmovies|prev|0")).toMatchObject({ disabled: false });
+        expect(buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|end|1")).toMatchObject({ disabled: true });
+        expect(buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|prev|0")).toMatchObject({ disabled: false });
     });
 });
 
