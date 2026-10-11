@@ -13,10 +13,9 @@
       "vitest/globals",
       "node"
     ],
-    "baseUrl": "./src",
     "paths": {
       "@tests/*": [
-        "tests/*"
+        "./src/tests/*"
       ]
     },
     // For nodejs:

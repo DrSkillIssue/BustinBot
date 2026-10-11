@@ -17,7 +17,7 @@
     "luxon": "^3.7.2",
     "node-cron": "^4.6.0",
     "node-fetch": "^3.3.2",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "test": "vitest run",
