@@ -68,6 +68,42 @@ describe("MovieScheduler", () => {
         expect(modalJson.components[0]!.components[0]!.label).toMatch(/^Start time \(UTC[+-]\d{1,2}(?::\d{2})?\)$/);
     });
 
+    it("edits the deferred reply when guild configuration is missing", async () => {
+        const movieRepo = {
+            getActivePoll: vi.fn(),
+            getAllMovies: vi.fn(),
+            getAllEvents: vi.fn(),
+            createMovieEvent: vi.fn(),
+        };
+        const interaction: any = {
+            customId: "movienight-time-2026-03-05",
+            guildId: "guild-1",
+            fields: {
+                getTextInputValue: vi.fn().mockReturnValue("20:30"),
+            },
+            deferReply: vi.fn().mockResolvedValue(undefined),
+            editReply: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn().mockResolvedValue(undefined),
+            client: {},
+        };
+        const services: any = {
+            guildId: "guild-1",
+            repos: { movieRepo },
+            guilds: {
+                get: vi.fn().mockResolvedValue(null),
+            },
+        };
+
+        await handleMovieNightTime(interaction, services);
+
+        expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 1 << 6 });
+        expect(interaction.reply).not.toHaveBeenCalled();
+        expect(interaction.editReply).toHaveBeenCalledWith(
+            expect.objectContaining({ content: expect.stringContaining("Guild configuration not found") })
+        );
+        expect(movieRepo.getActivePoll).not.toHaveBeenCalled();
+    });
+
     it("rejects invalid time input format", async () => {
         const movieRepo = {
             getActivePoll: vi.fn(),
@@ -89,8 +125,7 @@ describe("MovieScheduler", () => {
             guildId: "guild-1",
             repos: { movieRepo },
             guilds: {
-                requireConfig: vi.fn().mockResolvedValue({ channels: {}, roles: {} }),
-                get: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+                get: vi.fn().mockResolvedValue({ timezone: "UTC", channels: {}, roles: {} }),
             },
         };
 
@@ -199,11 +234,11 @@ describe("MovieScheduler", () => {
             guildId: "guild-1",
             repos: { movieRepo },
             guilds: {
-                requireConfig: vi.fn().mockResolvedValue({
+                get: vi.fn().mockResolvedValue({
+                    timezone: "UTC",
                     channels: { movieNight: "movie-night-channel", movieVC: "voice-123" },
                     roles: { movieUser: "movie-role" },
                 }),
-                get: vi.fn().mockResolvedValue({ timezone: "UTC" }),
             },
         };
 
@@ -323,11 +358,11 @@ describe("MovieScheduler", () => {
             guildId: "guild-1",
             repos: { movieRepo },
             guilds: {
-                requireConfig: vi.fn().mockResolvedValue({
+                get: vi.fn().mockResolvedValue({
+                    timezone: "UTC",
                     channels: { movieNight: "missing-configured-channel" },
                     roles: {},
                 }),
-                get: vi.fn().mockResolvedValue({ timezone: "UTC" }),
             },
         };
 

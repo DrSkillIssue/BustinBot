@@ -129,7 +129,7 @@ describe("Movie module flows", () => {
       const services: any = {
         guildId: "guild-1",
         guilds: {
-          requireConfig: vi.fn().mockResolvedValue({
+          get: vi.fn().mockResolvedValue({
             roles: { movieUser: "role-id" },
             channels: { movieNight: "channel-123", movieVC: "voice-123" },
           }),
@@ -244,7 +244,7 @@ describe("Movie module flows", () => {
       const services: any = {
         guildId: "guild-1",
         guilds: {
-          requireConfig: vi.fn().mockResolvedValue({
+          get: vi.fn().mockResolvedValue({
             roles: { movieUser: "role-id" },
             channels: { movieNight: "channel-123", movieVC: "voice-123" },
           }),
@@ -278,7 +278,7 @@ describe("Movie module flows", () => {
       const services: any = {
         guildId: "guild-1",
         guilds: {
-          requireConfig: vi.fn().mockResolvedValue({
+          get: vi.fn().mockResolvedValue({
             roles: { movieUser: "role-id" },
             channels: { movieNight: "channel-123", movieVC: "voice-123" },
           }),

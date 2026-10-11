@@ -31,7 +31,6 @@ const { default: moviesetup } = await import('../movies/moviesetup.js');
 const { default: tasksetup } = await import('../tasks/tasksetup.js');
 
 const mockGuilds = {
-    requireConfig: vi.fn(),
     get: vi.fn(),
 };
 
@@ -94,7 +93,6 @@ const baseInteraction = () => {
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockGuilds.requireConfig.mockReset();
     mockGuilds.get.mockReset();
     baseServices.repos.movieRepo.getAllMovies.mockReset();
     baseServices.repos.movieRepo.upsertMovie.mockReset();
@@ -106,12 +104,27 @@ beforeEach(() => {
 });
 
 describe('addmovie command', () => {
+    it('edits the deferred reply when guild configuration is missing', async () => {
+        const { interaction } = baseInteraction();
+        mockGuilds.get.mockResolvedValue(null);
+
+        await addmovie.execute({ interaction, services: baseServices as any });
+
+        expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 1 << 6 });
+        expect(mockGuilds.get).toHaveBeenCalledWith('guild-1');
+        expect(interaction.reply).not.toHaveBeenCalled();
+        expect(interaction.editReply).toHaveBeenCalledWith(
+            expect.stringContaining('Guild configuration not found')
+        );
+        expect(baseServices.repos.movieRepo.getAllMovies).not.toHaveBeenCalled();
+    });
+
     it('prevents non-privileged users from exceeding active movie cap', async () => {
         const { interaction } = baseInteraction();
         interaction.options.getString.mockReturnValue('Inception');
         interaction.options.getInteger.mockReturnValue(null);
 
-        mockGuilds.requireConfig.mockResolvedValue({
+        mockGuilds.get.mockResolvedValue({
             roles: { admin: 'admin-role', movieAdmin: 'movie-admin', movieUser: 'movie-user' },
             channels: {},
         });
@@ -140,7 +153,7 @@ describe('addmovie command', () => {
         interaction.options.getString.mockReturnValue('The Matrix');
         interaction.options.getInteger.mockReturnValue(1999);
 
-        mockGuilds.requireConfig.mockResolvedValue({
+        mockGuilds.get.mockResolvedValue({
             roles: {},
             channels: {},
         });
@@ -184,7 +197,7 @@ describe('addmovie command', () => {
         interaction.options.getString.mockReturnValue('The Matrix');
         interaction.options.getInteger.mockReturnValue(1999);
 
-        mockGuilds.requireConfig.mockResolvedValue({
+        mockGuilds.get.mockResolvedValue({
             roles: {},
             channels: {},
         });
@@ -234,7 +247,7 @@ describe('addmovie command', () => {
         interaction.options.getString.mockReturnValue('The Matrix');
         interaction.options.getInteger.mockReturnValue(1999);
 
-        mockGuilds.requireConfig.mockResolvedValue({
+        mockGuilds.get.mockResolvedValue({
             roles: {},
             channels: {},
         });

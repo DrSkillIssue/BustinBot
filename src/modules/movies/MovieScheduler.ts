@@ -58,8 +58,10 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         return interaction.editReply({ content: "Internal error: missing movie repository." });
     }
 
-    const guildConfig = await services.guilds.requireConfig(interaction);
-    if (!guildConfig) return;
+    const guildConfig = await services.guilds.get(interaction.guildId!);
+    if (!guildConfig) {
+        return interaction.editReply({ content: "Guild configuration not found. Please run `/setup` first." });
+    }
 
     const parts = interaction.customId.split('-');
     const selectedDate = `${parts[2]}-${parts[3]}-${parts[4]}`;
