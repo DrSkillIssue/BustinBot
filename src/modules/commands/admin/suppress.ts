@@ -38,7 +38,7 @@ const suppress: Command = {
         await services.guilds.update(guildId, {
             mentionSuppressedUntilMs: untilMs,
             updatedBy: interaction.user.id,
-            updatedAt: new Date() as any,
+            updatedAt: new Date(),
         });
 
         const untilUnix = Math.floor(untilMs / 1000);

@@ -3,10 +3,11 @@ import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IPrizeDrawRepository } from "./interfaces/IPrizeDrawRepo.js";
 import type { PrizeDraw } from "../../models/PrizeDraw.js";
 import { TaskCategory } from "../../models/Task.js";
+import { prizeDrawConverter } from "./converters.js";
 
 export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implements IPrizeDrawRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'prizeDraws');
+        super(db, guildId, 'prizeDraws', prizeDrawConverter);
     }
 
     async createPrizeDraw(draw: PrizeDraw): Promise<void> {
@@ -15,12 +16,12 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
 
     async getAllPrizeDraws(): Promise<PrizeDraw[]> {
         const snapshot = await this.collection.orderBy('start', 'desc').get();
-        return snapshot.docs.map((doc) => doc.data() as PrizeDraw);
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async getPrizeDrawById(id: string): Promise<PrizeDraw | null> {
         const doc = await this.collection.doc(id).get();
-        return doc.exists ? (doc.data() as PrizeDraw) : null;
+        return doc.data() ?? null;
     }
 
     async deletePrizeDraw(drawId: string): Promise<void> {
@@ -48,14 +49,13 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
 
     async addEntry(drawId: string, userId: string): Promise<void> {
         const docRef = this.collection.doc(drawId);
-        const snap = await docRef.get();
+        const data = (await docRef.get()).data();
 
-        if (!snap.exists) {
+        if (!data) {
             console.warn(`[PrizeDrawRepository] Prize draw ${drawId} not found`);
             return;
         }
 
-        const data = snap.data() as PrizeDraw;
         const updatedEntries = Array.from(new Set([...(data.entries ?? []), userId]));
 
         await docRef.update({

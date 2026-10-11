@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { createFirestore } from '../core/database/firestore.js';
-import { Timestamp } from 'firebase-admin/firestore';
 import 'dotenv/config';
 
 const db = createFirestore();
@@ -37,7 +36,7 @@ async function importKeywords(guildId: string, filePath: string) {
         const keyword = cleanUndefined({
             id,
             word,
-            lastUsedAt: Timestamp.fromMillis(0),
+            lastUsedAt: new Date(0),
             timesUsed: 0,
             usageHistory: [],
         });

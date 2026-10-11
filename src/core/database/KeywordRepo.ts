@@ -1,21 +1,22 @@
-import { Timestamp, type Firestore } from "firebase-admin/firestore";
+import type { Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { Keyword } from "../../models/Keyword.js";
 import type { IKeywordRepository } from "./interfaces/IKeywordRepo.js";
+import { keywordConverter } from "./converters.js";
 
 export class KeywordRepository extends GuildScopedRepository<Keyword> implements IKeywordRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'keywords');
+        super(db, guildId, 'keywords', keywordConverter);
     }
 
     async getAllKeywords(): Promise<Keyword[]> {
         const snapshot = await this.collection.get();
-        return snapshot.docs.map((doc) => doc.data() as Keyword);
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async getKeywordById(id: string): Promise<Keyword | null> {
         const doc = await this.collection.doc(id).get();
-        return doc.exists ? (doc.data() as Keyword) : null;
+        return doc.data() ?? null;
     }
 
     async addKeyword(word: string): Promise<void> {
@@ -23,7 +24,7 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
         const newKeyword: Keyword = {
             id,
             word,
-            lastUsedAt: Timestamp.fromMillis(0),
+            lastUsedAt: new Date(0),
             timesUsed: 0,
             usageHistory: [],
         };
@@ -39,7 +40,7 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
         const allKeywords = await this.getAllKeywords();
 
         const sorted = allKeywords.sort(
-            (a, b) => b.lastUsedAt.toMillis() - a.lastUsedAt.toMillis()
+            (a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime()
         );
 
         const eligible = sorted.slice(excludeRecentCount);
@@ -52,17 +53,16 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
 
     async markKeywordUsed(keywordId: string, eventId: string): Promise<void> {
         const docRef = this.collection.doc(keywordId);
-        const doc = await docRef.get();
+        const data = (await docRef.get()).data();
 
-        if (!doc.exists) {
+        if (!data) {
             console.warn(`[KeywordRepo] Keyword ${keywordId} not found`);
             return;
         }
 
-        const data = doc.data() as Keyword;
         const updated: Partial<Keyword> = {
             lastUsedEventId: eventId,
-            lastUsedAt: Timestamp.now(),
+            lastUsedAt: new Date(),
             timesUsed: (data.timesUsed ?? 0) + 1,
             usageHistory: [eventId, ...(data.usageHistory ?? [])].slice(0, 20),
         };
@@ -77,7 +77,7 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
         snapshot.docs.forEach((doc) => {
             batch.update(doc.ref, {
                 timesUsed: 0,
-                lastUsedAt: Timestamp.fromMillis(0),
+                lastUsedAt: new Date(0),
                 lastUsedEventId: "",
                 usageHistory: [],
             });

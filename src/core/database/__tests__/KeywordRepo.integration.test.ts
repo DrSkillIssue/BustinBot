@@ -15,7 +15,7 @@ describe('KeywordRepository', () => {
 
         const keyword = await repo.getKeywordById('new_keyword');
         expect(keyword).toMatchObject({ id: 'new_keyword', word: 'New Keyword!', timesUsed: 0, usageHistory: [] });
-        expect(keyword?.lastUsedAt.toMillis()).toBe(0);
+        expect(keyword?.lastUsedAt.getTime()).toBe(0);
         expect(await repo.getAllKeywords()).toHaveLength(1);
     });
 
@@ -30,7 +30,7 @@ describe('KeywordRepository', () => {
         expect(keyword?.lastUsedEventId).toBe('event-21');
         expect(keyword?.usageHistory).toHaveLength(20);
         expect(keyword?.usageHistory[0]).toBe('event-21');
-        expect(keyword?.lastUsedAt.toMillis()).toBeGreaterThan(0);
+        expect(keyword?.lastUsedAt.getTime()).toBeGreaterThan(0);
     });
 
     test('ignores usage of a keyword that does not exist', async ({ repo }) => {

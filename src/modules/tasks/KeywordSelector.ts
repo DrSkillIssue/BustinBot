@@ -15,9 +15,7 @@ export class KeywordSelector {
 
         // Sort by lastUsedAt descending to exclude recent keywords
         const sorted = [...allKeywords].sort((a, b) => {
-            const timeA = a.lastUsedAt?.toMillis?.() ?? 0;
-            const timeB = b.lastUsedAt?.toMillis?.() ?? 0;
-            return timeB - timeA;
+            return b.lastUsedAt.getTime() - a.lastUsedAt.getTime();
         });
 
         const excludeCount = Math.min(HISTORY_LIMIT, sorted.length);

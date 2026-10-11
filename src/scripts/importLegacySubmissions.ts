@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createFirestore } from "../core/database/firestore.js";
-import { Timestamp } from "firebase-admin/firestore";
+import { newUserStats } from "../models/UserStats.js";
 import "dotenv/config";
 
 const db = createFirestore();
@@ -58,11 +58,7 @@ async function importLegacyStats() {
                 updated++;
                 console.log(`Updated ${userId}: ${submissions}`);
             } else {
-                await docRef.set({
-                    userId,
-                    legacyTasksCompleted: submissions,
-                    createdAt: Timestamp.now(),
-                });
+                await docRef.set({ ...newUserStats(userId, new Date()), legacyTasksCompleted: submissions });
                 created++;
                 console.log(`Created ${userId}: ${submissions}`);
             }

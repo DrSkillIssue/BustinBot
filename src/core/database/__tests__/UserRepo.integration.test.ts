@@ -1,6 +1,7 @@
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { UserRepository } from '../UserRepo.js';
 import { buildUserStats } from '../../../tests/fakes/builders.js';
+import { newUserStats } from '../../../models/UserStats.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 
 const test = base.extend('repo', ({ db }) => new UserRepository(db, 'guild-1'));
@@ -57,5 +58,20 @@ describe('UserRepository', () => {
         await repo.clearAllUsers();
 
         expect(await repo.getAllUsers()).toEqual([]);
+    });
+
+    test('reads a user back exactly as stored', async ({ repo }) => {
+        const user = buildUserStats({ userId: 'user-1', commandsRun: 3, lastActiveAt: new Date('2026-01-07T00:00:00.000Z') });
+        await repo.createUser(user);
+
+        expect(await repo.getUserById('user-1')).toEqual(user);
+    });
+
+    test('reads a member created by the legacy completion import as a full set of stats', async ({ repo, db }) => {
+        // The shape src/scripts/importLegacySubmissions.ts wrote before it stored complete stats
+        const importedAt = new Date('2025-10-29T00:00:00.000Z');
+        await db.doc('guilds/guild-1/userStats/legacy-user').set({ userId: 'legacy-user', legacyTasksCompleted: 12, createdAt: importedAt });
+
+        expect(await repo.getUserById('legacy-user')).toEqual({ ...newUserStats('legacy-user', importedAt), legacyTasksCompleted: 12 });
     });
 });

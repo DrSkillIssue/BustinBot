@@ -26,6 +26,13 @@ function buildBotStats(): BotStats {
 }
 
 describe('BotRepository', () => {
+    test('reads the stats back exactly as stored', async ({ repo }) => {
+        const stats = { ...buildBotStats(), lastUpdatedAt: new Date('2026-01-08T00:00:00.000Z') };
+        await repo.initBotStats(stats);
+
+        expect(await repo.getBotStats()).toEqual(stats);
+    });
+
     test('creates the stats document only when it does not exist', async ({ repo }) => {
         expect(await repo.getBotStats()).toBeNull();
 

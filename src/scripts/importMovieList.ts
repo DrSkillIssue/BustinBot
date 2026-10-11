@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import { createFirestore } from "../core/database/firestore.js";
 import { fetchMovieDetails, fetchMovieDetailsById } from "../modules/movies/MovieService.js";
-import { Timestamp } from "firebase-admin/firestore";
 import "dotenv/config";
 
 const db = createFirestore();
@@ -96,7 +95,7 @@ async function importMovieList() {
                 watched: false,
                 addedBy: userId,
                 addedByDisplay: suggestedby,
-                addedAt: Timestamp.now().toDate(),
+                addedAt: new Date(),
             };
 
             await docRef.set(movieData);

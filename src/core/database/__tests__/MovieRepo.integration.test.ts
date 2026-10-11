@@ -138,3 +138,26 @@ describe('MovieRepository events', () => {
         expect(await repo.getAllEvents()).toEqual([]);
     });
 });
+
+describe('MovieRepository dates', () => {
+    const watched = buildMovie({ id: 'movie-3', watched: true, watchedAt: new Date('2026-01-04T00:00:00.000Z'), selectedAt: new Date('2026-01-02T00:00:00.000Z') });
+
+    test('reads movies, polls and events back exactly as stored, nested dates included', async ({ repo }) => {
+        const poll = buildPoll({ options: [buildMovie(), watched] });
+        const event = buildEvent({ movie: watched, completed: true, completedAt: new Date('2026-01-03T12:00:00.000Z') });
+        await repo.upsertMovie(watched);
+        await repo.createPoll(poll);
+        await repo.createMovieEvent(event);
+
+        expect(await repo.getMovieById('movie-3')).toEqual(watched);
+        expect(await repo.getActivePoll()).toEqual(poll);
+        expect(await repo.getLatestEvent()).toEqual(event);
+        expect((await repo.getLatestEvent())?.movie.watchedAt).toBeInstanceOf(Date);
+    });
+
+    test('reports a stored date that is not a timestamp instead of guessing', async ({ repo, db }) => {
+        await db.doc('guilds/guild-1/movies/movie-1').set({ ...buildMovie(), addedAt: '2026-01-01' });
+
+        await expect(repo.getMovieById('movie-1')).rejects.toThrow('Stored movie.addedAt is string, not a timestamp.');
+    });
+});

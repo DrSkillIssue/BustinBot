@@ -1,6 +1,6 @@
 import { TaskCategory, TaskType, type Task } from "../../models/Task.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
-import type { UserStats } from "../../models/UserStats.js";
+import { newUserStats, type UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import type { Guild } from "../../models/Guild.js";
@@ -40,25 +40,7 @@ export function buildTaskEvent(overrides: Partial<TaskEvent> = {}): TaskEvent {
 }
 
 export function buildUserStats(overrides: Partial<UserStats> = {}): UserStats {
-    return {
-        userId: "user-1",
-        joinedAt: new Date("2026-01-01T00:00:00.000Z"),
-        lastActiveAt: new Date("2026-01-01T00:00:00.000Z"),
-        commandsRun: 0,
-        moviesAdded: 0,
-        moviesWatched: 0,
-        moviesAttended: 0,
-        moviePollsVoted: 0,
-        tasksCompletedBronze: 0,
-        tasksCompletedSilver: 0,
-        tasksCompletedGold: 0,
-        taskStreak: 0,
-        longestTaskStreak: 0,
-        taskPollsVoted: 0,
-        taskPrizesWon: 0,
-        legacyTasksCompleted: 0,
-        ...overrides,
-    };
+    return { ...newUserStats("user-1", new Date("2026-01-01T00:00:00.000Z")), ...overrides };
 }
 
 export function buildTaskSubmission(overrides: Partial<TaskSubmission> = {}): TaskSubmission {

@@ -1,47 +1,22 @@
 import { GuildScopedRepository } from "./CoreRepo.js";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { IUserRepository } from "./interfaces/IUserRepo.js";
-import type { UserStats } from "../../models/UserStats.js";
+import { newUserStats, type UserStats } from "../../models/UserStats.js";
+import { userStatsConverter } from "./converters.js";
 
 export class UserRepository extends GuildScopedRepository<UserStats> implements IUserRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'userStats');
-    }
-
-    private createDefaultUserStats(userId: string): UserStats {
-        return {
-            userId,
-            joinedAt: new Date(),
-            lastActiveAt: new Date(),
-            commandsRun: 0,
-            moviesAdded: 0,
-            moviesWatched: 0,
-            moviesAttended: 0,
-            moviePollsVoted: 0,
-            tasksCompletedBronze: 0,
-            tasksCompletedSilver: 0,
-            tasksCompletedGold: 0,
-            taskStreak: 0,
-            longestTaskStreak: 0,
-            taskPollsVoted: 0,
-            taskPrizesWon: 0,
-            taskChampionFirsts: 0,
-            taskChampionSeconds: 0,
-            taskChampionThirds: 0,
-            legacyTasksCompleted: 0,
-            totalXP: 0,
-            leaderboardRank: 0,
-        };
+        super(db, guildId, 'userStats', userStatsConverter);
     }
 
     async getAllUsers(): Promise<UserStats[]> {
         const snapshot = await this.collection.get();
-        return snapshot.docs.map((doc) => doc.data() as UserStats);
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async getUserById(userId: string): Promise<UserStats | null> {
         const doc = await this.collection.doc(userId).get();
-        return doc.exists ? (doc.data() as UserStats) : null;
+        return doc.data() ?? null;
     }
 
     async createUser(user: UserStats): Promise<void> {
@@ -76,7 +51,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
             const doc = await transaction.get(docRef);
 
             if (!doc.exists) {
-                transaction.set(docRef, { ...this.createDefaultUserStats(userId), [field]: amount });
+                transaction.set(docRef, { ...newUserStats(userId, new Date()), [field]: amount });
                 return;
             }
 
@@ -97,9 +72,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         const doc = await docRef.get();
 
         if (!doc.exists) {
-            const newStats = this.createDefaultUserStats(userId);
-            (newStats as any)[toField] = 1;
-            await docRef.set(newStats);
+            await docRef.set({ ...newUserStats(userId, new Date()), [toField]: 1 });
             return;
         }
 

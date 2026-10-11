@@ -64,4 +64,13 @@ describe('GuildRepository', () => {
         vi.stubEnv('BOT_MODE', 'production');
         expect(await repo.getGuild(IDS.guild)).toMatchObject({ timezone: 'UTC' });
     });
+
+    test('reads the time of the last change back as a date', async ({ repo }) => {
+        await repo.initGuild(IDS.guild, buildGuild());
+
+        await repo.updateGuild(IDS.guild, { timezone: 'Australia/Melbourne' });
+
+        expect((await repo.getGuild(IDS.guild))?.updatedAt).toBeInstanceOf(Date);
+    });
 });
+

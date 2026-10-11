@@ -152,3 +152,22 @@ describe('TaskRepository feedback', () => {
         expect((await repo.getFeedbackForTask('PVM001', 'week-2')).map((f) => f.id)).toEqual(['f2']);
     });
 });
+
+describe('TaskRepository dates', () => {
+    test('reads task events, polls and submissions back exactly as stored', async ({ repo }) => {
+        const event = buildTaskEvent();
+        const poll = buildTaskPoll();
+        const submission = buildTaskSubmission({
+            submittedAt: new Date('2026-01-06T01:00:00.000Z'),
+            reviewedAt: new Date('2026-01-06T02:00:00.000Z'),
+        });
+        await repo.createTaskEvent(event);
+        await repo.createTaskPoll(poll);
+        await repo.createSubmission(submission);
+
+        expect(await repo.getTaskEventById(event.id)).toEqual(event);
+        expect(await repo.getTaskPollById(poll.id)).toEqual(poll);
+        expect(await repo.getSubmissionById(submission.id)).toEqual(submission);
+    });
+});
+
