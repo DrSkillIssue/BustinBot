@@ -3,9 +3,9 @@ import { GuildRepository } from "../database/GuildRepo.js";
 import { initTaskScheduler } from "../../modules/tasks/TaskScheduler.js";
 
 vi.mock("../database/GuildRepo", () => ({
-  GuildRepository: vi.fn().mockImplementation(() => ({
-    getAllGuilds: vi.fn(),
-  })),
+  GuildRepository: vi.fn().mockImplementation(function () {
+    return { getAllGuilds: vi.fn() };
+  }),
 }));
 
 vi.mock("../../../src/modules/tasks/TaskScheduler", () => ({

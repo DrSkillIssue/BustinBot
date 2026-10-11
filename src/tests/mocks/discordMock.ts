@@ -9,4 +9,4 @@ export const mockEmbedInstance = {
     setTimestamp: vi.fn().mockReturnThis(),
 };
 
-export const EmbedBuilder = vi.fn().mockImplementation(() => mockEmbedInstance);
+export const EmbedBuilder = vi.fn().mockImplementation(function () { return mockEmbedInstance; });

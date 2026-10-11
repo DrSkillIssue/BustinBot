@@ -22,12 +22,14 @@ vi.mock("../GuildRepo", () => {
   const getAllGuilds = vi.fn();
 
   return {
-    GuildRepository: vi.fn().mockImplementation(() => ({
-      getGuild,
-      updateGuild,
-      updateToggle,
-      getAllGuilds,
-    })),
+    GuildRepository: vi.fn().mockImplementation(function () {
+      return {
+        getGuild,
+        updateGuild,
+        updateToggle,
+        getAllGuilds,
+      };
+    }),
   };
 });
 

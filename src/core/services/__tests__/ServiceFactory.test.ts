@@ -8,13 +8,13 @@ const movieRepoInstance = { name: 'movieRepo' };
 const guildRepoInstance = { name: 'guildRepo' };
 const userRepoInstance = { name: 'userRepo' };
 
-const BotRepository = vi.fn(() => botRepoInstance);
-const TaskRepository = vi.fn(() => taskRepoInstance);
-const PrizeDrawRepository = vi.fn(() => prizeRepoInstance);
-const KeywordRepository = vi.fn(() => keywordRepoInstance);
-const MovieRepository = vi.fn(() => movieRepoInstance);
-const GuildRepository = vi.fn(() => guildRepoInstance);
-const UserRepository = vi.fn(() => userRepoInstance);
+const BotRepository = vi.fn(function () { return botRepoInstance; });
+const TaskRepository = vi.fn(function () { return taskRepoInstance; });
+const PrizeDrawRepository = vi.fn(function () { return prizeRepoInstance; });
+const KeywordRepository = vi.fn(function () { return keywordRepoInstance; });
+const MovieRepository = vi.fn(function () { return movieRepoInstance; });
+const GuildRepository = vi.fn(function () { return guildRepoInstance; });
+const UserRepository = vi.fn(function () { return userRepoInstance; });
 
 vi.mock('../../database/BotRepo', () => ({ BotRepository }));
 vi.mock('../../database/TaskRepo', () => ({ TaskRepository }));
@@ -25,19 +25,19 @@ vi.mock('../../database/GuildRepo', () => ({ GuildRepository }));
 vi.mock('core/database/UserRepo', () => ({ UserRepository }));
 
 const botStatsInit = vi.fn().mockResolvedValue(undefined);
-const BotStatsService = vi.fn(() => ({ init: botStatsInit }));
+const BotStatsService = vi.fn(function () { return { init: botStatsInit }; });
 vi.mock('../BotStatsService', () => ({ BotStatsService }));
 
-const TaskService = vi.fn((repo: unknown) => ({ kind: 'TaskService', repo }));
+const TaskService = vi.fn(function (repo: unknown) { return { kind: 'TaskService', repo }; });
 vi.mock('../../../modules/tasks/TaskService', () => ({ TaskService }));
 
-const TaskEventStore = vi.fn((repo: unknown) => ({ kind: 'TaskEventStore', repo }));
+const TaskEventStore = vi.fn(function (repo: unknown) { return { kind: 'TaskEventStore', repo }; });
 vi.mock('../../../modules/tasks/TaskEventStore', () => ({ TaskEventStore }));
 
-const KeywordSelector = vi.fn((repo: unknown) => ({ kind: 'KeywordSelector', repo }));
+const KeywordSelector = vi.fn(function (repo: unknown) { return { kind: 'KeywordSelector', repo }; });
 vi.mock('../../../modules/tasks/KeywordSelector', () => ({ KeywordSelector }));
 
-const GuildService = vi.fn((repo: unknown) => ({ kind: 'GuildService', repo }));
+const GuildService = vi.fn(function (repo: unknown) { return { kind: 'GuildService', repo }; });
 vi.mock('../GuildService', () => ({ GuildService }));
 
 describe('createServiceContainer', () => {

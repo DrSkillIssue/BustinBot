@@ -34,8 +34,8 @@ describe('Bot startup smoke test', () => {
                 setToken: vi.fn(() => restInstance),
             };
             return {
-                Client: vi.fn(() => mockClient),
-                REST: vi.fn(() => restInstance),
+                Client: vi.fn(function () { return mockClient; }),
+                REST: vi.fn(function () { return restInstance; }),
                 Routes: { applicationGuildCommands: vi.fn() },
                 GatewayIntentBits: { Guilds: 1, GuildMessages: 2, MessageContent: 4, DirectMessages: 8 },
                 Partials: { Channel: 1 },
