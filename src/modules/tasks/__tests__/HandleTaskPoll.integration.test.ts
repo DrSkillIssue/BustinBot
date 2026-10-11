@@ -60,6 +60,8 @@ describe("posting the weekly task polls", () => {
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
             const stored = await services.repos.taskRepo!.getActiveTaskPollByCategory(category);
             expect(stored?.options).toHaveLength(3);
+            // Votes find their poll by the message they were cast on
+            expect(stored).toMatchObject({ isActive: true, channelId: IDS.channel, id: stored?.messageId });
             expect(stored!.endsAt.getTime() - stored!.createdAt.getTime()).toBe(24 * HOUR);
         }
     });
