@@ -3,8 +3,6 @@ import path from 'path';
 import { REST } from 'discord.js';
 import { loadCommands } from '../core/services/CommandService.js';
 import { registerGlobalCommands } from '../utils/registerCommands.js';
-import { getDirname } from '../utils/PathUtils.js';
-const dirname = getDirname(import.meta.url);
 
 // Dev mode registers against the dev application when one is configured; otherwise the live application
 const clientId = (process.env.BOT_MODE === 'dev' && process.env.DISCORD_CLIENT_ID_DEV)
@@ -20,7 +18,7 @@ try {
     }
 
     console.log(`[SlashRegister] Mode=${process.env.BOT_MODE ?? 'unset'} | Client ID=${clientId}`);
-    const commands = await loadCommands(path.join(dirname, '..', 'modules', 'commands'));
+    const commands = await loadCommands(path.join(import.meta.dirname, '..', 'modules', 'commands'));
     await registerGlobalCommands(new REST().setToken(token), clientId, commands, process.env.DISCORD_GUILD_ID ?? null);
     console.log('✅ Slash command registration complete.');
     process.exit(0);

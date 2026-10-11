@@ -72,7 +72,8 @@ const announce: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const announcementsPath = path.resolve(process.cwd(), "data/announcements.json");
+        // data/ sits beside src/ and dist/, so the path is the same from either
+        const announcementsPath = path.join(import.meta.dirname, "../../../../data/announcements.json");
         if (!fs.existsSync(announcementsPath)) {
             await interaction.editReply({
                 content: "announcements.json not found.",

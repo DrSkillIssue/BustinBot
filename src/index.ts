@@ -4,14 +4,12 @@ import path from 'path';
 import { loadCommands } from './core/services/CommandService.js';
 import { createFirestore } from './core/database/firestore.js';
 import { startBot } from './bot.js';
-import { getDirname } from './utils/PathUtils.js';
-const dirname = getDirname(import.meta.url);
 const isDryRun = process.argv.includes('--dryrun') || process.argv.includes('--dry-run');
 
 // Load environment variables (only for global secrets)
 config();
 
-const commandsDir = path.join(dirname, 'modules', 'commands');
+const commandsDir = path.join(import.meta.dirname, 'modules', 'commands');
 const isDevMode = process.env.BOT_MODE === 'dev';
 
 function resolveCommandSync(): { token: string; clientId: string } | null {

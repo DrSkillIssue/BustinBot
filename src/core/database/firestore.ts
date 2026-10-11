@@ -2,7 +2,6 @@ import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admi
 import { getFirestore, type Firestore, type Settings } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
-import { getDirname } from '../../utils/PathUtils.js';
 
 // Optional model fields are often undefined (e.g. TMDb metadata), which Firestore otherwise rejects on write
 export const FIRESTORE_SETTINGS: Settings = { ignoreUndefinedProperties: true };
@@ -34,8 +33,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
     }
 
     // Fallback to bundled config for local scripts.
-    const dirname = getDirname(import.meta.url);
-    const defaultPath = path.resolve(dirname, '../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json');
+    const defaultPath = path.resolve(import.meta.dirname, '../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json');
     if (fs.existsSync(defaultPath)) {
         const fileContents = fs.readFileSync(defaultPath, 'utf8');
         try {

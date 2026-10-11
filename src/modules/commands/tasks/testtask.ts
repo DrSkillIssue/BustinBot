@@ -23,7 +23,8 @@ const testtask: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const filePath = path.resolve(process.cwd(), 'data/tasks.json');
+        // data/ sits beside src/ and dist/, so the path is the same from either
+        const filePath = path.join(import.meta.dirname, '../../../../data/tasks.json');
         const taskData: Task[] = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
         if (!taskData.length) {
