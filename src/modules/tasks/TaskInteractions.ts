@@ -1,15 +1,13 @@
-import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import { ButtonInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { SubmissionStatus, TIERS, type SubmissionTier, type TaskSubmission } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName, getTierLabel } from './TaskEmbeds.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 import { raisedTier, type ReviewResult } from './TaskService.js';
 
-const MAX_SCREENSHOTS = 10;
-
 // STEP 1: "Submit Screenshot" button clicked on task embed
 export async function handleSubmitButton(interaction: ButtonInteraction, services: ServiceContainer) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const parts = interaction.customId.split('-');
     const taskEventId = parts.slice(2).join('-');
@@ -34,9 +32,8 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     }
 
     const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-    const userId = interaction.user.id;
 
-    services.tasks.setPendingTask(userId, taskEventId);
+    await services.tasks.startSubmission(interaction.user.id, taskEventId);
 
     try {
         await interaction.user.send(
@@ -46,91 +43,57 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
             content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
         });
     } catch {
-        services.tasks.consumePendingTask(userId);
         await interaction.editReply({
             content: "I couldn't send you a DM. Please enable direct messages from server members and try again."
         });
     }
 }
 
-// STEP 2: User confirms task from select menu
-export async function handleTaskSelect(interaction: StringSelectMenuInteraction, services: ServiceContainer) {
-    const [, , userId] = interaction.customId.split('-');
+// STEP 2: Member sends screenshots + notes in DM. Bots are members of several guilds, so the submission goes to the
+// guild where the member last clicked Submit.
+export async function handleDirectMessage(message: Message, client: Client, guildServices: ServiceContainer[]) {
+    if (message.author.bot) return;
 
-    if (!userId) {
-        await interaction.reply({
-            content: "User ID missing from selection.",
-            flags: 1 << 6
-        });
-        return;
-    }
+    const drafts = await Promise.all(guildServices.map(async (services) => ({
+        services,
+        draft: await services.tasks.getSubmissionDraft(message.author.id),
+    })));
+    const latest = drafts
+        .flatMap(({ services, draft }) => (draft ? [{ services, draft }] : []))
+        .sort((a, b) => b.draft.createdAt.getTime() - a.draft.createdAt.getTime())[0];
+    if (!latest) return;
+    const { services, draft } = latest;
 
-    const selectedTaskEventId = interaction.values[0];
-    if (!selectedTaskEventId) {
-        await interaction.reply({
-            content: "No task selected.",
-            flags: 1 << 6
-        });
-        return;
-    }
-
-    services.tasks.setPendingTask(userId, selectedTaskEventId);
-    try {
-        const submission = await services.tasks.createSubmission(userId, selectedTaskEventId);
-
-        await interaction.reply({
-            content: `Thank you for confirming. Now upload your screenshot for **${submission.taskName ?? 'your task'}** and include any notes/comments in the same message.`,
-            flags: 64
-        });
-    } catch (error) {
-        console.error('[TaskSelect] Failed to create submission:', error);
-        await interaction.reply({
-            content: "There was a problem creating your submission. Please try again or contact a Task Admin.",
-            flags: 64
-        });
-    }
-}
-
-// STEP 3: User sends screenshot + notes in DM
-export async function handleDirectMessage(message: Message, client: Client, services: ServiceContainer) {
-    if (message.author.bot || message.channel.type !== 1) return;
-
-    const taskEventId = services.tasks.consumePendingTask(message.author.id);
-    const pending = taskEventId ? await services.tasks.getPendingSubmission(message.author.id, taskEventId) : undefined;
-    if (!pending && !taskEventId) return;
-
-    let submission = pending;
-    if (!submission) {
-        try {
-            submission = await services.tasks.createSubmission(message.author.id, taskEventId!);
-        } catch (error) {
-            console.error('[TaskDM] Failed to create submission from DM:', error);
-            await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
-            return;
-        }
-    }
-
-    if (!submission) return;
-
-    const attachments = message.attachments;
-
-    const imageUrls: string[] = [];
-    attachments.forEach((attachment) => {
-        if (attachment.contentType?.startsWith("image/")) {
-            imageUrls.push(attachment.url);
-        }
-    });
-
+    const imageUrls = message.attachments
+        .filter((attachment) => attachment.contentType?.startsWith("image/"))
+        .map((attachment) => attachment.url);
     if (imageUrls.length === 0) {
         await message.reply("Please attach at least one image for your submission.");
         return;
     }
 
-    const notes = message.content.trim() || undefined;
-
-    const limitedImages = imageUrls.slice(0, MAX_SCREENSHOTS);
-    await services.tasks.completeSubmission(client, submission.id, limitedImages, services, notes);
-    await message.reply(`✅ Submission for **${submission.taskName ?? 'your task'}** received with ${limitedImages.length} screenshot${limitedImages.length === 1 ? '' : 's'} and sent for review!`);
+    try {
+        const outcome = await services.tasks.submit(client, draft, imageUrls, message.content.trim() || undefined, services);
+        switch (outcome.result) {
+            case 'submitted': {
+                const { taskName, screenshotUrls } = outcome.submission;
+                await message.reply(`✅ Submission for **${taskName ?? 'your task'}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? '' : 's'} and sent for review!`);
+                break;
+            }
+            case 'taskNotFound':
+                await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
+                break;
+            case 'adminsUnreachable':
+                await message.reply("I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.");
+                break;
+            case 'alreadySubmitted':
+                await message.reply("I've already received your submission for this task. To send another, click Submit on the task again.");
+                break;
+        }
+    } catch (err) {
+        console.error('[TaskDM] Failed to store submission:', err);
+        await message.reply("Something went wrong saving your submission. Please send it again.");
+    }
 }
 
 function alreadyReviewedMessage(submission: TaskSubmission): string {
@@ -146,7 +109,7 @@ function formatTier(tier: SubmissionTier): string {
     return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
-// STEP 4: Admin clicks Approve/Reject
+// STEP 3: Admin clicks Approve/Reject
 export async function handleAdminButton(interaction: ButtonInteraction, services: ServiceContainer) {
     const customId = interaction.customId;
 
@@ -317,7 +280,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
     });
 }
 
-// STEP 5: Modal submit for rejection reason
+// STEP 4: Modal submit for rejection reason
 export async function handleRejectionModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
     // Acknowledge the modal submission ephemerally
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });

@@ -51,9 +51,6 @@ export interface TaskSubmission {
 
     // Optional storage of screenshot message ID in admin verification channel
     screenshotMessage?: string;
-
-    // Flag if submission is a duplicate of one already approved
-    alreadyApproved?: boolean;
 }
 
 // The tiers a submission can be approved at, lowest first
@@ -72,6 +69,14 @@ export function tierRank(tier: SubmissionTier | null): number {
 // The highest tier among a member's submissions for a task, if any was approved
 export function highestTier(statuses: SubmissionStatus[]): SubmissionTier | null {
     return statuses.filter(isTier).reduce<SubmissionTier | null>((best, tier) => (tierRank(tier) > tierRank(best) ? tier : best), null);
+}
+
+// A member who clicked Submit on a task and is expected to send their screenshots for it in DMs. Each member has one:
+// clicking Submit on another task replaces it.
+export interface TaskSubmissionDraft {
+    userId: string;
+    taskEventId: string;
+    createdAt: Date;
 }
 
 // An admin's decision on a pending submission

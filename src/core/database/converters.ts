@@ -11,7 +11,7 @@ import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { TaskFeedback } from "../../models/TaskFeedback.js";
 import type { TaskLeaderboard } from "../../models/TaskLeaderboard.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
-import type { TaskSubmission } from "../../models/TaskSubmission.js";
+import type { TaskSubmission, TaskSubmissionDraft } from "../../models/TaskSubmission.js";
 import { newUserStats, type UserStats } from "../../models/UserStats.js";
 
 // One converter per collection, given to Firestore with withConverter
@@ -97,6 +97,11 @@ export const taskSubmissionConverter = converter<TaskSubmission, Stored<TaskSubm
         ...(reviewedAt !== undefined ? { reviewedAt: date(reviewedAt, "taskSubmission.reviewedAt") } : {}),
     };
 });
+
+export const taskSubmissionDraftConverter = converter<TaskSubmissionDraft, Stored<TaskSubmissionDraft>>((stored) => ({
+    ...stored,
+    createdAt: date(stored.createdAt, "taskSubmissionDraft.createdAt"),
+}));
 
 export const taskFeedbackConverter = converter<TaskFeedback>((stored) => stored);
 

@@ -100,8 +100,60 @@ describe('TaskRepository submissions', () => {
         expect((await repo.getSubmissionsForTask('week-1')).map((s) => s.id).sort()).toEqual(['a', 'b']);
         expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id).sort()).toEqual(['a', 'c']);
     });
+
+    test('gives every new submission its own id', async ({ repo }) => {
+        const ids = Array.from({ length: 50 }, () => repo.newSubmissionId());
+
+        expect(new Set(ids).size).toBe(50);
+    });
+
+    test('finds the highest tier a member holds for a task', async ({ repo }) => {
+        await repo.createSubmission(buildTaskSubmission({ id: 'silver', status: SubmissionStatus.Silver }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'bronze', status: SubmissionStatus.Bronze }));
+        await repo.createSubmission(buildTaskSubmission({ id: 'rejected', status: SubmissionStatus.Rejected }));
+
+        expect(await repo.getHeldTier('user-1', 'PVM001-20260105')).toBe(SubmissionStatus.Silver);
+        expect(await repo.getHeldTier('user-2', 'PVM001-20260105')).toBeNull();
+    });
 });
 
+describe('TaskRepository submission drafts', () => {
+    const draft = (taskEventId: string, createdAt = new Date('2026-01-06T00:00:00.000Z')) => ({ userId: 'user-1', taskEventId, createdAt });
+
+    test('keeps one draft per member, the latest replacing the one before', async ({ repo }) => {
+        await repo.saveSubmissionDraft(draft('week-1'));
+        await repo.saveSubmissionDraft(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
+
+        expect(await repo.getSubmissionDraft('user-1')).toEqual(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
+        expect(await repo.getSubmissionDraft('user-2')).toBeNull();
+    });
+
+    test('turns a draft into a submission once', async ({ repo }) => {
+        await repo.saveSubmissionDraft(draft('PVM001-20260105'));
+
+        expect(await repo.submitDraft(buildTaskSubmission({ id: 'first' }))).toBe(true);
+        expect(await repo.submitDraft(buildTaskSubmission({ id: 'second' }))).toBe(false);
+
+        expect(await repo.getSubmissionDraft('user-1')).toBeNull();
+        expect((await repo.getSubmissionsByUser('user-1')).map((s) => s.id)).toEqual(['first']);
+    });
+
+    test('turns a draft into one submission when two arrive at the same moment', async ({ repo }) => {
+        await repo.saveSubmissionDraft(draft('PVM001-20260105'));
+
+        const outcomes = await Promise.all([repo.submitDraft(buildTaskSubmission({ id: 'a' })), repo.submitDraft(buildTaskSubmission({ id: 'b' }))]);
+
+        expect(outcomes.sort()).toEqual([false, true]);
+        expect(await repo.getSubmissionsByUser('user-1')).toHaveLength(1);
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+
+    test('refuses a submission for another task than the draft is for', async ({ repo }) => {
+        await repo.saveSubmissionDraft(draft('week-2'));
+
+        expect(await repo.submitDraft(buildTaskSubmission({ taskEventId: 'week-1' }))).toBe(false);
+        expect(await repo.getSubmissionDraft('user-1')).not.toBeNull();
+    });
+});
 
 describe('TaskRepository reviews', () => {
     const approve = (submissionId: string, decision: SubmissionTier) => ({ submissionId, reviewedBy: 'admin-1', decision });
@@ -213,7 +265,7 @@ describe('TaskRepository feedback', () => {
 });
 
 describe('TaskRepository dates', () => {
-    test('reads task events, polls and submissions back exactly as stored', async ({ repo }) => {
+    test('reads task events, polls, submissions and drafts back exactly as stored', async ({ repo }) => {
         const event = buildTaskEvent();
         const poll = buildTaskPoll();
         const submission = buildTaskSubmission({
@@ -223,6 +275,10 @@ describe('TaskRepository dates', () => {
         await repo.createTaskEvent(event);
         await repo.createTaskPoll(poll);
         await repo.createSubmission(submission);
+        const draft = { userId: 'user-1', taskEventId: event.id, createdAt: new Date('2026-01-06T00:30:00.000Z') };
+        await repo.saveSubmissionDraft(draft);
+
+        expect(await repo.getSubmissionDraft('user-1')).toEqual(draft);
         expect(await repo.getTaskEventById(event.id)).toEqual(event);
         expect(await repo.getTaskPollById(poll.id)).toEqual(poll);
         expect(await repo.getSubmissionById(submission.id)).toEqual(submission);

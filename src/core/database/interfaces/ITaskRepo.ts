@@ -1,6 +1,6 @@
 import type { Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
-import type { SubmissionReview, SubmissionReviewOutcome, TaskSubmission } from "../../../models/TaskSubmission.js";
+import type { SubmissionReview, SubmissionReviewOutcome, SubmissionTier, TaskSubmission, TaskSubmissionDraft } from "../../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
 import type { TaskFeedback, TaskFeedbackOutcome } from "../../../models/TaskFeedback.js";
 import type { TaskCategory } from "../../../models/Task.js";
@@ -28,10 +28,16 @@ export interface ITaskRepository {
     updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void>;
 
     // Submissions
+    newSubmissionId(): string;
     createSubmission(submission: TaskSubmission): Promise<void>;
     getSubmissionById(submissionId: string): Promise<TaskSubmission | null>;
     getSubmissionsForTask(taskId: string): Promise<TaskSubmission[]>;
     getSubmissionsByUser(userId: string): Promise<TaskSubmission[]>;
+    getHeldTier(userId: string, taskEventId: string): Promise<SubmissionTier | null>;
+    saveSubmissionDraft(draft: TaskSubmissionDraft): Promise<void>;
+    getSubmissionDraft(userId: string): Promise<TaskSubmissionDraft | null>;
+    deleteSubmissionDraft(userId: string): Promise<void>;
+    submitDraft(submission: TaskSubmission): Promise<boolean>;
     reviewSubmission(review: SubmissionReview): Promise<SubmissionReviewOutcome>;
 
     // Feedback

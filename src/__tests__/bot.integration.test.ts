@@ -5,9 +5,10 @@ import { promisify } from "node:util";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
 import { startBot } from "../bot.js";
 import { DiscordHarness } from "../tests/discord/harness.js";
-import { IDS, apiGuild, apiTextChannel, chatInputInteraction } from "../tests/discord/payloads.js";
+import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
-import { buildGuild } from "../tests/fakes/builders.js";
+import { TaskRepository } from "../core/database/TaskRepo.js";
+import { buildGuild, buildTaskEvent } from "../tests/fakes/builders.js";
 import { getNextPollDate } from "../modules/tasks/TaskScheduler.js";
 
 const commandsDir = path.join(import.meta.dirname, "../modules/commands");
@@ -104,6 +105,35 @@ describe("startBot", () => {
 
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Bustin makes me feel good!" })]);
         expect(await services.repos.userRepo!.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
+    });
+
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, services }) => {
+        const otherGuild = "100000000000000011";
+        const otherChannel = "100000000000000021";
+        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { taskVerification: otherChannel } }));
+        const otherTasks = new TaskRepository(db, otherGuild);
+        const event = buildTaskEvent({ endTime: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+        await otherTasks.createTaskEvent(event);
+        // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
+        await services.repos.taskRepo!.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: new Date(Date.now() - 60_000) });
+        await otherTasks.saveSubmissionDraft({ userId: IDS.user, taskEventId: event.id, createdAt: new Date() });
+        const discord = DiscordHarness.create();
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(otherChannel);
+        discord.acceptMessages(IDS.dm);
+
+        const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
+        await discord.connect();
+        await discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
+        await discord.sendMessage(directMessage("", { attachments: [screenshot] }));
+        // Shutting down lets the DM being handled finish
+        await shutdown();
+
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: expect.stringContaining("received with 1 screenshot and sent for review!") })]);
+        expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([expect.objectContaining({ taskEventId: event.id })]);
+        expect(discord.messagesSentTo(otherChannel)).toHaveLength(2);
+        expect(await services.repos.taskRepo!.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 
     test("refuses to start when no guild is configured and no fallback is given", async ({ db, onTestFinished }) => {

@@ -7,9 +7,10 @@ import {
     type SubmissionReviewOutcome,
     type SubmissionTier,
     type TaskSubmission,
+    type TaskSubmissionDraft,
 } from '../../models/TaskSubmission.js';
 import type { UserStats } from '../../models/UserStats.js';
-import { archiveSubmission, notifyUser, postToAdminChannel, removeReviewPost } from './SubmissionActions.js';
+import { MAX_SCREENSHOTS, archiveSubmission, notifyUser, postToAdminChannel, removeReviewPost, type ReviewPost } from './SubmissionActions.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
@@ -18,13 +19,18 @@ import { ensureTaskLeaderboardsInitialized, getStatusPoints, incrementLifetimePo
 import { applyTaskMilestoneRoles } from './TaskMilestones.js';
 import { refreshTaskEventMessage } from './HandleTaskStart.js';
 
-const MAX_SCREENSHOTS = 10;
-
 const TIER_STATS: Record<SubmissionTier, keyof UserStats> = {
     [SubmissionStatus.Bronze]: 'tasksCompletedBronze',
     [SubmissionStatus.Silver]: 'tasksCompletedSilver',
     [SubmissionStatus.Gold]: 'tasksCompletedGold',
 };
+
+// What sending screenshots for a draft did
+export type SubmitOutcome =
+    | { result: 'submitted'; submission: TaskSubmission }
+    | { result: 'taskNotFound' }
+    | { result: 'adminsUnreachable' }
+    | { result: 'alreadySubmitted' };
 
 // What reviewing a submission did. A reviewed submission also says whether it was archived.
 export type ReviewResult =
@@ -39,105 +45,68 @@ export function raisedTier(outcome: SubmissionReviewOutcome): SubmissionTier | n
 }
 
 export class TaskService {
-    private pendingTaskMap = new Map<string, string>();
     constructor(private repo: ITaskRepository) { }
 
     get repository() {
         return this.repo;
     }
 
-    async createSubmission(userId: string, taskEventId: string): Promise<TaskSubmission> {
-        // Check if this user already has an approved submission for this task
-        const existing = await this.repo.getSubmissionsByUser(userId);
-        const hasApproved = existing.some(
-            s => s.userId === userId && s.taskEventId === taskEventId && s.status === SubmissionStatus.Approved
-        );
+    // Remembers, in Firestore so it survives restarts, that a member is about to DM their screenshots for a task
+    async startSubmission(userId: string, taskEventId: string): Promise<TaskSubmissionDraft> {
+        const draft: TaskSubmissionDraft = { userId, taskEventId, createdAt: new Date() };
+        await this.repo.saveSubmissionDraft(draft);
+        return draft;
+    }
 
-        const taskEvent = await this.repo.getTaskEventById(taskEventId);
-        if (!taskEvent) {
-            throw new Error(`Task event ${taskEventId} not found`);
+    async getSubmissionDraft(userId: string): Promise<TaskSubmissionDraft | null> {
+        return this.repo.getSubmissionDraft(userId);
+    }
+
+    // Turns a member's draft and the screenshots they sent into a submission for the task admins to review. It is
+    // posted first and stored after, so a stored submission is always one the admins can see; if storing fails, the
+    // post is removed and the draft kept for the member to try again.
+    async submit(client: Client, draft: TaskSubmissionDraft, screenshotUrls: string[], notes: string | undefined, services: ServiceContainer): Promise<SubmitOutcome> {
+        const event = await this.repo.getTaskEventById(draft.taskEventId);
+        if (!event) {
+            await this.repo.deleteSubmissionDraft(draft.userId);
+            return { result: 'taskNotFound' };
         }
-        const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
+        const now = new Date();
         const submission: TaskSubmission = {
-            id: Date.now().toString(),
-            userId,
-            taskEventId,
-            screenshotUrls: [],
+            id: this.repo.newSubmissionId(),
+            userId: draft.userId,
+            taskEventId: draft.taskEventId,
+            taskName: getTaskDisplayName(event.task, event.selectedAmount),
+            screenshotUrls: screenshotUrls.slice(0, MAX_SCREENSHOTS),
+            ...(notes ? { notes } : {}),
             status: SubmissionStatus.Pending,
-            createdAt: new Date(),
-            alreadyApproved: hasApproved,
-            taskName,
+            createdAt: now,
+            submittedAt: now,
         };
+        const heldTier = await this.repo.getHeldTier(draft.userId, draft.taskEventId);
 
-        await this.repo.createSubmission(submission);
-        return submission;
-    }
-
-    async completeSubmission(client: Client, submissionId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<TaskSubmission | null> {
-        const submission = await this.repo.getSubmissionById(submissionId);
-        if (!submission) return null;
-
-        submission.screenshotUrls = screenshotUrls.slice(0, MAX_SCREENSHOTS);
-        submission.submittedAt = new Date();
-
-        if (notes !== undefined) {
-            submission.notes = notes;
-        } else {
-            delete submission.notes;
+        let posted: ReviewPost;
+        try {
+            posted = await postToAdminChannel(client, submission, event, heldTier, services);
+        } catch (err) {
+            console.warn(`[TaskService] Couldn't post submission ${submission.id} for review:`, err);
+            return { result: 'adminsUnreachable' };
         }
 
-        if (!submission.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(submission.taskEventId);
-            if (taskEvent) {
-                submission.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-            }
+        const stored: TaskSubmission = { ...submission, ...posted };
+        let submitted: boolean;
+        try {
+            submitted = await this.repo.submitDraft(stored);
+        } catch (err) {
+            await removeReviewPost(client, stored, services);
+            throw err;
         }
-
-        await postToAdminChannel(client, submission, services);
-        await this.repo.createSubmission(submission);
-        return submission;
-    }
-
-    async getPendingSubmission(
-        userId: string,
-        taskEventId?: string
-    ): Promise<TaskSubmission | undefined> {
-        const submissions = await this.repo.getSubmissionsByUser(userId);
-        const pending = submissions.find(
-            (s) =>
-                s.userId === userId &&
-                s.status === SubmissionStatus.Pending &&
-                (!s.screenshotUrls || s.screenshotUrls.length === 0) &&
-                (taskEventId ? s.taskEventId === taskEventId : true)
-        );
-        if (pending && !pending.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(pending.taskEventId);
-            if (taskEvent) {
-                pending.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-                await this.repo.createSubmission(pending);
-            }
+        if (!submitted) {
+            await removeReviewPost(client, stored, services);
+            return { result: 'alreadySubmitted' };
         }
-        return pending;
-    }
-
-
-    setPendingTask(userId: string, taskEventId: string) {
-        this.pendingTaskMap.set(userId, taskEventId);
-    }
-
-    hasPendingTask(userId: string): boolean {
-        return this.pendingTaskMap.has(userId);
-    }
-
-    peekPendingTask(userId: string): string | undefined {
-        return this.pendingTaskMap.get(userId);
-    }
-
-    consumePendingTask(userId: string): string | undefined {
-        const taskId = this.pendingTaskMap.get(userId);
-        this.pendingTaskMap.delete(userId);
-        return taskId;
+        return { result: 'submitted', submission: stored };
     }
 
     // Records an admin's decision on a submission, then what follows from it: the member's stats, points and roles

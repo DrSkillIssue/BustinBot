@@ -162,28 +162,28 @@ export function getTierLabel(tier: SubmissionTier): string {
 }
 
 // Embed shown in task verification channel when a submission is received
-export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent) {
-    const submissionTime = new Date();
+export function buildSubmissionEmbed(submission: TaskSubmission, event: TaskEvent, heldTier: SubmissionTier | null) {
+    const submittedAt = submission.submittedAt ?? submission.createdAt;
     const eventEndTime = event.endTime;
 
     const embed = new EmbedBuilder()
         .setTitle('Task Submission')
         .addFields(
             { name: 'User', value: `<@${submission.userId}>`, inline: true },
-            { name: 'Task', value: taskName, inline: true },
+            { name: 'Task', value: submission.taskName ?? `Task ${submission.taskEventId}`, inline: true },
             { name: 'Message', value: submission.notes || "No message included" },
             { name: 'Tier Amounts', value: `🥉 **${shortenAmount(event.amounts?.bronze ?? 0)}** 🥈 **${shortenAmount(event.amounts?.silver ?? 0)}** 🥇 **${shortenAmount(event.amounts?.gold ?? 0)}**`}
         )
-        .setTimestamp();
+        .setTimestamp(submittedAt);
 
-    if (submission.alreadyApproved) {
+    if (heldTier) {
         embed.addFields({
             name: '⚠️ WARNING',
-            value: 'This user already has an **approved submission** for this task.'
+            value: `This user already holds **${getTierLabel(heldTier)}** for this task.`
         });
     }
 
-    if (submissionTime.getTime() > eventEndTime.getTime()) {
+    if (submittedAt.getTime() > eventEndTime.getTime()) {
         embed.addFields({
             name: '⚠️ WARNING',
             value: `This submission was made after the task event ended (${eventEndTime.toUTCString()}).`,

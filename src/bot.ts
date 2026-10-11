@@ -1,4 +1,4 @@
-import type { Client, Interaction, Message } from 'discord.js';
+import { ChannelType, type Client, type Interaction, type Message } from 'discord.js';
 import cron from 'node-cron';
 import type { Firestore } from 'firebase-admin/firestore';
 import { loadCommands } from './core/services/CommandService.js';
@@ -75,23 +75,9 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     const onMessageCreate = (message: Message) => track(handleMessageEvent(message));
     const handleMessageEvent = async (message: Message) => {
         try {
-            if (message.channel.type === 1) {
-                let services: ServiceContainer | undefined;
-
-                for (const existingServices of servicesByGuild.values()) {
-                    if (existingServices.tasks.hasPendingTask(message.author.id)) {
-                        services = existingServices;
-                        break;
-                    }
-                }
-
-                if (!services) {
-                    // Fall back to the guild the DM originated from (if tracked) or the primary guild.
-                    const fallbackGuild = message.guildId ?? primaryGuildId;
-                    services = getServices(fallbackGuild);
-                }
-
-                await handleDirectMessage(message, client, services);
+            if (message.channel.type === ChannelType.DM) {
+                // A DM belongs to no guild, so every guild the bot is in is asked whether it expects one
+                await handleDirectMessage(message, client, client.guilds.cache.map((guild) => getServices(guild.id)));
             } else if (message.guildId) {
                 const services = getServices(message.guildId);
                 await handleMessage(message, commands, services);

@@ -1,6 +1,7 @@
 import { TextChannel, ButtonBuilder, ButtonStyle, ActionRowBuilder, Client, type Message } from 'discord.js';
 import type { SubmissionTier, TaskSubmission } from '../../models/TaskSubmission.js';
 import { isTier, tierRank } from '../../models/TaskSubmission.js';
+import type { TaskEvent } from '../../models/TaskEvent.js';
 import { buildSubmissionEmbed, buildArchiveEmbed, getTierLabel } from './TaskEmbeds.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
@@ -24,25 +25,25 @@ async function resolveVerificationChannel(client: Client, services: ServiceConta
     return resolveTextChannel(client, guildConfig?.channels?.taskVerification);
 }
 
-export async function postToAdminChannel(client: Client, submission: TaskSubmission, services: ServiceContainer) {
-    const guildConfig = await services.guilds.get(services.guildId);
-    const verificationChannelId = guildConfig?.channels?.taskVerification;
-    if (!verificationChannelId) {
-        console.warn(`[SubmissionActions] Task verification channel not configured for guild ${services.guildId}.`);
-        return;
-    }
+// The messages a submission was posted as in the verification channel
+export interface ReviewPost {
+    message: string;
+    screenshotMessage?: string;
+}
 
-    const channel = await resolveTextChannel(client, verificationChannelId);
+// Posts a submission for the task admins to review: its details with the review buttons, then its screenshots.
+// Throws when the submission can't be posted in full, after removing anything already posted.
+export async function postToAdminChannel(
+    client: Client,
+    submission: TaskSubmission,
+    event: TaskEvent,
+    heldTier: SubmissionTier | null,
+    services: ServiceContainer
+): Promise<ReviewPost> {
+    const channel = await resolveVerificationChannel(client, services);
     if (!channel) {
-        console.warn(`[SubmissionActions] Unable to resolve task verification channel ${verificationChannelId}.`);
-        return;
+        throw new Error(`The task verification channel for guild ${services.guildId} is not configured or can't be reached.`);
     }
-
-    const taskEvent = await services.repos.taskRepo?.getTaskEventById(submission.taskEventId);
-    if (!taskEvent) return;
-
-    const taskLabel = submission.taskName ?? `Task ${submission.taskEventId}`;
-    const embed = buildSubmissionEmbed(submission, taskLabel, taskEvent);
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
@@ -63,23 +64,23 @@ export async function postToAdminChannel(client: Client, submission: TaskSubmiss
             .setStyle(ButtonStyle.Danger)
     );
 
-    // First message: embed with info and buttons
-    const sentMessage = await channel.send({ embeds: [embed], components: [buttons] });
-    submission.message = sentMessage.id;
+    const details = await channel.send({ embeds: [buildSubmissionEmbed(submission, event, heldTier)], components: [buttons] });
+    if (submission.screenshotUrls.length === 0) return { message: details.id };
 
-    // Second message: screenshots as file uploads
-    if (submission.screenshotUrls?.length > 0) {
-        const filesToSend = submission.screenshotUrls.slice(0, 10);
+    try {
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-        const sentScreens = await channel.send({
-            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
-            files: filesToSend
+        const screenshots = await channel.send({
+            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${submission.taskName ?? `Task ${submission.taskEventId}`}:` }, suppressMentions),
+            files: submission.screenshotUrls.slice(0, MAX_SCREENSHOTS),
         });
-        submission.screenshotMessage = sentScreens.id;
+        return { message: details.id, screenshotMessage: screenshots.id };
+    } catch (err) {
+        await details.delete().catch((deleteErr: unknown) => console.warn(`[SubmissionActions] Failed to remove the partly posted submission ${submission.id}:`, deleteErr));
+        throw err;
     }
 }
 
-// Removes a submission's review posts once it is reviewed
+// Removes a submission's review posts, after it has been posted but couldn't be stored, or once it is reviewed
 export async function removeReviewPost(client: Client, submission: Pick<TaskSubmission, 'id' | 'message' | 'screenshotMessage'>, services: ServiceContainer): Promise<void> {
     const channel = await resolveVerificationChannel(client, services);
     if (!channel) return;

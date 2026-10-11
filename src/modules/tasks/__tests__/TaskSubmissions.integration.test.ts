@@ -1,4 +1,4 @@
-import { ComponentType, InteractionResponseType, MessageFlags, type APIAttachment, type APIMessageTopLevelComponent } from "discord-api-types/v10";
+import { ComponentType, InteractionResponseType, MessageFlags, type APIAttachment, type APIMessageTopLevelComponent, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -14,10 +14,12 @@ import {
     apiTextChannel,
     apiUser,
     buttonInteraction,
+    directMessage,
     modalSubmitInteraction,
 } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
+import { handleDirectMessage } from "../TaskInteractions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const EVENT = "PVM001-20260105-a1b2c3d4";
@@ -103,6 +105,176 @@ async function acceptReviewEffects(discord: DiscordHarness, services: ServiceCon
 
 afterEach(() => {
     vi.restoreAllMocks();
+});
+
+describe("submitting a task", () => {
+    async function sendDirectMessage(discord: DiscordHarness, services: ServiceContainer, payload: GatewayMessageCreateDispatchData): Promise<void> {
+        await handleDirectMessage(await discord.sendMessage(payload), discord.client, [services]);
+    }
+
+    test("asks for screenshots in DMs, then posts them for review and stores the submission", async ({ discord, interact, services }) => {
+        await storeEvent(services);
+        const dm = discord.acceptDirectMessages(IDS.user);
+
+        const click = await interact(buttonInteraction(`task-submit-${EVENT}`));
+
+        expect(discord.callbacks(click)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
+        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Check your DMs to submit your screenshot(s) for **Kill Zulrah**!" })]);
+        expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({
+            content: "Please upload your screenshot(s) for **Kill Zulrah** and include any notes/comments in the same message.",
+        })]);
+
+        const screenshots = [apiAttachment({ filename: "before.png" }), apiAttachment({ filename: "after.png" })];
+        for (const screenshot of screenshots) discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessages(IDS.dm);
+
+        await sendDirectMessage(discord, services, directMessage("Got it on the first kill", { attachments: screenshots }));
+
+        const [submission, ...others] = await services.repos.taskRepo!.getSubmissionsByUser(IDS.user);
+        expect(others).toEqual([]);
+        expect(submission).toMatchObject({
+            taskEventId: EVENT, taskName: "Kill Zulrah", status: SubmissionStatus.Pending, notes: "Got it on the first kill",
+            screenshotUrls: screenshots.map((screenshot) => screenshot.url), message: expect.any(String), screenshotMessage: expect.any(String),
+        });
+        const [details, posted] = discord.messagesSentTo(IDS.channel);
+        expect(buttonIds(details?.components)).toEqual(["bronze", "silver", "gold"].map((tier) => `approve_${tier}_${submission!.id}`).concat(`reject_${submission!.id}`));
+        expect(posted).toMatchObject({ content: `Submission screenshots for <@${IDS.user}> — Kill Zulrah:`, files: ["before.png", "after.png"] });
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: "✅ Submission for **Kill Zulrah** received with 2 screenshots and sent for review!" })]);
+        expect(await services.tasks.getSubmissionDraft(IDS.user)).toBeNull();
+    });
+
+    test("asks again when the DM has no image, and takes the screenshots sent next", async ({ discord, services }) => {
+        await storeEvent(services);
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessages(IDS.dm);
+
+        await sendDirectMessage(discord, services, directMessage("Forgot the picture"));
+        await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
+
+        expect(discord.messagesSentTo(IDS.dm).map((reply) => reply.content)).toEqual([
+            "Please attach at least one image for your submission.",
+            "✅ Submission for **Kill Zulrah** received with 1 screenshot and sent for review!",
+        ]);
+        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toHaveLength(1);
+    });
+
+    test("tells the member to send again when the Task Admins can't be reached, and takes the next try", async ({ discord, services }) => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        await storeEvent(services);
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.api
+            .intercept({ path: `/api/v10/channels/${IDS.channel}/messages`, method: "POST" })
+            .reply(403, { code: 50013, message: "Missing Permissions" }, { headers: { "content-type": "application/json" } });
+        discord.acceptMessages(IDS.dm);
+
+        await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
+
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({
+            content: "I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.",
+        })]);
+        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toEqual([]);
+
+        discord.acceptMessages(IDS.channel);
+        await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
+
+        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toHaveLength(1);
+    });
+
+    test("takes one submission when two DMs arrive at once, removing the other's review post", async ({ discord, services }) => {
+        await storeEvent(services);
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessageDeletions(IDS.channel);
+        discord.acceptMessages(IDS.dm);
+        const messages = [
+            await discord.sendMessage(directMessage("first", { attachments: [screenshot] })),
+            await discord.sendMessage(directMessage("second", { attachments: [screenshot] })),
+        ];
+
+        await Promise.all(messages.map((message) => handleDirectMessage(message, discord.client, [services])));
+
+        expect(discord.messagesSentTo(IDS.dm).map((reply) => reply.content).sort()).toEqual([
+            "I've already received your submission for this task. To send another, click Submit on the task again.",
+            "✅ Submission for **Kill Zulrah** received with 1 screenshot and sent for review!",
+        ]);
+        const [submission, ...others] = await services.repos.taskRepo!.getSubmissionsByUser(IDS.user);
+        expect(others).toEqual([]);
+        expect(discord.messagesSentTo(IDS.channel)).toHaveLength(4);
+        expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
+        expect(discord.messageDeletions(IDS.channel)).not.toContain(submission!.message);
+        expect(discord.messageDeletions(IDS.channel)).not.toContain(submission!.screenshotMessage);
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+
+    test("removes the review post and keeps the draft when the submission can't be stored", async ({ discord, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        await storeEvent(services);
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessageDeletions(IDS.channel);
+        discord.acceptMessages(IDS.dm);
+        // The emulator can't be made to fail one write, so the repository's write fails the way an unreachable
+        // Firestore fails it
+        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        vi.spyOn(services.repos.taskRepo!, "submitDraft").mockRejectedValueOnce(unavailable);
+
+        await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
+
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: "Something went wrong saving your submission. Please send it again." })]);
+        expect(discord.messagesSentTo(IDS.channel)).toHaveLength(2);
+        expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
+        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toEqual([]);
+        expect(await services.tasks.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: EVENT });
+        expect(error).toHaveBeenCalledWith("[TaskDM] Failed to store submission:", unavailable);
+    });
+
+    test("tells the member to send again when no verification channel is set up", async ({ discord, services }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await storeEvent(services);
+        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskVerification: "" } });
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        discord.acceptMessages(IDS.dm);
+
+        await sendDirectMessage(discord, services, directMessage("", { attachments: [apiAttachment()] }));
+
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({
+            content: "I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.",
+        })]);
+        expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[TaskService\] Couldn't post submission \w+ for review:$/), expect.objectContaining({
+            message: `The task verification channel for guild ${IDS.guild} is not configured or can't be reached.`,
+        }));
+        expect(await services.tasks.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: EVENT });
+    });
+
+    test("ignores DMs from members who haven't clicked Submit", async ({ discord, services }) => {
+        await sendDirectMessage(discord, services, directMessage("hello", { attachments: [apiAttachment()] }));
+
+        expect(discord.requests()).toEqual([]);
+    });
+
+    test("warns the Task Admins when the member already holds a tier for the task", async ({ discord, services }) => {
+        await storeEvent(services);
+        await storeApproval(services, SubmissionStatus.Bronze);
+        await services.tasks.startSubmission(IDS.user, EVENT);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessages(IDS.dm);
+
+        await sendDirectMessage(discord, services, directMessage("Going for gold", { attachments: [screenshot] }));
+
+        const [details] = discord.messagesSentTo(IDS.channel);
+        expect(details?.embeds?.[0]?.fields).toContainEqual({ name: "⚠️ WARNING", value: "This user already holds **🥉 Bronze** for this task." });
+    });
 });
 
 describe("approving a submission", () => {
