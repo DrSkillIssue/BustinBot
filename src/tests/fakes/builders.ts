@@ -4,7 +4,7 @@ import type { UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import type { Guild } from "../../models/Guild.js";
-import { IDS } from "../discord/payloads.js";
+import { IDS, nextId } from "../discord/payloads.js";
 
 // Builders return complete, valid domain objects; tests override only the fields they care about.
 
@@ -80,8 +80,9 @@ export function buildTaskPoll(overrides: Partial<TaskPoll> = {}): TaskPoll {
         type: "task",
         category: TaskCategory.PvM,
         options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" }), buildTask({ id: "PVM003" })],
-        messageId: "message-1",
-        channelId: "channel-1",
+        // Posted in the harness guild's channel, so flows that fetch the poll message reach the harness
+        messageId: nextId(),
+        channelId: IDS.channel,
         createdAt: new Date("2026-01-04T00:00:00.000Z"),
         endsAt: new Date("2026-01-05T00:00:00.000Z"),
         isActive: true,
