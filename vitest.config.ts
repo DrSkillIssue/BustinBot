@@ -14,5 +14,24 @@ export default defineConfig({
     test: {
         environment: "node",
         coverage: { provider: "v8", reporter: ["text", "html"] },
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: "unit",
+                    include: ["src/**/*.test.ts"],
+                    exclude: ["src/**/*.integration.test.ts"],
+                },
+            },
+            {
+                extends: true,
+                test: {
+                    name: "integration",
+                    include: ["src/**/*.integration.test.ts"],
+                    // Every file shares the one emulator database and clears it between tests
+                    fileParallelism: false,
+                },
+            },
+        ],
     },
 });

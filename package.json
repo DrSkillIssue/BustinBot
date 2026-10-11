@@ -20,8 +20,9 @@
     "typescript": "^7.0.2"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "firebase emulators:exec --only firestore --project demo-bustinbot \"vitest run\"",
+    "test:unit": "vitest run --project unit",
+    "test:watch": "firebase emulators:exec --only firestore --project demo-bustinbot \"vitest\"",
     "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.prod.json",
     "start": "node dist/index.js",
@@ -44,6 +45,7 @@
     "@vitest/coverage-v8": "^5.0.3",
     "@vitest/ui": "^5.0.3",
     "conventional-changelog-cli": "^5.0.0",
+    "firebase-tools": "^15.33.0",
     "tsx": "^4.23.15",
     "vitest": "^5.0.3"
   }
