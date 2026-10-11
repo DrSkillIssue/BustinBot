@@ -49,9 +49,10 @@ export class DiscordHarness {
     static create(): DiscordHarness {
         const client = new Client({
             intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
-            // Send REST requests through the global fetch so msw can intercept them. Node's fetch is undici's
-            // implementation, but its typings come from @types/node rather than the undici package REST expects.
-            rest: { makeRequest: fetch as RESTOptions["makeRequest"] },
+            // Send REST requests through the global fetch so msw can intercept them, as @discordjs/rest documents.
+            // Its option is typed with undici 6's RequestInit while Node 24's fetch is typed by undici-types 7, so the
+            // two declarations of the same fetch API don't overlap until @discordjs/rest moves to undici 7.
+            rest: { makeRequest: fetch as unknown as RESTOptions["makeRequest"] },
         });
         client.rest.setToken("test-token");
 

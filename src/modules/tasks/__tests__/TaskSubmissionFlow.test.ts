@@ -120,7 +120,7 @@ describe('Task submission lifecycle', () => {
     describe('Admin approval flow', () => {
         it('updates submission status, archives, notifies and increments counters', async () => {
             const { service, repo, services } = createTaskServiceHarness();
-            const { client, adminChannel, archiveChannel } = createAdminClientMock();
+            const { client, adminChannel } = createAdminClientMock();
 
             const submission = await service.createSubmission('user-1', 'event-1');
             const stored = { ...submission, screenshotUrls: ['https://cdn/img.png'] };

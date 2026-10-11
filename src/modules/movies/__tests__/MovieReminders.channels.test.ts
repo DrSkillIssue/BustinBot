@@ -20,7 +20,7 @@ const movieStart = DateTime.utc().plus({ hours: 1 });
 describe('MovieReminders channel handling', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.spyOn(global, 'setTimeout').mockImplementation(((handler: TimerHandler): any => {
+    vi.spyOn(global, 'setTimeout').mockImplementation(((handler: Parameters<typeof setTimeout>[0]): any => {
       if (typeof handler === 'function') handler();
       return 0 as any;
     }) as any);

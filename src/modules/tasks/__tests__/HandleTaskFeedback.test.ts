@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SubmissionStatus } from '../../../models/TaskSubmission.js';
 import { handleTaskFeedback } from '../HandleTaskFeedback.js';
 
 const interactionBase = () => {

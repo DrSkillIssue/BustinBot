@@ -291,10 +291,9 @@ describe("/taskroles subcommands", () => {
     });
 
     it("toggles champion roles off and removes roles from holders", async () => {
-        const { guild, createRole, createMember } = makeMockGuild([
+        const { guild, createMember } = makeMockGuild([
             { id: "champ-1", name: "Champion 1" },
         ]);
-        const role = createRole("champ-1", "Champion 1");
         const member = createMember("user-1", ["champ-1"]);
 
         baseServices.repos.taskLeaderboardRepo.getLeaderboard.mockResolvedValue({

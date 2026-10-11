@@ -6,7 +6,6 @@ import * as TaskSelectorModule from '../TaskSelector.js';
 import { createTaskRepoMock } from '../../../tests/mocks/taskMocks.js';
 
 const TASK_USER_ROLE = 'Task User';
-const TASK_ADMIN_CHANNEL = 'task-channel';
 const GUILD_ID = 'guild-1';
 const CHANNEL_ID = 'channel-99';
 

@@ -22,7 +22,7 @@ interface TMDbSearchResult {
     poster_path?: string;
 }
 
-interface TMDbSearchResponse {
+export interface TMDbSearchResponse {
     results: TMDbSearchResult[];
 }
 
