@@ -1,6 +1,8 @@
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
 
+// Picks up to `count` different tasks, each draw favouring tasks in proportion to their weight (50 when unset).
+// A task weighted 0 is only picked once nothing else is left.
 export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     if (!tasks.length) return [];
 
@@ -8,26 +10,28 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     const pool = [...tasks];
 
     for (let i = 0; i < count && pool.length > 0; i++) {
-        const totalWeight = pool.reduce((sum, t) => sum + (t.weight ?? 50), 0);
-        let roll = Math.random() * totalWeight;
-        let chosenIndex = 0;
+        const weights = pool.map((task) => Math.max(task.weight ?? 50, 0));
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
-        for (let j = 0; j < pool.length; j++) {
-            const task = pool[j];
-            if (!task) continue;
-
-            roll -= task.weight ?? 50;
-            if (roll <= 0) {
-                chosenIndex = j;
-                break;
+        let chosenIndex: number;
+        if (totalWeight <= 0) {
+            chosenIndex = Math.floor(Math.random() * pool.length);
+        } else {
+            // The roll lands in [0, totalWeight); the first task whose running total passes it is chosen. Any
+            // floating-point remainder falls to the last task, never the first.
+            const roll = Math.random() * totalWeight;
+            let runningTotal = 0;
+            chosenIndex = pool.length - 1;
+            for (let j = 0; j < pool.length; j++) {
+                runningTotal += weights[j]!;
+                if (roll < runningTotal) {
+                    chosenIndex = j;
+                    break;
+                }
             }
         }
 
-        const chosen = pool[chosenIndex];
-        if (chosen) {
-            selected.push(chosen);
-            pool.splice(chosenIndex, 1);
-        }
+        selected.push(...pool.splice(chosenIndex, 1));
     }
 
     console.log(
@@ -37,6 +41,16 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     );
 
     return selected;
+}
+
+// Fisher–Yates shuffle: every order is equally likely, unlike sorting with a random comparator
+function shuffle<T>(items: T[]): T[] {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    return shuffled;
 }
 
 export function selectTasksForCategory(category: TaskCategory, allTasks: Task[]): Task[] {
@@ -57,9 +71,7 @@ export function selectTasksForCategory(category: TaskCategory, allTasks: Task[])
         }
 
         // Randomly choose up to 3 unique skills
-        const allSkills = Object.keys(skillGroups);
-        const shuffledSkills = allSkills.sort(() => Math.random() - 0.5);
-        const chosenSkills = shuffledSkills.slice(0, Math.min(3, shuffledSkills.length));
+        const chosenSkills = shuffle(Object.keys(skillGroups)).slice(0, 3);
 
         const selected: Task[] = [];
         for (const skill of chosenSkills) {
