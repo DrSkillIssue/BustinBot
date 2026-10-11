@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
     buildRankedLifetimeEntries,
     buildRankedPeriodicEntries,
@@ -6,7 +6,7 @@ import {
 } from "../TaskLeaderboards.js";
 
 describe("TaskLeaderboards ranking", () => {
-    it("orders lifetime leaderboard by points then current streak", () => {
+    test("orders lifetime leaderboard by points then current streak", () => {
         const points = { alice: 10, bob: 10, carol: 8 };
         const streaks = { alice: 2, bob: 5, carol: 1 };
 
@@ -17,7 +17,7 @@ describe("TaskLeaderboards ranking", () => {
         expect(ranked[1]?.rank).toBe(2);
     });
 
-    it("assigns equal ranks when points and streak are tied", () => {
+    test("assigns equal ranks when points and streak are tied", () => {
         const points = { alice: 10, bob: 10 };
         const streaks = { alice: 3, bob: 3 };
 
@@ -26,7 +26,7 @@ describe("TaskLeaderboards ranking", () => {
         expect(ranked[1]?.rank).toBe(1);
     });
 
-    it("assigns equal ranks for periodic ties", () => {
+    test("assigns equal ranks for periodic ties", () => {
         const points = { alice: 10, bob: 10, carol: 8 };
         const ranked = buildRankedPeriodicEntries(points);
 
@@ -37,7 +37,7 @@ describe("TaskLeaderboards ranking", () => {
 });
 
 describe("TaskLeaderboards placements", () => {
-    it("skips second place when there is a tie for first", () => {
+    test("skips second place when there is a tie for first", () => {
         const placements = resolvePeriodicPlacements([
             { userId: "a", points: 10 },
             { userId: "b", points: 10 },
@@ -49,7 +49,7 @@ describe("TaskLeaderboards placements", () => {
         expect(placements.third.map((entry) => entry.userId)).toEqual(["c"]);
     });
 
-    it("skips third place when there is a tie for second", () => {
+    test("skips third place when there is a tie for second", () => {
         const placements = resolvePeriodicPlacements([
             { userId: "a", points: 12 },
             { userId: "b", points: 9 },

@@ -1,6 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { ApplicationCommandOptionType, type APIApplicationCommandInteractionDataOption, type APIRole } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import type { DiscordHarness } from "../../../../tests/discord/harness.js";
 import { IDS, apiGuild, apiGuildMember, apiMember, apiRole, apiUser, chatInputInteraction } from "../../../../tests/discord/payloads.js";
 import { buildUserStats } from "../../../../tests/fakes/builders.js";
@@ -30,10 +30,6 @@ function milestone(role: APIRole, requiredSubmissions: number): TaskMilestoneRol
 function storedGuild(db: Firestore) {
     return new GuildRepository(db).getGuild(IDS.guild);
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("/taskroles list", () => {
     test("shows the milestone thresholds and which champion roles are set", async ({ discord, slash }) => {

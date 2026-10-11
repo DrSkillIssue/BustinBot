@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
@@ -18,10 +18,6 @@ async function storePoll(services: ServiceContainer, category: TaskCategory, opt
     await services.repos.taskRepo!.seedTasks(options);
     await services.repos.taskRepo!.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: new Date(Date.now() - 1000), ...overrides }));
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({ discord, slash, services, db }) => {

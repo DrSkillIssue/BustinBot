@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
@@ -36,10 +36,6 @@ function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
         ...overrides,
     };
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("a prize draw snapshot", () => {
     test("gives one entry per task however many times the member upgraded their submission", async ({ services }) => {

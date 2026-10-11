@@ -1,6 +1,6 @@
 import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import type { ButtonInteraction } from "discord.js";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import {
     IDS,
@@ -45,10 +45,6 @@ function buttonIds(rows: Rows): string[] {
 function button(rows: Rows, customId: string) {
     return components(rows).find((component) => component.custom_id === customId);
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("a movie poll", () => {
     test("is posted with a button per movie, leaving out watched ones, and stored", async ({ discord, services }) => {

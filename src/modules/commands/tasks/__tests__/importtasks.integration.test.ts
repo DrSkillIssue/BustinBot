@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { mockAgent } from "../../../../tests/http.js";
 import { IDS, apiMember, chatInputInteraction, nextId } from "../../../../tests/discord/payloads.js";
 import { buildTask } from "../../../../tests/fakes/builders.js";
@@ -23,10 +23,6 @@ function importWith(filename: string) {
     );
     return { interaction, path: new URL(url).pathname };
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("/importtasks", () => {
     test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({ discord, interact, services }) => {

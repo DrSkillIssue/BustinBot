@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import {
     ensureTaskLeaderboardsInitialized,
     finalizePeriodicLeaderboard,
@@ -23,10 +23,6 @@ async function periodic(services: ServiceContainer): Promise<TaskLeaderboard | n
 
 beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => {});
-});
-
-afterEach(() => {
-    vi.restoreAllMocks();
 });
 
 describe("TaskLeaderboards initialisation", () => {

@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "vitest";
 import { createMovieEmbed } from "../MovieEmbeds.js";
 
 describe("createMovieEmbed", () => {
-    it("shows the movie's TMDb details", () => {
+    test("shows the movie's TMDb details", () => {
         const embed = createMovieEmbed({
             title: "Inception",
             releaseDate: 2010,
@@ -24,7 +24,7 @@ describe("createMovieEmbed", () => {
         ]);
     });
 
-    it("fills in what TMDb doesn't know", () => {
+    test("fills in what TMDb doesn't know", () => {
         const embed = createMovieEmbed({ title: "Unknown Film" }).toJSON();
 
         expect(embed).toMatchObject({ description: "No description available.", url: "https://www.themoviedb.org/" });

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { DateTime } from "luxon";
 import { InteractionResponseType } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
@@ -48,10 +48,6 @@ async function storeNight(services: ServiceContainer, overrides: Partial<MovieEv
 }
 
 const at = (time: Date, offsetMs: number) => new Date(time.getTime() + offsetMs);
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("scheduling a movie night", () => {
     test("asks for a start time in the guild's timezone once a date is picked", async ({ discord, interact }) => {
@@ -198,7 +194,7 @@ describe("the movie night sweep", () => {
             votes: { [present]: "movie-2", [joiner]: "movie-2", [leaver]: "movie-1" },
         });
         await services.repos.movieRepo!.createPoll(poll);
-        await storeNight(services, { startTime: new Date(Date.now() + HOUR), movie: buildMovie({ id: "TBD", title: "TBD" }) });
+        await storeNight(services, { startTime: new Date(Date.now() + 3 * HOUR), movie: buildMovie({ id: "TBD", title: "TBD" }) });
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
@@ -222,7 +218,8 @@ describe("the movie night sweep", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() - 10 * MINUTE);
-        const night = await storeNight(services, { startTime: start });
+        // Its reminders have gone out; this is about the night itself
+        const night = await storeNight(services, { startTime: start, remindersSent: ["2 hours before", "30 mins before", "start time"] });
         await services.repos.movieRepo!.upsertMovie(night.movie);
         for (const userId of [present, leaver]) await voice(apiVoiceState(userId, VOICE));
         discord.acceptMessages(IDS.channel);

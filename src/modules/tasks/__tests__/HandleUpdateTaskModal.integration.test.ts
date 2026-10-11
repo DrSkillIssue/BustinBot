@@ -1,5 +1,5 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
@@ -22,10 +22,6 @@ async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
     await services.repos.taskRepo!.createTaskEvent(event);
     return event;
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("the update task form", () => {
     test("saves the task and redraws its running event and open poll, keeping their completions and votes", async ({ discord, interact, services }) => {

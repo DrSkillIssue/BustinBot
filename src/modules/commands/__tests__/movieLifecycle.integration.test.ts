@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
@@ -13,10 +13,6 @@ async function storeTonight(services: ServiceContainer, overrides = {}) {
     await services.repos.movieRepo!.upsertMovie(movie);
     await services.repos.movieRepo!.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() - 60 * 60 * 1000), movie, ...overrides }));
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("/endmovie", () => {
     test("ends tonight's movie night, archives the movie and thanks everyone in the movie night channel", async ({ discord, slash, services }) => {
@@ -103,6 +99,7 @@ describe("/cancelmovie", () => {
         await slash("cancelmovie", [], movieAdmin);
 
         expect(discord.requests().filter((request) => request.path === `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`)).toHaveLength(1);
+
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: `❌ Movie night has been cancelled by <@${IDS.user}>.` })]);
     });
 });

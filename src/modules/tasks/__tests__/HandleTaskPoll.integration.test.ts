@@ -1,5 +1,5 @@
 import { ComponentType, type APIMessageTopLevelComponent } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
@@ -28,10 +28,6 @@ async function storeOpenPoll(services: ServiceContainer, overrides: Partial<Task
 function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
     return buttonInteraction(`vote_${poll.category}_${optionId}`, apiMessage({ id: poll.messageId }), { member: apiMember({ user: apiUser({ id: userId }) }) });
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("posting the weekly task polls", () => {
     test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services }) => {

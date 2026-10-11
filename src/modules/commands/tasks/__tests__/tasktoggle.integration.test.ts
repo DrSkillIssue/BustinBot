@@ -19,7 +19,6 @@ function jobCount(guildId: string): number {
 }
 
 afterEach(async () => {
-    vi.restoreAllMocks();
     await cron.shutdown();
 });
 

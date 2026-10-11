@@ -1,13 +1,9 @@
-import { test as base, afterEach, describe, expect, vi } from '../../../tests/fixtures.js';
+import { test as base, describe, expect, vi } from '../../../tests/fixtures.js';
 import { Timestamp } from 'firebase-admin/firestore';
 import { KeywordRepository } from '../KeywordRepo.js';
 
 const test = base.extend('repo', ({ db }) => new KeywordRepository(db, 'guild-1'));
 
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe('KeywordRepository', () => {
     test('adds a keyword under a normalised id with no usage', async ({ repo }) => {

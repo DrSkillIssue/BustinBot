@@ -1,6 +1,6 @@
 import { ComponentType, InteractionResponseType, MessageFlags, type APIAttachment, type APIMessageTopLevelComponent, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
@@ -102,10 +102,6 @@ async function acceptReviewEffects(discord: DiscordHarness, services: ServiceCon
     discord.acceptMessageDeletions(IDS.channel);
     return { dm, screenshot };
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("submitting a task", () => {
     async function sendDirectMessage(discord: DiscordHarness, services: ServiceContainer, payload: GatewayMessageCreateDispatchData): Promise<void> {

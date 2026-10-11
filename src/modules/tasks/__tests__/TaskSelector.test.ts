@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { pickWeightedRandom, selectTasksForCategory } from '../TaskSelector.js';
 import { Skill, TaskCategory } from '../../../models/Task.js';
 import { buildTask } from '../../../tests/fakes/builders.js';
@@ -13,10 +13,6 @@ function seedRandom(seed: number): void {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     });
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe('pickWeightedRandom', () => {
     test('favours tasks in proportion to their weight', () => {

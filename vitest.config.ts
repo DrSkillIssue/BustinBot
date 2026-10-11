@@ -9,6 +9,8 @@ export default defineConfig({
         // Every test starts from the real globals and environment, whatever an earlier test stubbed
         unstubGlobals: true,
         unstubEnvs: true,
+        // and with every spy restored
+        restoreMocks: true,
         coverage: { provider: "v8", reporter: ["text", "html"] },
         projects: [
             {

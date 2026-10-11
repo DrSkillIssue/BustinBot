@@ -1,5 +1,5 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { afterEach, beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { mockAgent } from "../../../tests/http.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
@@ -38,10 +38,6 @@ async function storeOwnMovies(services: ServiceContainer, count: number): Promis
 
 beforeEach(() => {
     vi.stubEnv("TMDB_API_KEY", "test-key");
-});
-
-afterEach(() => {
-    vi.restoreAllMocks();
 });
 
 describe("/addmovie", () => {

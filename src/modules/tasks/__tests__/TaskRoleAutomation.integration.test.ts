@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildUserStats } from "../../../tests/fakes/builders.js";
 import { applyTaskMilestoneRoles } from "../TaskMilestones.js";
@@ -13,10 +13,6 @@ const milestoneRoles = [
     { id: enthusiast.id, label: "Task Enthusiast", roleId: enthusiast.id, requiredSubmissions: 25, enabled: true },
     { id: expert.id, label: "Task Expert", roleId: expert.id, requiredSubmissions: 50, enabled: true },
 ];
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("milestone roles", () => {
     test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({ discord, services }) => {

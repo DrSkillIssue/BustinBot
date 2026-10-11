@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { test as base, afterEach, describe, expect, vi } from "../../../tests/fixtures.js";
+import { test as base, describe, expect, vi } from "../../../tests/fixtures.js";
 import { KeywordRepository } from "../../../core/database/KeywordRepo.js";
 import { KeywordSelector } from "../KeywordSelector.js";
 
@@ -19,10 +19,6 @@ async function storeKeywordsUsedInOrder(db: Firestore, words: string[]): Promise
         });
     }
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("KeywordSelector", () => {
     test("falls back to a placeholder when no keywords are stored", async ({ repo }) => {

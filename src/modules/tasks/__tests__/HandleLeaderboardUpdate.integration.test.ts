@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
@@ -49,10 +49,6 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
     }
     return { roles, dms };
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services }) => {

@@ -1,4 +1,4 @@
-import { test as base, afterEach, describe, expect, vi } from '../../../tests/fixtures.js';
+import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
 import type { PrizeDraw } from '../../../models/PrizeDraw.js';
 
@@ -16,10 +16,6 @@ function buildPrizeDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
         ...overrides,
     };
 }
-
-afterEach(() => {
-    vi.restoreAllMocks();
-});
 
 describe('PrizeDrawRepository', () => {
     test('stores draws and lists them newest first', async ({ repo }) => {

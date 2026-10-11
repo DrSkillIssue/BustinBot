@@ -20,7 +20,6 @@ function jobsOf(guildId: string): Record<string, string> {
 }
 
 afterEach(async () => {
-    vi.restoreAllMocks();
     await cron.shutdown();
 });
 
