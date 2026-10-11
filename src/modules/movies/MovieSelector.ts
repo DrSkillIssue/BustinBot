@@ -12,9 +12,10 @@ export const ADD_MOVIE_BUTTON = "addmovie|";
 
 type Member = ChatInputCommandInteraction["member"] | ButtonInteraction["member"];
 
-// Whether a member may add more than the usual number of movies: the server owner, administrators, and bot or
-// movie admins. Discord sends the member's roles as a cached GuildMember or, when the member isn't cached, as ids.
-async function isPrivileged(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<boolean> {
+// Whether a member runs movie nights: the server owner, administrators, and bot or movie admins. They may add more
+// than the usual number of movies. Discord sends the member's roles as a cached GuildMember or, when the member
+// isn't cached, as ids.
+export async function isMovieNightAdmin(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<boolean> {
     if (interaction.guild?.ownerId === interaction.user.id) return true;
     if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
 
@@ -31,7 +32,7 @@ export async function checkCanAddMovie(services: ServiceContainer, interaction: 
     const active = movies.filter((movie) => !movie.watched);
 
     const own = active.filter((movie) => movie.addedBy === interaction.user.id);
-    if (own.length >= MAX_ACTIVE_MOVIES_PER_USER && !(await isPrivileged(services, interaction))) {
+    if (own.length >= MAX_ACTIVE_MOVIES_PER_USER && !(await isMovieNightAdmin(services, interaction))) {
         return `You have reached the maximum of ${MAX_ACTIVE_MOVIES_PER_USER} active movies. Remove one or wait for a movie night to conclude before adding more.`;
     }
 

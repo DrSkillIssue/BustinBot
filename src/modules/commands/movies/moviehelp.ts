@@ -1,7 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { packageVersion } from "../../../utils/version.js";
+import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
+import { isMovieNightAdmin } from "../../movies/MovieSelector.js";
 
 const moviehelp: Command = {
     name: 'moviehelp',
@@ -13,7 +15,7 @@ const moviehelp: Command = {
         .setName("moviehelp")
         .setDescription("Learn how movie nights work and what commands can be used."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: any }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -23,18 +25,7 @@ const moviehelp: Command = {
             return;
         }
 
-        const guild = interaction.guild!;
-        const member = interaction.member as GuildMember;
-
-        const guildRoles = guildConfig.roles ?? {};
-        const userRoleIds = member.roles.cache.map((r) => r.id);
-
-        const isBotAdmin = guildRoles.admin && userRoleIds.includes(guildRoles.admin);
-        const isMovieAdmin = guildRoles.movieAdmin && userRoleIds.includes(guildRoles.movieAdmin);
-        const isPrivilegedUser =
-            guild.ownerId === interaction.user.id ||
-            member.permissions.has("Administrator") ||
-            isBotAdmin || isMovieAdmin;
+        const isPrivilegedUser = await isMovieNightAdmin(services, interaction);
 
         const generalDescription = "BustinBot's **movie night system** helps the community host and vote on regular movie watch parties! Movies are added by users, selected by admins, random, or community polls, and watched together in the movie voice channel.";
 
