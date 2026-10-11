@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { FIRESTORE_SETTINGS } from "../core/database/firestore.js";
 
 const APP_NAME = "firestore-emulator-tests";
 
@@ -22,8 +23,13 @@ function emulatorTarget(): { host: string; projectId: string } {
 
 export function getEmulatorFirestore(): Firestore {
     const { projectId } = emulatorTarget();
-    const app = getApps().find((existing) => existing.name === APP_NAME) ?? initializeApp({ projectId }, APP_NAME);
-    return getFirestore(app);
+    const existing = getApps().find((app) => app.name === APP_NAME);
+    if (existing) return getFirestore(existing);
+
+    // Same settings as production so tests see the same write behaviour
+    const db = getFirestore(initializeApp({ projectId }, APP_NAME));
+    db.settings(FIRESTORE_SETTINGS);
+    return db;
 }
 
 // Deletes every document in the emulator database (documented emulator REST endpoint)
