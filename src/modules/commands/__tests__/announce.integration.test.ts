@@ -3,10 +3,10 @@ import path from "node:path";
 import { ComponentType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
-import { IDS, apiMember } from "../../../tests/discord/payloads.js";
+import { IDS, withRoles } from "../../../tests/discord/payloads.js";
 import { packageVersion } from "../../../utils/version.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+const admin = withRoles(IDS.roles.admin);
 const announcements = JSON.parse(readFileSync(path.join(import.meta.dirname, "../../../../data/announcements.json"), "utf8"));
 
 describe("/announce", () => {
@@ -49,14 +49,13 @@ describe("/announce", () => {
     });
 
     test("tells the admin when the configured channel can't be reached", async ({ discord, services, slash }) => {
-        const deleted = "100000000000000099";
-        await services.guilds.update(IDS.guild, { channels: { announcements: deleted } });
-        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
+        await services.guilds.update(IDS.guild, { channels: { announcements: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
         const interaction = await slash("announce", [], admin);
 
         expect(discord.originalEdits(interaction)).toEqual([
-            expect.objectContaining({ content: `I can't reach the announcement channel <#${deleted}>. Check it still exists and that I can see it, or pick another with \`/setup\`.` }),
+            expect.objectContaining({ content: `I can't reach the announcement channel <#${IDS.missingChannel}>. Check it still exists and that I can see it, or pick another with \`/setup\`.` }),
         ]);
     });
 });

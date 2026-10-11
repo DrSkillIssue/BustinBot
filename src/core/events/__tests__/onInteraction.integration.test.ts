@@ -25,12 +25,11 @@ function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyo
 
 describe("slash command routing", () => {
     // Interactions from a guild discord.js hasn't cached carry the member as raw data with role ids only
-    const uncachedGuild = "100000000000000012";
-    async function fromUncachedGuild(discord: DiscordHarness, db: Firestore, adminRoleName: string) {
-        const admin = apiRole({ id: "100000000000000046", name: adminRoleName });
-        discord.guild(apiGuild({ id: uncachedGuild, roles: [apiRole({ id: uncachedGuild, name: "@everyone" }), admin] }));
-        await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild, roles: { admin: "BustinBot Admin" } }));
-        return { guild_id: uncachedGuild, member: apiMember({ roles: [admin.id] }) };
+        async function fromUncachedGuild(discord: DiscordHarness, db: Firestore, adminRoleName: string) {
+        const admin = apiRole({ name: adminRoleName });
+        discord.guild(apiGuild({ id: IDS.uncachedGuild, roles: [apiRole({ id: IDS.uncachedGuild, name: "@everyone" }), admin] }));
+        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild, roles: { admin: "BustinBot Admin" } }));
+        return { guild_id: IDS.uncachedGuild, member: apiMember({ roles: [admin.id] }) };
     }
 
     test("recognises a role configured by name for a member Discord sends as role ids", async ({ discord, services, db }) => {

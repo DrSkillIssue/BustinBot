@@ -1,9 +1,9 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../../tests/discord/harness.js";
-import { IDS, apiMember } from "../../../../tests/discord/payloads.js";
+import { IDS, withRoles } from "../../../../tests/discord/payloads.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+const admin = withRoles(IDS.roles.admin);
 
 describe("/taskdraw", () => {
     test("acknowledges privately before anything else, then asks for the snapshot to roll", async ({ discord, slash }) => {

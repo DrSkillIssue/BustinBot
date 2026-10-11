@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, apiUser, nextId, withRoles } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 
-const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
-const SUBMITTER = "100000000000000036";
-const ANNOUNCEMENT = "100000000000000075";
+const movieAdmin = withRoles(IDS.roles.movieAdmin);
+const SUBMITTER = nextId();
+const ANNOUNCEMENT = nextId();
 const DAY = 24 * 60 * 60 * 1000;
 
 async function storeTonight(services: ServiceContainer, overrides = {}) {

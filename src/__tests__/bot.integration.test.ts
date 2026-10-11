@@ -55,18 +55,16 @@ describe("startBot", () => {
     });
 
     test("reports bot-wide praise counts the same in every guild", async ({ db, http, services, onTestFinished }) => {
-        const otherGuild = "100000000000000011";
-        const otherChannel = "100000000000000021";
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { announcements: otherChannel } }));
+                        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { announcements: IDS.otherGuildChannel } }));
         const discord = DiscordHarness.create(http);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
-        await discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
+        await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
         const inOtherGuild = {
-            guild_id: otherGuild,
-            channel_id: otherChannel,
-            channel: { id: otherChannel, type: 0 as const, guild_id: otherGuild, name: "general" },
+            guild_id: IDS.otherGuild,
+            channel_id: IDS.otherGuildChannel,
+            channel: { id: IDS.otherGuildChannel, type: 0 as const, guild_id: IDS.otherGuild, name: "general" },
         };
         // The other guild is already in use before anyone praises the bot
         await discord.originalEdit(await discord.dispatch(chatInputInteraction("bustin", [], inOtherGuild)));
@@ -106,10 +104,8 @@ describe("startBot", () => {
     });
 
     test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services }) => {
-        const otherGuild = "100000000000000011";
-        const otherChannel = "100000000000000021";
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { taskVerification: otherChannel } }));
-        const otherTasks = new TaskRepository(db, otherGuild);
+                        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { taskVerification: IDS.otherGuildChannel } }));
+        const otherTasks = new TaskRepository(db, IDS.otherGuild);
         const event = buildTaskEvent({ endTime: new Date(Date.now() + 24 * 60 * 60 * 1000) });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
@@ -118,19 +114,19 @@ describe("startBot", () => {
         const discord = DiscordHarness.create(http);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
-        discord.acceptMessages(otherChannel);
+        discord.acceptMessages(IDS.otherGuildChannel);
         discord.acceptMessages(IDS.dm);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
         await discord.connect();
-        await discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
+        await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
         await discord.sendMessage(directMessage("", { attachments: [screenshot] }));
         // Shutting down lets the DM being handled finish
         await shutdown();
 
         expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: expect.stringContaining("received with 1 screenshot and sent for review!") })]);
         expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([expect.objectContaining({ taskEventId: event.id })]);
-        expect(discord.messagesSentTo(otherChannel)).toHaveLength(2);
+        expect(discord.messagesSentTo(IDS.otherGuildChannel)).toHaveLength(2);
         expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 

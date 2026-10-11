@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, nextId } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
 import { Skill, TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
@@ -85,7 +85,7 @@ describe("voting in a task poll", () => {
     test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services }) => {
         const poll = await storeOpenPoll(services);
         discord.acceptMessageEdits(IDS.channel);
-        const voters: string[] = ["100000000000000031", "100000000000000032", "100000000000000033"];
+        const voters = [nextId(), nextId(), nextId()];
 
         for (const voter of voters) {
             const click = await interact(vote(poll, "PVM001", voter));
@@ -121,7 +121,7 @@ describe("closing a task poll", () => {
     test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await services.repos.taskRepo.seedTasks(options);
-        const poll = await storeOpenPoll(services, { votes: { "100000000000000031": "PVM002" } });
+        const poll = await storeOpenPoll(services, { votes: { [nextId()]: "PVM002" } });
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
         discord.message(apiMessage({ id: poll.messageId }));

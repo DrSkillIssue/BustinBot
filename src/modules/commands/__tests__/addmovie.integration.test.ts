@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.
 import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, nextId, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie } from "../../../tests/fakes/builders.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
@@ -28,12 +28,9 @@ function tmdbMovie(http: MockAgent, movie: typeof matrix, runtime: number, direc
         .reply(200, { cast: [{ name: "Keanu Reeves", order: 0 }], crew: [{ job: "Director", name: director }] }, JSON_RESPONSE);
 }
 
-// A member who isn't the server owner (the harness user owns the guild)
-const MEMBER = "100000000000000037";
-const asMember = (roles: string[] = []) => apiMember({ user: apiUser({ id: MEMBER }), roles });
-
-async function storeOwnMovies(services: ServiceContainer, count: number): Promise<void> {
-    for (let i = 0; i < count; i++) await services.repos.movieRepo.upsertMovie(buildMovie({ id: `own-${i}`, tmdbId: 900 + i, addedBy: MEMBER }));
+// The most movies a member may have in the list, added by them
+async function storeFullList(services: ServiceContainer, userId: string): Promise<void> {
+    for (let i = 0; i < 3; i++) await services.repos.movieRepo.upsertMovie(buildMovie({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId }));
 }
 
 beforeEach(() => {
@@ -61,7 +58,8 @@ describe("/addmovie", () => {
 
     test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: "100000000000000099" }));
+        const lister = nextId();
+        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
         tmdbMovie(http, reloaded, 138, "Lana Wachowski");
 
@@ -69,35 +67,38 @@ describe("/addmovie", () => {
         const rewatch = await interact(buttonInteraction("addmovie|select|604", resultsMessage));
 
         expect(discord.followUps(duplicate)).toEqual([
-            expect.objectContaining({ content: "**The Matrix** is already in the movie list (added by <@100000000000000099>). Please choose a different result." }),
+            expect.objectContaining({ content: `**The Matrix** is already in the movie list (added by <@${lister}>). Please choose a different result.` }),
         ]);
         expect(discord.originalEdits(rewatch)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "Added: The Matrix Reloaded" })] })]);
     });
 
-    test("stops a member at three movies in the list, unless they are a movie admin", async ({ discord, slash, services, http }) => {
-        await storeOwnMovies(services, 3);
+    test("stops a member at three movies in the list, unless they are a movie admin or the server owner", async ({ discord, slash, services, http }) => {
+        await storeFullList(services, IDS.user);
+        await storeFullList(services, IDS.owner);
+        tmdbSearch(http, "The Matrix", [matrix]);
         tmdbSearch(http, "The Matrix", [matrix]);
 
-        const member = await slash("addmovie", [title("The Matrix")], { member: asMember() });
-        const admin = await slash("addmovie", [title("The Matrix")], { member: asMember([IDS.roles.movieAdmin]) });
+        const member = await slash("addmovie", [title("The Matrix")]);
+        const admin = await slash("addmovie", [title("The Matrix")], withRoles(IDS.roles.movieAdmin));
+        const owner = await slash("addmovie", [title("The Matrix")], { member: apiMember({ user: apiUser({ id: IDS.owner }) }) });
 
         expect(discord.originalEdits(member)).toEqual([expect.objectContaining({
             content: "You have reached the maximum of 3 active movies. Remove one or wait for a movie night to conclude before adding more.",
         })]);
         expect(discord.originalEdits(admin)[0]?.embeds).toHaveLength(1);
+        expect(discord.originalEdits(owner)[0]?.embeds).toHaveLength(1);
     });
 
     test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, db, http }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
-        const uncachedGuild = "100000000000000012";
-        await new GuildRepository(db).initGuild(uncachedGuild, buildGuild({ id: uncachedGuild }));
-        discord.guild(apiGuild({ id: uncachedGuild }));
-        await storeOwnMovies(services, 3);
+        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild }));
+        discord.guild(apiGuild({ id: IDS.uncachedGuild }));
+        await storeFullList(services, IDS.user);
         tmdbSearch(http, "The Matrix", [matrix]);
 
         const command = await interact(chatInputInteraction("addmovie", [title("The Matrix")], {
-            guild_id: uncachedGuild,
-            member: asMember([IDS.roles.movieAdmin]),
+            guild_id: IDS.uncachedGuild,
+            ...withRoles(IDS.roles.movieAdmin),
         }));
 
         expect(discord.originalEdits(command)[0]?.embeds).toHaveLength(1);

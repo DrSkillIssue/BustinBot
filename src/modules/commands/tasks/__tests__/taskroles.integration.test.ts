@@ -2,13 +2,13 @@ import type { Firestore } from "firebase-admin/firestore";
 import { ApplicationCommandOptionType, type APIApplicationCommandInteractionDataOption, type APIRole } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
-import { IDS, apiGuild, apiGuildMember, apiMember, apiRole, apiUser, chatInputInteraction } from "../../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, nextId, withRoles } from "../../../../tests/discord/payloads.js";
 import { buildUserStats } from "../../../../tests/fakes/builders.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
 import type { TaskMilestoneRole } from "../../../../models/Guild.js";
 
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
-const member = "100000000000000031";
+const taskAdmin = withRoles(IDS.roles.taskAdmin);
+const member = nextId();
 const NEUTRAL = 0x95a5a6;
 
 function sub(name: string, options: APIApplicationCommandInteractionDataOption[] = []): APIApplicationCommandInteractionDataOption[] {

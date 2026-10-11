@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
+import { IDS, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
 import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { PrizeDraw } from "../../../models/PrizeDraw.js";
@@ -9,7 +9,7 @@ import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapsh
 
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number) => new Date(Date.now() - days * DAY);
-const winner = "100000000000000031";
+const [winner, second, third, fourth] = [nextId(), nextId(), nextId(), nextId()];
 
 // A finished task event and the submissions made for it
 async function storeEvent(services: ServiceContainer, id: string, endTime: Date, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
@@ -30,8 +30,8 @@ function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
         start: daysAgo(14).toISOString(),
         end: daysAgo(1).toISOString(),
         snapshotTakenAt: daysAgo(1).toISOString(),
-        participants: { [winner]: 2, "100000000000000032": 1 },
-        entries: [winner, winner, "100000000000000032"],
+        participants: { [winner]: 2, [second]: 1 },
+        entries: [winner, winner, second],
         totalEntries: 3,
         tierCounts: { bronze: 1, silver: 1, gold: 1 },
         ...overrides,
@@ -63,7 +63,7 @@ describe("a prize draw snapshot", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services, "pvm", daysAgo(2), [
             { userId: winner, status: SubmissionStatus.Pending },
-            { userId: "100000000000000032", status: SubmissionStatus.Rejected },
+            { userId: second, status: SubmissionStatus.Rejected },
         ]);
 
         expect(await snapshot(services)).toMatchObject({ participants: {}, totalEntries: 0 });
@@ -72,7 +72,7 @@ describe("a prize draw snapshot", () => {
     test("leaves out a task event that is still running", async ({ services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services, "finished", daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
-        await storeEvent(services, "running", new Date(Date.now() + 60 * 60 * 1000), [{ userId: "100000000000000032", status: SubmissionStatus.Gold }]);
+        await storeEvent(services, "running", new Date(Date.now() + 60 * 60 * 1000), [{ userId: second, status: SubmissionStatus.Gold }]);
 
         expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 1 }, taskEventIds: ["finished"] });
     });
@@ -91,17 +91,17 @@ describe("a prize draw snapshot", () => {
         }));
         await storeEvent(services, "previous-event", previousEnd, [
             // Approved after the previous snapshot, before its roll: in neither draw until carried over
-            { userId: "100000000000000032", status: SubmissionStatus.Silver, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousSnapshot.getTime() + 60 * 60 * 1000) },
+            { userId: second, status: SubmissionStatus.Silver, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousSnapshot.getTime() + 60 * 60 * 1000) },
             // Approved before the previous snapshot: already counted there
-            { userId: "100000000000000033", status: SubmissionStatus.Gold, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousEnd.getTime() - 60 * 60 * 1000) },
+            { userId: third, status: SubmissionStatus.Gold, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousEnd.getTime() - 60 * 60 * 1000) },
             // Made after the previous period ended
-            { userId: "100000000000000034", status: SubmissionStatus.Bronze, submittedAt: new Date(previousEnd.getTime() + DAY), reviewedAt: new Date(previousEnd.getTime() + 2 * DAY) },
+            { userId: fourth, status: SubmissionStatus.Bronze, submittedAt: new Date(previousEnd.getTime() + DAY), reviewedAt: new Date(previousEnd.getTime() + 2 * DAY) },
         ]);
         await storeEvent(services, "current-event", daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
 
         const draw = await snapshot(services);
 
-        expect(draw.participants).toEqual({ [winner]: 1, "100000000000000032": 1 });
+        expect(draw.participants).toEqual({ [winner]: 1, [second]: 1 });
         expect(draw.taskEventIds).toEqual(expect.arrayContaining(["current-event", "previous-event"]));
     });
 
@@ -137,9 +137,9 @@ describe("rolling a prize draw", () => {
     });
 
     test("keeps the winner already rolled", async ({ services }) => {
-        await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: "100000000000000032", rolledAt: daysAgo(1).toISOString() }));
+        await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: second, rolledAt: daysAgo(1).toISOString() }));
 
-        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe("100000000000000032");
+        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(second);
     });
 
     test("picks a winner by entries, stores them and counts the win", async ({ services }) => {
@@ -192,11 +192,10 @@ describe("announcing a prize draw winner", () => {
 
     test("reports that the task channel can't be reached instead of posting anywhere else", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        const deleted = "100000000000000099";
-        await services.guilds.update(IDS.guild, { channels: { taskChannel: deleted } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: winner }));
         discord.user(apiUser({ id: winner, username: "lucky" }));
-        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(false);

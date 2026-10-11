@@ -1,7 +1,7 @@
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, modalSubmitInteraction, nextId } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
@@ -10,6 +10,8 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const eventMessage = "100000000000000600";
 const pollMessage = "100000000000000601";
+const completer = nextId();
+const voter = nextId();
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
 async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
@@ -28,11 +30,11 @@ describe("the update task form", () => {
         const tasks = services.repos.taskRepo;
         await storeRunningEvent(services);
         // A completion approved after the event was posted
-        await tasks.createSubmission(buildTaskSubmission({ id: "approved", userId: "100000000000000031", taskEventId: "PVM001-week" }));
+        await tasks.createSubmission(buildTaskSubmission({ id: "approved", userId: completer, taskEventId: "PVM001-week" }));
         await tasks.reviewSubmission({ submissionId: "approved", reviewedBy: IDS.user, decision: SubmissionStatus.Bronze });
         await tasks.createTaskPoll(buildTaskPoll({
             id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" })],
-            votes: { "100000000000000032": "PVM001" }, endsAt: new Date(Date.now() + HOUR),
+            votes: { [voter]: "PVM001" }, endsAt: new Date(Date.now() + HOUR),
         }));
         for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
@@ -44,9 +46,9 @@ describe("the update task form", () => {
         expect(await tasks.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Vorkath", type: TaskType.KC, amtBronze: 5, amtSilver: 10, amtGold: 150000 });
         expect(await tasks.getTaskEventById("PVM001-week")).toMatchObject({
             task: { taskName: "Kill {amount} Vorkath" }, amounts: { bronze: 5, silver: 10, gold: 150000 },
-            completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: ["100000000000000031"],
+            completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [completer],
         });
-        expect(await tasks.getTaskPollById(pollMessage)).toMatchObject({ votes: { "100000000000000032": "PVM001" }, options: [{ id: "PVM001", taskName: "Kill {amount} Vorkath" }, { id: "PVM002" }] });
+        expect(await tasks.getTaskPollById(pollMessage)).toMatchObject({ votes: { [voter]: "PVM001" }, options: [{ id: "PVM001", taskName: "Kill {amount} Vorkath" }, { id: "PVM002" }] });
         expect(discord.messageEdits(IDS.channel, eventMessage)).toHaveLength(1);
         expect(discord.messageEdits(IDS.channel, pollMessage)).toHaveLength(1);
     });

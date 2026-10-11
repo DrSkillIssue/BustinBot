@@ -3,22 +3,14 @@ import type { ButtonInteraction } from "discord.js";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import {
-    IDS,
-    apiMember,
-    apiMessage,
-    apiUser,
-    buttonInteraction,
-    modalSubmitInteraction,
-    stringSelectInteraction,
-} from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, nextId, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 import type { Movie } from "../../../models/Movie.js";
 import { pollMovieWithList } from "../MoviePolls.js";
 import { addMovieWithStats } from "../MovieService.js";
 
-const SUBMITTER = "100000000000000036";
-const VOICE = "100000000000000080";
+const SUBMITTER = nextId();
+const VOICE = nextId();
 const DAY = 24 * 60 * 60 * 1000;
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
@@ -127,7 +119,7 @@ describe("choosing the movie for movie night", () => {
 });
 
 describe("/pickmovie", () => {
-    const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
+    const movieAdmin = withRoles(IDS.roles.movieAdmin);
 
     test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, services }) => {
         await storeMovies(services, [{ title: "Inception" }]);
@@ -196,8 +188,8 @@ describe("/listmovies", () => {
 describe("the movie list", () => {
     test("lets members remove their own movies and admins remove anyone's", async ({ discord, slash, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        const someoneElse = { member: apiMember({ user: apiUser({ id: "100000000000000099" }) }) };
-        const admin = { member: apiMember({ user: apiUser({ id: "100000000000000098" }), permissions: String(PermissionFlagsBits.Administrator) }) };
+        const someoneElse = { member: apiMember({ user: apiUser({ id: nextId() }) }) };
+        const admin = { member: apiMember({ user: apiUser({ id: nextId() }), permissions: String(PermissionFlagsBits.Administrator) }) };
 
         const refused = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], someoneElse);
         const byAdmin = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], admin);

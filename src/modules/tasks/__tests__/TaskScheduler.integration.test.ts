@@ -4,11 +4,10 @@ import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.j
 import { DiscordError } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS } from "../../../tests/discord/payloads.js";
+import { IDS, nextId } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 import { getDefaultChannel, initTaskScheduler, stopTaskScheduler } from "../TaskScheduler.js";
 
-const otherGuild = "100000000000000011";
 
 // The guild's jobs as node-cron records them, by job name
 function jobsOf(guildId: string): Record<string, string> {
@@ -45,21 +44,21 @@ describe("task scheduler", () => {
 
     test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({ discord, services, db }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild }));
-        const otherServices = createServiceContainer(db, otherGuild, services.botStats);
+        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
+        const otherServices = createServiceContainer(db, IDS.otherGuild, services.botStats);
 
         await initTaskScheduler(discord.client, services);
         await initTaskScheduler(discord.client, otherServices);
         await initTaskScheduler(discord.client, services);
 
         expect(Object.keys(jobsOf(IDS.guild))).toHaveLength(5);
-        expect(Object.keys(jobsOf(otherGuild))).toHaveLength(5);
+        expect(Object.keys(jobsOf(IDS.otherGuild))).toHaveLength(5);
         expect(cron.getTasks().size).toBe(10);
 
         await stopTaskScheduler(IDS.guild);
 
         expect(jobsOf(IDS.guild)).toEqual({});
-        expect(Object.keys(jobsOf(otherGuild))).toHaveLength(5);
+        expect(Object.keys(jobsOf(IDS.otherGuild))).toHaveLength(5);
     });
 });
 
@@ -75,7 +74,7 @@ describe("the task channel", () => {
     });
 
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
-        const category = "100000000000000098";
+        const category = nextId();
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
         discord.channel({ id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] });
 
@@ -83,12 +82,11 @@ describe("the task channel", () => {
     });
 
     test("is reported missing when the configured channel no longer exists", async ({ discord, services }) => {
-        const deleted = "100000000000000099";
-        await services.guilds.update(IDS.guild, { channels: { taskChannel: deleted } });
-        discord.refuse("GET", `/channels/${deleted}`, DiscordError.unknownChannel);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
-        expect(warn).toHaveBeenCalledWith(`[TaskScheduler] Can't reach the task channel ${deleted} in ${IDS.guild}:`, expect.objectContaining({ code: 10003 }));
+        expect(warn).toHaveBeenCalledWith(`[TaskScheduler] Can't reach the task channel ${IDS.missingChannel} in ${IDS.guild}:`, expect.objectContaining({ code: 10003 }));
     });
 });

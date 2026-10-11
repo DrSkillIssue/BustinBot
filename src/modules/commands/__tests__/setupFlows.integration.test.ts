@@ -4,19 +4,11 @@ import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import {
-    IDS,
-    apiMember,
-    buttonInteraction,
-    channelSelectInteraction,
-    modalSubmitInteraction,
-    roleSelectInteraction,
-    stringSelectInteraction,
-} from "../../../tests/discord/payloads.js";
+import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 
 const CHANNELS = { announce: "100000000000000201", log: "100000000000000202", archive: "100000000000000203" };
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+const admin = withRoles(IDS.roles.admin);
 
 // The select menus' custom ids and placeholders in a reply, row by row
 function menuPlaceholders(edit: RESTPatchAPIWebhookWithTokenMessageJSONBody | undefined): Record<string, string> {
@@ -107,12 +99,11 @@ describe("/setup choices", () => {
     });
 
     test("keeps one guild's choices separate from another's", async ({ discord, interact, services, commands, db }) => {
-        const otherGuild = "100000000000000011";
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild }));
-        const otherServices = createServiceContainer(db, otherGuild, services.botStats);
+        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
+        const otherServices = createServiceContainer(db, IDS.otherGuild, services.botStats);
         await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
 
-        const confirmElsewhere = await discord.dispatch(buttonInteraction("setup_confirm", undefined, { guild_id: otherGuild }));
+        const confirmElsewhere = await discord.dispatch(buttonInteraction("setup_confirm", undefined, { guild_id: IDS.otherGuild }));
         await routeInteraction(confirmElsewhere, discord.client, commands, otherServices);
 
         expect(discord.callbacks(confirmElsewhere)).toEqual([

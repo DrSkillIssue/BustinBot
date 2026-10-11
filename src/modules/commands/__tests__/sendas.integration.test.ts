@@ -1,9 +1,9 @@
 import { ApplicationCommandOptionType, ChannelType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
-import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, chatInputInteraction, nextId, withRoles } from "../../../tests/discord/payloads.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+const admin = withRoles(IDS.roles.admin);
 
 // /sendas aimed at a channel, as Discord delivers it with the channel resolved
 function sendas(channel: { id: string; type: ChannelType.GuildText | ChannelType.GuildCategory; name: string }, text: string, overrides = admin) {
@@ -52,7 +52,7 @@ describe("/sendas", () => {
     });
 
     test("refuses a channel that can't hold messages", async ({ discord, interact }) => {
-        const category = { id: "100000000000000098", type: ChannelType.GuildCategory as const, name: "Tasks" };
+        const category = { id: nextId(), type: ChannelType.GuildCategory as const, name: "Tasks" };
 
         const interaction = await interact(sendas(category, "Hello"));
 

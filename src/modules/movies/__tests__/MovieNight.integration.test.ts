@@ -6,29 +6,17 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import {
-    IDS,
-    apiGuild,
-    apiMember,
-    apiMessage,
-    apiRole,
-    apiTextChannel,
-    apiUser,
-    apiVoiceChannel,
-    apiVoiceState,
-    modalSubmitInteraction,
-    stringSelectInteraction,
-} from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, nextId, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
 import type { MovieEvent } from "../../../models/MovieEvent.js";
 import { startMovieScheduler, sweepMovieNight } from "../MovieScheduler.js";
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
-const VOICE = "100000000000000080";
-const SUBMITTER = "100000000000000036";
+const VOICE = nextId();
+const SUBMITTER = nextId();
 const movieUsers = apiRole({ name: "Movie Night" });
-const [present, joiner, leaver] = ["100000000000000031", "100000000000000032", "100000000000000033"];
+const [present, joiner, leaver] = [nextId(), nextId(), nextId()];
 
 // The guild's movie night set up as /moviesetup leaves it: the harness channel, a voice channel and a role to ping
 async function setUpMovieNight(discord: DiscordHarness, services: ServiceContainer): Promise<void> {
@@ -87,12 +75,13 @@ describe("scheduling a movie night", () => {
     test("points members at the running poll and stores a placeholder movie when none is chosen yet", async ({ discord, interact, services }) => {
         await setUpMovieNight(discord, services);
         const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
-        await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: new Date(Date.now() + HOUR), channelId: "100000000000000090" }));
+        const pollChannel = nextId();
+        await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: new Date(Date.now() + HOUR), channelId: pollChannel }));
         discord.acceptMessages(IDS.channel);
 
         await interact(modalSubmitInteraction(`movienight-time-${date}`, { "start-time": "21:00" }));
 
-        expect(JSON.stringify(discord.messagesSentTo(IDS.channel)[0]?.embeds)).toContain("A poll is currently running in <#100000000000000090>");
+        expect(JSON.stringify(discord.messagesSentTo(IDS.channel)[0]?.embeds)).toContain(`A poll is currently running in <#${pollChannel}>`);
         expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({ movie: { id: "TBD", title: "TBD" } });
     });
 
@@ -255,7 +244,7 @@ describe("the movie night sweep", () => {
         await storeNight(services, { startTime: start });
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        await slash("cancelmovie", [], withRoles(IDS.roles.movieAdmin));
         await sweepMovieNight(discord.client, services, at(start, -30 * MINUTE));
         await sweepMovieNight(discord.client, services, start);
 
@@ -266,21 +255,19 @@ describe("the movie night sweep", () => {
 
     test("keeps each guild's movie night to itself", async ({ discord, services, db }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        const otherGuild = "100000000000000011";
-        const otherChannel = "100000000000000021";
-        await discord.addGuild(apiGuild({ id: otherGuild, channels: [apiTextChannel({ id: otherChannel, guild_id: otherGuild })] }));
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild, channels: { movieNight: otherChannel } }));
-        const other = createServiceContainer(db, otherGuild, services.botStats);
-        const duePoll = buildMoviePoll({ endsAt: new Date(Date.now() - MINUTE), votes: { [present]: "movie-2" }, messageId: "", channelId: otherChannel });
+        await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
+        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { movieNight: IDS.otherGuildChannel } }));
+        const other = createServiceContainer(db, IDS.otherGuild, services.botStats);
+        const duePoll = buildMoviePoll({ endsAt: new Date(Date.now() - MINUTE), votes: { [present]: "movie-2" }, messageId: "", channelId: IDS.otherGuildChannel });
         await other.repos.movieRepo.createPoll(duePoll);
         await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: new Date(Date.now() + HOUR) }));
-        discord.acceptMessages(otherChannel);
+        discord.acceptMessages(IDS.otherGuildChannel);
         discord.user(apiUser());
         discord.acceptDirectMessages(IDS.user);
 
         for (const guild of [services, other]) await sweepMovieNight(discord.client, guild, new Date());
 
-        expect(discord.messagesSentTo(otherChannel)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "🏆 Movie poll closed!" })] })]);
+        expect(discord.messagesSentTo(IDS.otherGuildChannel)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "🏆 Movie poll closed!" })] })]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
         expect(await services.repos.movieRepo.getActivePoll()).not.toBeNull();
     });

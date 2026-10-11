@@ -43,7 +43,16 @@ export const IDS = {
     application: "100000000000000001",
     bot: "100000000000000002",
     guild: "100000000000000010",
+    // A second guild the bot is in, with its own channel, for tests that show guilds are kept apart
+    otherGuild: "100000000000000011",
+    otherGuildChannel: "100000000000000021",
+    // A guild discord.js hasn't cached: its interactions carry members as raw data, with role ids only
+    uncachedGuild: "100000000000000012",
     channel: "100000000000000020",
+    // A channel that was deleted, or that the bot can't see
+    missingChannel: "100000000000000099",
+    // The guild's owner, so that the default user is an ordinary member
+    owner: "100000000000000029",
     // The harness user's DM channel with the bot
     dm: "100000000000000050",
     user: "100000000000000030",
@@ -163,7 +172,7 @@ export function apiGuild(overrides: Partial<GatewayGuildCreateDispatchData> = {}
         icon: null,
         splash: null,
         discovery_splash: null,
-        owner_id: IDS.user,
+        owner_id: IDS.owner,
         afk_channel_id: null,
         afk_timeout: 300,
         verification_level: GuildVerificationLevel.None,
@@ -229,6 +238,11 @@ export function apiGuildMember(overrides: Partial<APIGuildMember> = {}): APIGuil
 // The member who invoked an interaction, which also carries their permissions in the channel
 export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): APIInteractionGuildMember {
     return { ...apiGuildMember(), permissions: "0", ...overrides };
+}
+
+// The harness user holding the given roles, as an interaction's member
+export function withRoles(...roleIds: string[]): { member: APIInteractionGuildMember } {
+    return { member: apiMember({ roles: roleIds }) };
 }
 
 const interactionBase = {

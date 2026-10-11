@@ -4,7 +4,6 @@ import { IDS } from '../../../tests/discord/payloads.js';
 import { buildGuild } from '../../../tests/fakes/builders.js';
 
 const test = base.extend('repo', ({ db }) => new GuildRepository(db));
-const otherGuild = '100000000000000011';
 
 beforeEach(() => {
     vi.stubEnv('BOT_MODE', 'production');
@@ -44,18 +43,18 @@ describe('GuildRepository', () => {
 
     test('lists every guild', async ({ repo }) => {
         await repo.initGuild(IDS.guild, buildGuild());
-        await repo.initGuild(otherGuild, buildGuild({ id: otherGuild }));
+        await repo.initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
 
-        expect((await repo.getAllGuilds()).map((guild) => guild.id).sort()).toEqual([IDS.guild, otherGuild]);
+        expect((await repo.getAllGuilds()).map((guild) => guild.id).sort()).toEqual([IDS.guild, IDS.otherGuild]);
     });
 
     test('only reads and writes the dev guild in dev mode', async ({ repo }) => {
         await repo.initGuild(IDS.guild, buildGuild());
-        await repo.initGuild(otherGuild, buildGuild({ id: otherGuild }));
+        await repo.initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
         vi.stubEnv('BOT_MODE', 'dev');
-        vi.stubEnv('DISCORD_GUILD_ID_DEV', otherGuild);
+        vi.stubEnv('DISCORD_GUILD_ID_DEV', IDS.otherGuild);
 
-        expect((await repo.getAllGuilds()).map((guild) => guild.id)).toEqual([otherGuild]);
+        expect((await repo.getAllGuilds()).map((guild) => guild.id)).toEqual([IDS.otherGuild]);
         expect(await repo.getGuild(IDS.guild)).toBeNull();
 
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

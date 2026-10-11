@@ -1,15 +1,14 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
-import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuildMember, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from "../HandleLeaderboardUpdate.js";
 
 const DAY = 24 * 60 * 60 * 1000;
-const [winner, runnerUp, third] = ["100000000000000031", "100000000000000032", "100000000000000033"];
-const DELETED_CHANNEL = "100000000000000099";
+const [winner, runnerUp, third] = [nextId(), nextId(), nextId()];
 
 // Weekly task events, each starting on its own day; `ended` of them are over
 async function storeWeeks(services: ServiceContainer, count: number, ended: number): Promise<string[]> {
@@ -101,8 +100,8 @@ describe("the weekly leaderboard update", () => {
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { points: { [winner]: 9 }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await setUpChampions(discord, services);
-        await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
-        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel, { persist: true });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel, { persist: true });
 
         await postPeriodicLeaderboardUpdate(discord.client, services);
         await postPeriodicLeaderboardUpdate(discord.client, services);
@@ -125,8 +124,8 @@ describe("/taskboard", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(services, {});
-        await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
-        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
         const command = await slash("taskboard", [{ type: 1, name: "update" }], { member: { ...apiGuildMember({ user: apiUser() }), roles: [IDS.roles.admin], permissions: "0" } });
 
@@ -160,11 +159,11 @@ describe("the warning before a period ends", () => {
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
-        await services.guilds.update(IDS.guild, { channels: { taskVerification: DELETED_CHANNEL } });
-        discord.refuse("GET", `/channels/${DELETED_CHANNEL}`, DiscordError.unknownChannel);
+        await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
         await warnPendingLeaderboardFinalization(discord.client, services);
 
-        expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Task verification channel ${DELETED_CHANNEL} not found; pending submissions not announced.`);
+        expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Task verification channel ${IDS.missingChannel} not found; pending submissions not announced.`);
     });
 });

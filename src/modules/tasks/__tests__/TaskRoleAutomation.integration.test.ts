@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
-import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuildMember, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
 import { buildUserStats } from "../../../tests/fakes/builders.js";
 import { applyTaskMilestoneRoles } from "../TaskMilestones.js";
 import { awardTaskChampionRoles } from "../TaskLeaderboards.js";
 
-const member = "100000000000000031";
+const member = nextId();
 const participant = apiRole({ name: "Task Participant" });
 const enthusiast = apiRole({ name: "Task Enthusiast" });
 const expert = apiRole({ name: "Task Expert" });
@@ -52,8 +52,8 @@ describe("champion roles", () => {
         const second = apiRole({ name: "Task Champion (2nd)" });
         for (const role of [first, second]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: first.id, taskChampionSecond: second.id } });
-        const previousChampion = "100000000000000032";
-        const runnerUp = "100000000000000033";
+        const previousChampion = nextId();
+        const runnerUp = nextId();
         await services.repos.taskLeaderboardRepo.createLeaderboard({
             id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z",
             period: { length: 4, eventIds: [], startedAt: "2026-01-05T00:00:00.000Z", index: 4 },

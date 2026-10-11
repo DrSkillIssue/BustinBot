@@ -3,12 +3,11 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { createServiceContainer } from "../../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
-import { IDS, apiMember } from "../../../../tests/discord/payloads.js";
+import { IDS, withRoles } from "../../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../../tests/fakes/builders.js";
 import { initTaskScheduler } from "../../../tasks/TaskScheduler.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
-const otherGuild = "100000000000000011";
+const admin = withRoles(IDS.roles.admin);
 
 function subcommand(name: "schedule" | "leaderboard") {
     return [{ type: ApplicationCommandOptionType.Subcommand as const, name }];
@@ -37,8 +36,8 @@ describe("/tasktoggle schedule", () => {
 
     test("stops only this guild's task jobs when switched off", async ({ discord, slash, services, db }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        await new GuildRepository(db).initGuild(otherGuild, buildGuild({ id: otherGuild }));
-        await initTaskScheduler(discord.client, createServiceContainer(db, otherGuild, services.botStats));
+        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
+        await initTaskScheduler(discord.client, createServiceContainer(db, IDS.otherGuild, services.botStats));
         await slash("tasktoggle", subcommand("schedule"), admin);
 
         const interaction = await slash("tasktoggle", subcommand("schedule"), admin);
@@ -47,7 +46,7 @@ describe("/tasktoggle schedule", () => {
             expect.objectContaining({ content: "⏹️ Task scheduler **disabled** and stopped for this guild." }),
         ]);
         expect(jobCount(IDS.guild)).toBe(0);
-        expect(jobCount(otherGuild)).toBe(5);
+        expect(jobCount(IDS.otherGuild)).toBe(5);
         expect((await new GuildRepository(db).getGuild(IDS.guild))?.toggles.taskScheduler).toBe(false);
     });
 
