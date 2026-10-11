@@ -17,6 +17,7 @@ const goodbot: Command = {
         const guild = message?.guild ?? interaction?.guild ?? null;
         const emoji = replaceBustinEmote("🥹", guild);
 
+        await interaction?.deferReply();
         await services?.botStats.incrementGoodBot();
         const count = services?.botStats.getGoodBotCount();
 
@@ -29,7 +30,7 @@ const goodbot: Command = {
             }
             console.log(`${message.author.username} made BustinBot feel good!`);
         } else if (interaction) {
-            await interaction.reply(`${emoji} ${reply}`);
+            await interaction.editReply(`${emoji} ${reply}`);
             console.log(`${interaction.user.username} made BustinBot feel good!`);
         }
     },

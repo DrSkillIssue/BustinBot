@@ -19,27 +19,31 @@ beforeEach(() => {
 describe('core moderation commands', () => {
     it('replies to slash interaction for goodbot', async () => {
         const interaction: any = {
-            reply: vi.fn().mockResolvedValue(undefined),
+            deferReply: vi.fn().mockResolvedValue(undefined),
+            editReply: vi.fn().mockResolvedValue(undefined),
             user: { username: 'PraiseUser' },
         };
 
         await goodbot.execute({ interaction, services });
 
         expect(botStats.incrementGoodBot).toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('🥹'));
-        expect(interaction.reply.mock.calls[0][0]).toContain('3 time');
+        expect(interaction.deferReply).toHaveBeenCalledWith();
+        expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('🥹'));
+        expect(interaction.editReply.mock.calls[0][0]).toContain('3 time');
     });
 
     it('replies to slash interaction for badbot', async () => {
         const interaction: any = {
-            reply: vi.fn().mockResolvedValue(undefined),
+            deferReply: vi.fn().mockResolvedValue(undefined),
+            editReply: vi.fn().mockResolvedValue(undefined),
             user: { username: 'CriticUser' },
         };
 
         await badbot.execute({ interaction, services });
 
         expect(botStats.incrementBadBot).toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('😭'));
-        expect(interaction.reply.mock.calls[0][0]).toContain('2 time');
+        expect(interaction.deferReply).toHaveBeenCalledWith();
+        expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('😭'));
+        expect(interaction.editReply.mock.calls[0][0]).toContain('2 time');
     });
 });
