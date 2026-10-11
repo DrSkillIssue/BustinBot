@@ -34,10 +34,9 @@ const [present, joiner, leaver] = ["100000000000000031", "100000000000000032", "
 async function setUpMovieNight(discord: DiscordHarness, services: ServiceContainer): Promise<void> {
     await discord.addChannel(apiVoiceChannel({ id: VOICE }));
     await discord.addRole(IDS.guild, movieUsers);
-    const config = (await services.guilds.get(IDS.guild))!;
     await services.guilds.update(IDS.guild, {
-        channels: { ...config.channels, movieNight: IDS.channel, movieVC: VOICE },
-        roles: { ...config.roles, movieUser: movieUsers.id },
+        channels: { movieNight: IDS.channel, movieVC: VOICE },
+        roles: { movieUser: movieUsers.id },
     });
 }
 
@@ -155,14 +154,13 @@ describe("the movie night sweep", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
-        const config = (await services.guilds.get(IDS.guild))!;
-        await services.guilds.update(IDS.guild, { channels: { ...config.channels, movieNight: "" } });
+        await services.guilds.update(IDS.guild, { channels: { movieNight: "" } });
         const start = new Date(Date.now() + 30 * MINUTE);
         await storeNight(services, { startTime: start });
         discord.acceptMessages(IDS.channel);
 
         await sweepMovieNight(discord.client, services, at(start, -30 * MINUTE));
-        await services.guilds.update(IDS.guild, { channels: { ...config.channels, movieNight: IDS.channel } });
+        await services.guilds.update(IDS.guild, { channels: { movieNight: IDS.channel } });
         await sweepMovieNight(discord.client, services, at(start, -29 * MINUTE));
 
         expect(warn).toHaveBeenCalledWith(`[MovieChannel] Movie night channel (not set) not found for guild ${IDS.guild}.`);

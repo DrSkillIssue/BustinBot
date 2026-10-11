@@ -38,7 +38,7 @@ async function storePeriodic(services: ServiceContainer, overrides: Partial<Task
 async function setUpChampions(discord: DiscordHarness, services: ServiceContainer) {
     const roles = { first: apiRole({ name: "Task Champion (1st)" }), second: apiRole({ name: "Task Champion (2nd)" }), third: apiRole({ name: "Task Champion (3rd)" }) };
     for (const role of Object.values(roles)) await discord.addRole(IDS.guild, role);
-    await services.guilds.update(IDS.guild, { roles: { ...IDS.roles, taskChampionFirst: roles.first.id, taskChampionSecond: roles.second.id, taskChampionThird: roles.third.id } });
+    await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: roles.first.id, taskChampionSecond: roles.second.id, taskChampionThird: roles.third.id } });
     const dms: Record<string, string> = {};
     for (const [index, userId] of [winner, runnerUp, third].entries()) {
         const user = apiUser({ id: userId, username: `member${index + 1}`, global_name: `member${index + 1}` });
@@ -101,7 +101,7 @@ describe("the weekly leaderboard update", () => {
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { points: { [winner]: 9 }, period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await setUpChampions(discord, services);
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskChannel: DELETED_CHANNEL } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
         discord.api
             .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
             .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } })
@@ -114,7 +114,7 @@ describe("the weekly leaderboard update", () => {
         expect(discord.memberRoleChanges("PUT")).toHaveLength(1);
         expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
 
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskChannel: IDS.channel } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.channel } });
         discord.acceptMessages(IDS.channel);
         const command = await slash("taskboard", [{ type: 1, name: "final" }], { member: { ...apiGuildMember({ user: apiUser() }), roles: [IDS.roles.admin], permissions: "0" } });
 
@@ -128,7 +128,7 @@ describe("/taskboard", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(services, {});
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskChannel: DELETED_CHANNEL } });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: DELETED_CHANNEL } });
         discord.api
             .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
             .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });
@@ -165,7 +165,7 @@ describe("the warning before a period ends", () => {
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskVerification: DELETED_CHANNEL } });
+        await services.guilds.update(IDS.guild, { channels: { taskVerification: DELETED_CHANNEL } });
         discord.api
             .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })
             .reply(404, { code: 10003, message: "Unknown Channel" }, { headers: { "content-type": "application/json" } });

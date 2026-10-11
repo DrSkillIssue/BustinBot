@@ -99,7 +99,7 @@ describe("choosing the movie for movie night", () => {
     test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
         await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() + DAY), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, movieVC: VOICE } });
+        await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
         const dm = discord.acceptDirectMessages(SUBMITTER);

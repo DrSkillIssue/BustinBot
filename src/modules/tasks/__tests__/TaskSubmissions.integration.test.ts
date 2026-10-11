@@ -88,7 +88,7 @@ async function storeApproval(services: ServiceContainer, tier: SubmissionStatus.
 // screenshots, removing the review post, redrawing the task's post and the note to the admins
 async function acceptReviewEffects(discord: DiscordHarness, services: ServiceContainer): Promise<{ dm: string; screenshot: APIAttachment }> {
     await discord.addChannel(apiTextChannel({ id: ARCHIVE, name: "bot-archive" }));
-    await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, botArchive: ARCHIVE } });
+    await services.guilds.update(IDS.guild, { channels: { botArchive: ARCHIVE } });
     discord.user(apiUser());
     discord.member(IDS.guild, apiGuildMember({ user: apiUser() }));
     const dm = discord.acceptDirectMessages(IDS.user);
@@ -236,7 +236,7 @@ describe("submitting a task", () => {
     test("tells the member to send again when no verification channel is set up", async ({ discord, services }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeEvent(services);
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskVerification: "" } });
+        await services.guilds.update(IDS.guild, { channels: { taskVerification: "" } });
         await services.tasks.startSubmission(IDS.user, EVENT);
         discord.acceptMessages(IDS.dm);
 
@@ -442,7 +442,7 @@ describe("approving a submission", () => {
         await storeEvent(services);
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
-        await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, botArchive: "" } });
+        await services.guilds.update(IDS.guild, { channels: { botArchive: "" } });
 
         const confirm = await approve(discord, interact, "bronze");
 
