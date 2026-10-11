@@ -1,7 +1,13 @@
+import path from "node:path";
+import type { ChatInputCommandInteraction } from "discord.js";
+import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction } from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
+import { loadCommands } from "../core/services/CommandService.js";
+import { handleInteraction } from "../core/events/onInteraction.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
 import { DiscordHarness } from "./discord/harness.js";
+import { chatInputInteraction } from "./discord/payloads.js";
 import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
 import { buildGuild } from "./fakes/builders.js";
 
@@ -9,6 +15,8 @@ import { buildGuild } from "./fakes/builders.js";
 // - discord: a real discord.js client fed raw Discord payloads, with Discord's REST API served by msw
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
+// - commands: the bot's real slash command registry
+// - slash: runs a slash command through the real router, the way a member invoking it would
 export const test = base
     .extend("discord", async ({}, { onCleanup }) => {
         const discord = DiscordHarness.start();
@@ -23,6 +31,18 @@ export const test = base
     .extend("services", async ({ db }) => {
         await new GuildRepository(db).initGuild(buildGuild().id, buildGuild());
         return createServiceContainer(db, buildGuild().id);
-    });
+    })
+    .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
+    .extend("slash", ({ discord, services, commands }) =>
+        async (
+            name: string,
+            options: APIApplicationCommandInteractionDataOption[] = [],
+            overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
+        ): Promise<ChatInputCommandInteraction> => {
+            const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction(name, options, overrides));
+            await handleInteraction(interaction, commands, services);
+            return interaction;
+        }
+    );
 
 export { describe, expect, vi, beforeEach, afterEach } from "vitest";
