@@ -77,13 +77,21 @@ describe('MovieRepository polls', () => {
         expect(active?.endsAt).toEqual(new Date('2026-01-02T00:00:00.000Z'));
     });
 
-    test('closes a poll', async ({ repo }) => {
-        await repo.createPoll(buildPoll());
+    test('closes a poll once, returning it with its votes as it closed', async ({ repo }) => {
+        await repo.createPoll(buildPoll({ votes: { 'user-1': 'movie-2' } }));
 
-        await repo.closePoll('poll-1');
-
+        expect(await repo.closePoll('poll-1')).toMatchObject({ id: 'poll-1', votes: { 'user-1': 'movie-2' } });
+        expect(await repo.closePoll('poll-1')).toBeNull();
         expect(await repo.getActivePoll()).toBeNull();
     });
+
+    test('closes a poll closed twice at the same moment once', async ({ repo }) => {
+        await repo.createPoll(buildPoll());
+
+        const closed = await Promise.all([repo.closePoll('poll-1'), repo.closePoll('poll-1')]);
+
+        expect(closed.filter(Boolean)).toHaveLength(1);
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('records a vote and reports whether it was the voter\'s first', async ({ repo }) => {
         await repo.createPoll(buildPoll());
@@ -126,6 +134,44 @@ describe('MovieRepository events', () => {
         expect(active?.id).toBe('late');
         expect(active?.startTime).toEqual(new Date('2026-01-10T09:00:00.000Z'));
     });
+
+    test('completes an event once, with the changes given', async ({ repo }) => {
+        await repo.createMovieEvent(buildEvent());
+        const completedAt = new Date('2026-01-03T12:00:00.000Z');
+
+        expect(await repo.completeEvent('event-1', { completedAt, movie: buildMovie({ watched: true }) })).toMatchObject({
+            completed: true, completedAt, movie: { watched: true },
+        });
+        expect(await repo.completeEvent('event-1')).toBeNull();
+        expect(await repo.completeEvent('missing')).toBeNull();
+        expect(await repo.getActiveEvent()).toBeNull();
+    });
+
+    test('completes an event completed twice at the same moment once', async ({ repo }) => {
+        await repo.createMovieEvent(buildEvent());
+
+        const completed = await Promise.all([repo.completeEvent('event-1'), repo.completeEvent('event-1')]);
+
+        expect(completed.filter(Boolean)).toHaveLength(1);
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+
+    test('claims each reminder once, and none for an event that has ended', async ({ repo }) => {
+        await repo.createMovieEvent(buildEvent());
+        await repo.createMovieEvent(buildEvent({ id: 'ended', completed: true }));
+
+        expect(await repo.claimReminders('event-1', ['2 hours before'])).toEqual(['2 hours before']);
+        expect(await repo.claimReminders('event-1', ['2 hours before', '30 mins before'])).toEqual(['30 mins before']);
+        expect(await repo.claimReminders('ended', ['start time'])).toEqual([]);
+        expect((await repo.getActiveEvent())?.remindersSent).toEqual(['2 hours before', '30 mins before']);
+    });
+
+    test('claims a reminder claimed twice at the same moment once', async ({ repo }) => {
+        await repo.createMovieEvent(buildEvent());
+
+        const claims = await Promise.all([repo.claimReminders('event-1', ['start time']), repo.claimReminders('event-1', ['start time'])]);
+
+        expect(claims.flat()).toEqual(['start time']);
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('lists events newest first and returns the latest', async ({ repo }) => {
         await repo.createMovieEvent(buildEvent({ id: 'first', createdAt: new Date('2026-01-01T00:00:00.000Z') }));

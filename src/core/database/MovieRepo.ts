@@ -48,9 +48,16 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         return polls[0] ?? null;
     }
 
-    async closePoll(pollId: string): Promise<void> {
+    // Closes a poll if it is still open and returns it as it was closed, votes included, or null if it was already
+    // closed. In one transaction, so a poll closed by an admin and by the scheduler at once is closed once.
+    async closePoll(pollId: string): Promise<MoviePoll | null> {
         const docRef = this.pollsCollection.doc(pollId);
-        await docRef.update({ isActive: false, closedAt: new Date() });
+        return this.db.runTransaction(async (transaction) => {
+            const poll = (await transaction.get(docRef)).data();
+            if (!poll?.isActive) return null;
+            transaction.update(docRef, { isActive: false, closedAt: new Date() });
+            return poll;
+        });
     }
 
     async clearPolls(): Promise<void> {
@@ -70,6 +77,34 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
             createdAt: event.createdAt ?? new Date(),
         };
         await this.eventsCollection.doc(payload.id).set(payload);
+    }
+
+    // Marks a movie night completed, with any changes given, if it isn't already, and returns it as completed, or
+    // null if it had already ended. In one transaction, so a night ended by an admin and by the scheduler at once
+    // ends once.
+    async completeEvent(eventId: string, changes: Partial<MovieEvent> = {}): Promise<MovieEvent | null> {
+        const docRef = this.eventsCollection.doc(eventId);
+        return this.db.runTransaction(async (transaction) => {
+            const event = (await transaction.get(docRef)).data();
+            if (!event || event.completed) return null;
+            const completed: MovieEvent = { ...event, ...changes, completed: true, completedAt: changes.completedAt ?? new Date() };
+            transaction.set(docRef, completed);
+            return completed;
+        });
+    }
+
+    // Records reminders as sent for a movie night that is still on and returns those not sent before, so each
+    // reminder goes out once however many sweeps see it due
+    async claimReminders(eventId: string, labels: string[]): Promise<string[]> {
+        const docRef = this.eventsCollection.doc(eventId);
+        return this.db.runTransaction(async (transaction) => {
+            const event = (await transaction.get(docRef)).data();
+            if (!event || event.completed) return [];
+            const sent = event.remindersSent ?? [];
+            const unsent = labels.filter((label) => !sent.includes(label));
+            if (unsent.length) transaction.update(docRef, { remindersSent: [...sent, ...unsent] });
+            return unsent;
+        });
     }
 
     async getActiveEvent(): Promise<MovieEvent | null> {

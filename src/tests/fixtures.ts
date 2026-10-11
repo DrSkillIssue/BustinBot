@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Interaction, Message } from "discord.js";
-import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData } from "discord-api-types/v10";
+import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData, GatewayVoiceStateUpdateDispatchData } from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
 import { BotStatsService } from "../core/services/BotStatsService.js";
@@ -23,6 +23,7 @@ import { buildGuild } from "./fakes/builders.js";
 // - interact: delivers any interaction (button, select, form) and routes it exactly as the running bot does
 // - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
 // - prefix: sends a channel message through the real prefix command handler
+// - voice: delivers a member's voice state change and hands it to the guild's movie attendance, as the bot does
 export const test = base
     .extend("discord", async ({}, { onCleanup }) => {
         const discord = await DiscordHarness.start();
@@ -54,6 +55,12 @@ export const test = base
             options: APIApplicationCommandInteractionDataOption[] = [],
             overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
         ): Promise<Interaction> => interact(chatInputInteraction(name, options, overrides))
+    )
+    .extend("voice", ({ discord, services }) =>
+        async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
+            const [oldState, newState] = await discord.voiceStateUpdate(state);
+            services.movieAttendance.voiceStateChanged(oldState, newState);
+        }
     )
     .extend("prefix", ({ discord, services, commands }) =>
         async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {

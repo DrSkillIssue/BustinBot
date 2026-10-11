@@ -1,4 +1,4 @@
-import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, Message, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel, StringSelectMenuInteraction, Client } from "discord.js";
+import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, Message, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel, StringSelectMenuInteraction } from "discord.js";
 import Fuse from 'fuse.js';
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
@@ -9,14 +9,15 @@ import { getManualPollSession, changeManualPollPage, clearManualPollSession, sho
 import { pollMovieRandom, pollMovieWithList } from "./MoviePolls.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
-import { scheduleMovieAutoEnd } from "./MovieLifecycle.js";
 function getActiveMoviesSorted(movies: Movie[]): Movie[] {
     return movies
         .filter((movie) => !movie.watched)
         .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
 }
 
-export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string, client?: Client) {
+// Makes a movie the current pick, and the movie of the scheduled movie night if there is one. The scheduler ends
+// the night once the movie's runtime has passed.
+export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string) {
     const movieRepo = services.repos.movieRepo;
     if (!movieRepo) {
         console.error("[MovieStorage] Movie repository not found in services.");
@@ -48,10 +49,6 @@ export async function saveCurrentMovie(services: ServiceContainer, movie: Movie,
                 ...(voiceChannelId ? { voiceChannelId } : {}),
             };
             await movieRepo.createMovieEvent(updatedEvent);
-
-            if (client && updatedMovie.runtime) {
-                await scheduleMovieAutoEnd(services, updatedEvent.startTime.toISOString(), updatedMovie.runtime, client);
-            }
         }
         console.log(`[MovieStorage] Saved current movie: ${movie.title}`);
     } catch (error) {
@@ -125,7 +122,7 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
         return;
     }
 
-    await saveCurrentMovie(services, selectedMovie, interaction.user.id, interaction.client);
+    await saveCurrentMovie(services, selectedMovie, interaction.user.id);
     await notifyMovieSubmitter(selectedMovie, interaction.client, services);
 
     const embed = createMovieEmbed(selectedMovie);
@@ -186,7 +183,7 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
         return;
     }
 
-    await saveCurrentMovie(services, selectedMovie, interaction.user.id, interaction.client);
+    await saveCurrentMovie(services, selectedMovie, interaction.user.id);
     await notifyMovieSubmitter(selectedMovie, interaction.client, services);
 
     if (!embed) {

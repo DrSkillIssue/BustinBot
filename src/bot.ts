@@ -1,4 +1,4 @@
-import { ChannelType, type Client, type Interaction, type Message } from 'discord.js';
+import { ChannelType, type Client, type Interaction, type Message, type VoiceState } from 'discord.js';
 import cron from 'node-cron';
 import type { Firestore } from 'firebase-admin/firestore';
 import { loadCommands } from './core/services/CommandService.js';
@@ -6,14 +6,13 @@ import { handleMessage } from './core/events/onMessage.js';
 import { routeInteraction } from './core/events/routeInteraction.js';
 import { handleDirectMessage } from './modules/tasks/TaskInteractions.js';
 import { registerGuildCommands } from './utils/registerCommands.js';
-import { cancelActivePollSchedule, scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
 import { createServiceContainer } from './core/services/ServiceFactory.js';
 import type { ServiceContainer } from './core/services/ServiceContainer.js';
 import { BotStatsService } from './core/services/BotStatsService.js';
 import { BotRepository } from './core/database/BotRepo.js';
 import { GuildRepository } from './core/database/GuildRepo.js';
 import { initTaskScheduler } from './modules/tasks/TaskScheduler.js';
-import { initMovieScheduler } from './modules/movies/MovieScheduler.js';
+import { startMovieScheduler } from './modules/movies/MovieScheduler.js';
 import { SchedulerStatusReporter } from './core/services/SchedulerStatusReporter.js';
 
 export interface BotOptions {
@@ -100,6 +99,12 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     };
     client.on('interactionCreate', onInteractionCreate);
 
+    // Voice joins and leaves count towards the attendance of the guild's movie night
+    const onVoiceStateUpdate = (oldState: VoiceState, newState: VoiceState) => {
+        getServices(newState.guild.id).movieAttendance.voiceStateChanged(oldState, newState);
+    };
+    client.on('voiceStateUpdate', onVoiceStateUpdate);
+
     // Ready event. Its work is kept so shutting down can wait for it, rather than racing it and leaving behind
     // schedulers started after the stop.
     let initialised: Promise<void> | undefined;
@@ -107,7 +112,6 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     const initialiseGuilds = async (): Promise<void> => {
         console.log(`Logged in as ${client.user?.tag}!`);
         const primaryServices = getServices(primaryGuildId);
-        await scheduleActivePollClosure(primaryServices, client);
 
         for (const guild of guildConfigs) {
             if (guild.toggles?.taskScheduler) {
@@ -117,8 +121,8 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
             }
         }
 
-        initMovieScheduler(client);
-        console.log("[MovieModule] Scheduler and attendance tracking initialised.");
+        startMovieScheduler(client, () => client.guilds.cache.map((guild) => getServices(guild.id)));
+        console.log("[MovieModule] Movie night scheduler started.");
 
         await SchedulerStatusReporter.logAllUpcoming(primaryServices);
         SchedulerStatusReporter.scheduleDailyLog(primaryServices);
@@ -136,11 +140,11 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
         // Take no new events, then let the ones being handled finish before anything they use is stopped
         client.off('messageCreate', onMessageCreate);
         client.off('interactionCreate', onInteractionCreate);
+        client.off('voiceStateUpdate', onVoiceStateUpdate);
         await Promise.all(inProgress);
         await initialised;
         // node-cron's own shutdown stops every scheduled job, waiting for any that is running to finish
         await cron.shutdown();
-        cancelActivePollSchedule();
         await client.destroy();
     };
 }

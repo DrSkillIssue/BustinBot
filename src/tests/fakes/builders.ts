@@ -4,6 +4,9 @@ import { newUserStats, type UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import type { Guild } from "../../models/Guild.js";
+import type { Movie } from "../../models/Movie.js";
+import type { MovieEvent } from "../../models/MovieEvent.js";
+import type { MoviePoll } from "../../models/MoviePoll.js";
 import { IDS, nextId } from "../discord/payloads.js";
 
 // Builders return complete, valid domain objects; tests override only the fields they care about.
@@ -82,6 +85,48 @@ export function buildGuild(overrides: Partial<Guild> = {}): Guild {
         channels: { announcements: IDS.channel, taskChannel: IDS.channel, taskVerification: IDS.channel, movieNight: IDS.channel },
         setupComplete: { core: true, movie: true, task: true },
         timezone: "UTC",
+        ...overrides,
+    };
+}
+
+export function buildMovie(overrides: Partial<Movie> = {}): Movie {
+    return {
+        id: "movie-1",
+        title: "Inception",
+        watched: false,
+        addedBy: IDS.user,
+        addedAt: new Date("2026-01-01T00:00:00.000Z"),
+        runtime: 148,
+        ...overrides,
+    };
+}
+
+// A scheduled movie night, announced in the harness channel
+export function buildMovieEvent(overrides: Partial<MovieEvent> = {}): MovieEvent {
+    return {
+        id: "event-1",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        startTime: new Date("2026-01-03T20:00:00.000Z"),
+        movie: buildMovie(),
+        channelId: IDS.channel,
+        completed: false,
+        hostedBy: IDS.user,
+        ...overrides,
+    };
+}
+
+// An open movie poll, posted in the harness channel
+export function buildMoviePoll(overrides: Partial<MoviePoll> = {}): MoviePoll {
+    return {
+        id: "poll-1",
+        type: "movie",
+        options: [buildMovie({ id: "movie-1" }), buildMovie({ id: "movie-2", title: "Arrival" })],
+        messageId: nextId(),
+        channelId: IDS.channel,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: new Date("2026-01-02T00:00:00.000Z"),
+        isActive: true,
+        votes: {},
         ...overrides,
     };
 }

@@ -2,7 +2,6 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "d
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
 const cancelmovie: Command = {
@@ -58,14 +57,11 @@ const cancelmovie: Command = {
         const cancellationMessage = `❌ Movie night has been cancelled by <@${interaction.user.id}>.`;
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
-        clearScheduledMovieAutoEnd(services.guildId);
-        actions.push("Cleared movie auto-end timer");
-
         try {
             // Cancel active poll
-            const activePoll = await movieRepo.getActivePoll();
-            if (activePoll?.isActive) {
-                await movieRepo.closePoll(activePoll.id);
+            const openPoll = await movieRepo.getActivePoll();
+            const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;
+            if (activePoll) {
                 actions.push("Active movie poll set inactive");
 
                 if (activePoll.messageId) {
@@ -97,12 +93,9 @@ const cancelmovie: Command = {
             const latestEvent = await movieRepo.getActiveEvent();
             if (latestEvent && !latestEvent.completed) {
                 fallbackAnnouncementChannelId = latestEvent.channelId;
-                const completedEvent = {
-                    ...latestEvent,
-                    completed: true,
-                    completedAt: new Date(),
-                };
-                await movieRepo.createMovieEvent(completedEvent);
+                // Ending it stops its reminders, attendance and automatic end
+                await movieRepo.completeEvent(latestEvent.id);
+                services.movieAttendance.stop();
                 actions.push("Movie night event marked as cancelled");
 
                 if (latestEvent.announcementMessageId) {

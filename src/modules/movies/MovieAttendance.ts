@@ -1,178 +1,96 @@
-import { Client, VoiceState } from 'discord.js';
-import type { VoiceBasedChannel } from 'discord.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
+import type { Client, VoiceState } from 'discord.js';
 
-const MIN_ATTENDANCE_MS = 30 * 60 * 1000; // 30 mins
-const PRESENCE_POLL_INTERVAL_MS = 60 * 1000; // Poll every minute as a safety net
+export const MIN_ATTENDANCE_MS = 30 * 60 * 1000; // 30 mins
 
-interface ActiveSession {
-    joinTime: number;
-    totalTime: number;
-    metThreshold: boolean;
+interface Session {
+    // When the member last joined the voice channel, or null while they are out of it
+    joinedAt: number | null;
+    // Time spent in the channel before that
+    totalMs: number;
 }
 
-interface AttendanceInitOptions {
-    channelId: string;
-    startTime: Date;
-    initialUserIds?: string[];
-    client?: Client;
+interface Tracking {
+    eventId: string;
+    // The movie night's voice channel, or null when none is configured and nothing can be counted
+    channelId: string | null;
+    sessions: Map<string, Session>;
 }
 
-const activeSessions = new Map<string, ActiveSession>();
-let activeChannelId: string | null = null;
-let movieStartTime: Date | null = null;
-let presencePollTimer: NodeJS.Timeout | null = null;
+// Who watches a guild's movie night: the time each member spends in its voice channel from the start. Each guild
+// has its own. The scheduler's sweep starts it at the start time with the members already in the channel, keeps it
+// in line with the channel every minute, and finishes it when the night ends; voice events record joins and leaves
+// in between. A restart starts it again from the members in the channel at that moment.
+export class MovieAttendance {
+    private tracking: Tracking | null = null;
 
-export function initAttendanceTracking(options: AttendanceInitOptions) {
-    const { channelId, startTime, initialUserIds = [], client } = options;
-
-    activeChannelId = channelId;
-    movieStartTime = startTime;
-    activeSessions.clear();
-
-    if (presencePollTimer) {
-        clearInterval(presencePollTimer);
-        presencePollTimer = null;
+    isTracking(eventId: string): boolean {
+        return this.tracking?.eventId === eventId;
     }
 
-    const now = Date.now();
-    for (const userId of initialUserIds) {
-        activeSessions.set(userId, { joinTime: now, totalTime: 0, metThreshold: false });
-        console.log(`[MovieAttendance] Seeded tracking for ${userId} already in channel ${channelId}`);
-    }
-    console.log(`[MovieAttendance] Tracking started for channel ${channelId}`);
-
-    if (client) {
-        presencePollTimer = setInterval(() => pollChannelPresence(client), PRESENCE_POLL_INTERVAL_MS);
-    }
-}
-
-export function registerVoiceListeners(client: Client) {
-    client.on("voiceStateUpdate", (oldState: VoiceState, newState: VoiceState) => {
-        if (!activeChannelId) return;
-
-        const userId = newState.id;
-        const now = Date.now();
-
-        // User joins VC
-        if (newState.channelId === activeChannelId && oldState.channelId !== activeChannelId) {
-            const existing = activeSessions.get(userId);
-            const totalTime = existing?.totalTime ?? 0;
-            activeSessions.set(userId, { joinTime: now, totalTime, metThreshold: existing?.metThreshold ?? false });
-            console.log(`[MovieAttendance] ${userId} joined tracked channel ${activeChannelId}`);
-        }
-
-        // User leaves VC
-        if (oldState.channelId === activeChannelId && newState.channelId !== activeChannelId) {
-            captureLeave(userId, now);
-        }
-    })
-}
-
-export async function finaliseAttendance(services: ServiceContainer) {
-    if (!activeChannelId || !movieStartTime) return [];
-
-    if (presencePollTimer) {
-        clearInterval(presencePollTimer);
-        presencePollTimer = null;
+    start(eventId: string, channelId: string | null, memberIds: string[], at: Date): void {
+        const sessions = new Map<string, Session>();
+        for (const userId of memberIds) sessions.set(userId, { joinedAt: at.getTime(), totalMs: 0 });
+        this.tracking = { eventId, channelId, sessions };
+        console.log(channelId
+            ? `[MovieAttendance] Tracking ${memberIds.length} member(s) in ${channelId} for ${eventId}.`
+            : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`);
     }
 
-    const now = Date.now();
-    const attendees: string[] = [];
+    voiceStateChanged(oldState: VoiceState, newState: VoiceState, at: Date = new Date()): void {
+        const channelId = this.tracking?.channelId;
+        if (!channelId) return;
+        if (newState.channelId === channelId && oldState.channelId !== channelId) this.join(newState.id, at.getTime());
+        if (oldState.channelId === channelId && newState.channelId !== channelId) this.leave(newState.id, at.getTime());
+    }
 
-    for (const [userId, session] of activeSessions.entries()) {
-        const totalTime = session.totalTime + (session.joinTime ? now - session.joinTime : 0);
-        const totalMinutes = Math.round(totalTime / 60000);
-        if (totalTime >= MIN_ATTENDANCE_MS) {
-            if (!session.metThreshold) {
-                console.log(`[MovieAttendance] ${userId} reached threshold during finalisation (${totalMinutes} mins).`);
-            }
-            attendees.push(userId);
-            console.log(`[MovieAttendance] ${userId} counted as attendee with ${totalMinutes} mins watched.`);
-        } else {
-            console.log(`[MovieAttendance] ${userId} watched ${totalMinutes} mins (< ${MIN_ATTENDANCE_MS / 60000}); not counted.`);
+    // Brings the sessions in line with who is in the channel, in case a voice event was missed
+    reconcile(memberIds: string[], at: Date): void {
+        if (!this.tracking?.channelId) return;
+        const present = new Set(memberIds);
+        for (const userId of present) this.join(userId, at.getTime());
+        for (const [userId, session] of this.tracking.sessions) {
+            if (session.joinedAt !== null && !present.has(userId)) this.leave(userId, at.getTime());
         }
     }
 
-    console.log(`[MovieAttendance] There were ${attendees.length} attendees for movie night.`);
-
-    const userRepo = services.repos.userRepo;
-    if (!userRepo) {
-        console.error('[MovieAttendance] User repository not available in ServiceContainer.');
-        cleanupTrackingState();
+    // Stops counting and returns the members who watched at least 30 minutes of the given movie night
+    finish(eventId: string, at: Date): string[] {
+        if (!this.isTracking(eventId)) return [];
+        const attendees = [...this.tracking!.sessions].flatMap(([userId, session]) => {
+            const watchedMs = session.totalMs + (session.joinedAt !== null ? at.getTime() - session.joinedAt : 0);
+            return watchedMs >= MIN_ATTENDANCE_MS ? [userId] : [];
+        });
+        this.tracking = null;
         return attendees;
     }
 
-    for (const userId of attendees) {
-        try {
-            await userRepo.incrementStat(userId, "moviesAttended", 1);
-        } catch (err) {
-            console.warn(`[MovieAttendance] Failed to increment moviesAttended for ${userId}:`, err);
-        }
+    // Stops counting without recording anyone, when a movie night is cancelled or replaced
+    stop(): void {
+        this.tracking = null;
     }
 
-    cleanupTrackingState();
-    return attendees;
-}
-
-function cleanupTrackingState() {
-    if (presencePollTimer) {
-        clearInterval(presencePollTimer);
-        presencePollTimer = null;
-    }
-    activeChannelId = null;
-    activeSessions.clear();
-    movieStartTime = null;
-}
-
-function isVoiceChannel(channel: unknown): channel is VoiceBasedChannel {
-    return !!channel && typeof (channel as VoiceBasedChannel).isVoiceBased === 'function' && (channel as VoiceBasedChannel).isVoiceBased();
-}
-
-export async function getActiveVoiceMemberIds(client: Client, channelId: string): Promise<string[]> {
-    try {
-        const channel = await client.channels.fetch(channelId);
-        if (!isVoiceChannel(channel)) return [];
-        return Array.from(channel.members.keys());
-    } catch (err) {
-        console.warn(`[MovieAttendance] Failed to inspect voice channel ${channelId}:`, err);
-        return [];
-    }
-}
-
-async function pollChannelPresence(client: Client) {
-    if (!activeChannelId) return;
-    const memberIds = await getActiveVoiceMemberIds(client, activeChannelId);
-    const now = Date.now();
-    const memberSet = new Set(memberIds);
-
-    for (const userId of memberIds) {
-        const session = activeSessions.get(userId);
+    private join(userId: string, at: number): void {
+        const session = this.tracking!.sessions.get(userId);
         if (!session) {
-            activeSessions.set(userId, { joinTime: now, totalTime: 0, metThreshold: false });
-            console.log(`[MovieAttendance] ${userId} detected in channel ${activeChannelId} via poll.`);
-        } else if (!session.joinTime) {
-            session.joinTime = now;
-            console.log(`[MovieAttendance] ${userId} rejoined channel ${activeChannelId} via poll detection.`);
+            this.tracking!.sessions.set(userId, { joinedAt: at, totalMs: 0 });
+        } else if (session.joinedAt === null) {
+            session.joinedAt = at;
         }
     }
 
-    for (const [userId, session] of activeSessions.entries()) {
-        if (session.joinTime && !memberSet.has(userId)) {
-            captureLeave(userId, now);
-        }
+    private leave(userId: string, at: number): void {
+        const session = this.tracking!.sessions.get(userId);
+        if (session?.joinedAt == null) return;
+        session.totalMs += at - session.joinedAt;
+        session.joinedAt = null;
     }
 }
 
-function captureLeave(userId: string, timestamp: number) {
-    const session = activeSessions.get(userId);
-    if (session && session.joinTime) {
-        session.totalTime += timestamp - session.joinTime;
-        session.joinTime = 0;
-        console.log(`[MovieAttendance] ${userId} left channel ${activeChannelId} with total ${Math.round(session.totalTime / 60000)} mins`);
-        if (!session.metThreshold && session.totalTime >= MIN_ATTENDANCE_MS) {
-            session.metThreshold = true;
-            console.log(`[MovieAttendance] ${userId} has met the ${MIN_ATTENDANCE_MS / 60000} minute threshold.`);
-        }
-    }
+// The members in a voice channel, as discord.js knows them from voice state events
+export async function getActiveVoiceMemberIds(client: Client, channelId: string): Promise<string[]> {
+    const channel = await client.channels.fetch(channelId).catch((err: unknown) => {
+        console.warn(`[MovieAttendance] Failed to inspect voice channel ${channelId}:`, err);
+        return null;
+    });
+    return channel?.isVoiceBased() ? [...channel.members.keys()] : [];
 }

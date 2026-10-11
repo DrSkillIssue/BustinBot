@@ -1,182 +1,79 @@
 import { DateTime } from "luxon";
+import type { Client } from 'discord.js';
 import type { Reminder } from "../../models/Reminder.js";
-import type { Client, TextChannel } from 'discord.js';
+import type { MovieEvent } from "../../models/MovieEvent.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
+import { resolveMovieChannel } from "./MovieChannel.js";
 
-const reminderTimers = new Map<string, NodeJS.Timeout>();
+// The reminders sent before each movie night, by how long before the start
+const MOVIE_REMINDERS = [
+    { label: '2 hours before', offset: { hours: 2 } },
+    { label: '30 mins before', offset: { minutes: 30 } },
+    { label: 'start time', offset: { minutes: 0 } },
+] as const;
+
+// A reminder that comes due while the bot is down is still sent if the bot is back within this long; after that
+// it would arrive too late to be useful
+const REMINDER_GRACE_MS = 15 * 60 * 1000;
 
 export function getPendingReminders(movieStart: DateTime, now: DateTime = DateTime.utc()): Reminder[] {
-    const reminderOffsets = [
-        { label: '2 hours before', offset: { hours: 2 } },
-        { label: '30 mins before', offset: { minutes: 30 } },
-        { label: 'start time', offset: { minutes: 0 } },
-    ];
-
-    return reminderOffsets
-        .map(({ label, offset }) => {
-            const sendAt = movieStart.minus(offset);
-            return { sendAt, label };
-        })
+    return MOVIE_REMINDERS
+        .map(({ label, offset }) => ({ sendAt: movieStart.minus(offset), label }))
         .filter(({ sendAt }) => sendAt > now);
 }
 
-export async function restoreMovieReminders(services: ServiceContainer, client: Client) {
-    const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieReminders] Movie repository not found in services.");
-        return;
-    }
-
-    const latestEvent = await movieRepo.getActiveEvent();
-    if (!latestEvent?.startTime) {
-        console.log("[MovieReminders] No upcoming movie event found.");
-        return;
-    }
-
-    const movieStart = DateTime.fromJSDate(latestEvent.startTime);
-    const reminders = getPendingReminders(movieStart);
-
-    await scheduleMovieReminders(services, movieStart, client);
-
-    console.log(
-        `[MovieReminders] Restored ${reminders.length} reminder(s) from Firestore (event ${latestEvent.id})`
-    );
+function formatRemaining(totalMinutes: number): string {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const hourText = hours > 0 ? `${hours} hour${hours > 1 ? "s" : ""}` : "";
+    const minuteText = minutes > 0 || hours === 0 ? `${minutes} minute${minutes !== 1 ? "s" : ""}` : "";
+    return [hourText, minuteText].filter(Boolean).join(" and ");
 }
 
-export async function scheduleMovieReminders(services: ServiceContainer, movieStart: DateTime, client: Client) {
+// Sends the movie night's reminder that has come due, once. When several came due together (the bot was down),
+// only the latest is sent, and only within the grace period.
+export async function sendDueReminders(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieReminders] Movie repository not found in services.");
+    if (!movieRepo) return;
+
+    const start = DateTime.fromJSDate(event.startTime);
+    const due = MOVIE_REMINDERS
+        .map(({ label, offset }) => ({ label, sendAt: start.minus(offset).toJSDate() }))
+        .filter(({ label, sendAt }) => sendAt <= now && !(event.remindersSent ?? []).includes(label));
+    if (!due.length) return;
+
+    // Without a channel the reminders stay unsent, to go out on a later sweep within the grace period
+    const channel = await resolveMovieChannel(client, services);
+    if (!channel) return;
+
+    const claimed = await movieRepo.claimReminders(event.id, due.map(({ label }) => label));
+    const latest = due.filter(({ label }) => claimed.includes(label)).at(-1);
+    if (!latest) return;
+    if (now.getTime() - latest.sendAt.getTime() > REMINDER_GRACE_MS) {
+        console.warn(`[MovieReminders] Skipped the "${latest.label}" reminder for ${event.id}: it came due while the bot was down.`);
         return;
     }
 
-    const reminders = getPendingReminders(movieStart);
-    const guildId = services.guildId;
-    const guildConfig = guildId ? await services.guilds.get(guildId) : null;
-    if (!guildId || !guildConfig) {
-        console.warn("[MovieReminders] Missing guild configuration for reminders.");
-        return;
-    }
+    const guildConfig = await services.guilds.get(services.guildId);
+    const mention = guildConfig?.roles?.movieUser ? `<@&${guildConfig.roles.movieUser}>` : "";
+    const voiceChannelId = event.voiceChannelId ?? guildConfig?.channels?.movieVC;
+    const voiceMention = voiceChannelId ? `<#${voiceChannelId}>` : "the movie voice channel";
 
-    const guild = await client.guilds.fetch(guildId);
-    const movieChannelId = guildConfig.channels?.movieNight;
-    const voiceChannelId = guildConfig.channels?.movieVC;
-    const movieRoleId = guildConfig.roles?.movieUser;
+    const activePoll = await movieRepo.getActivePoll();
+    const title = event.movie.id !== 'TBD' ? event.movie.title : null;
+    const stateLine = activePoll?.isActive
+        ? `A movie poll is currently running! Go cast your vote before it closes.`
+        : title
+            ? `We will be watching **${title}**!`
+            : `No movie has been selected yet — stay tuned!`;
 
-    let channel: TextChannel | undefined;
-    if (movieChannelId) {
-        const fetched = await guild.channels.fetch(movieChannelId);
-        if (fetched?.isTextBased()) {
-            channel = fetched as TextChannel;
-        }
-    }
+    const remaining = formatRemaining(Math.max(Math.round((event.startTime.getTime() - now.getTime()) / 60000), 0));
+    const content = latest.label === 'start time'
+        ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
+        : `${mention} Movie night starts in **${remaining}** (at <t:${Math.floor(start.toSeconds())}:t>)! ${stateLine}`;
 
-    if (!channel) {
-        channel = guild.channels.cache.find(
-            (ch) => ch.name === "movie-night" && ch.isTextBased()
-        ) as TextChannel | undefined;
-    }
-
-    const role = movieRoleId ? guild.roles.cache.get(movieRoleId) : null;
-    const mention = role ? `<@&${role.id}>` : "";
-    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
-
-    if (!channel) {
-        console.warn("[MovieReminders] Could not find movie-night channel.");
-        return;
-    }
-
-    for (const { sendAt, label } of reminders) {
-        const now = DateTime.utc();
-        const delayMs = sendAt.diff(now).as("milliseconds");
-
-        if (delayMs <= 0) {
-            console.warn(`[MovieReminders] Skipping past reminder "${label}"`);
-            continue;
-        }
-
-        const timerKey = getReminderKey(guildId, label, sendAt);
-        const existingTimer = reminderTimers.get(timerKey);
-        if (existingTimer) {
-            clearTimeout(existingTimer);
-        }
-
-        const timer = setTimeout(async () => {
-            try {
-                // Retrieve current state from Firestore
-                const [activePoll, latestEvent] = await Promise.all([
-                    movieRepo.getActivePoll(),
-                    movieRepo.getActiveEvent(),
-                ]);
-
-                // Determine movie state line
-                let stateLine = "";
-                const movie = latestEvent?.movie;
-                if (activePoll?.isActive) {
-                    stateLine = `A movie poll is currently running! Go cast your vote before it closes.`;
-                } else if (movie?.title) {
-                    stateLine = `We will be watching **${movie.title}**!`;
-                } else {
-                    stateLine = `No movie has been selected yet — stay tuned!`;
-                }
-
-                // Format remaining time
-                const totalMinutes = Math.max(
-                    Math.round(movieStart.diffNow("minutes").minutes),
-                    0
-                );
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                let timeString = "";
-
-                if (hours > 0) {
-                    timeString = `${hours} hour${hours > 1 ? "s" : ""}`;
-                    if (minutes > 0)
-                        timeString += ` and ${minutes} minute${
-                            minutes !== 1 ? "s" : ""
-                        }`;
-                } else {
-                    timeString = `${minutes} minute${
-                        minutes !== 1 ? "s" : ""
-                    }`;
-                }
-
-                const absoluteTime = `<t:${Math.floor(
-                    movieStart.toSeconds()
-                )}:t>`;
-
-                // Build and send message
-                const voiceMention = voiceChannelId ? `<#${voiceChannelId}>` : "the movie voice channel";
-                const msg =
-                    label === "start time"
-                        ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
-                        : `${mention} Movie night starts in **${timeString}** (at ${absoluteTime})! ${stateLine}`;
-
-                if (suppressMentions) {
-                    await channel.send(withSuppressedMentions({ content: msg }, true));
-                } else {
-                    await channel.send(msg);
-                }
-                console.log(
-                    `[MovieReminders] Sent "${label}" reminder at ${sendAt.toISO()}`
-                );
-            } catch (err) {
-                console.error(`[MovieReminders] Failed to send reminder:`, err);
-            } finally {
-                reminderTimers.delete(timerKey);
-            }
-        }, delayMs);
-        reminderTimers.set(timerKey, timer);
-
-        console.log(
-            `[MovieReminders] Scheduled "${label}" in ${Math.round(
-                delayMs / 60000
-            )} min(s)`
-        );
-    }
-}
-
-function getReminderKey(guildId: string | undefined, label: string, sendAt: DateTime): string {
-    return `${guildId ?? 'global'}:${label}:${sendAt.toMillis()}`;
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+    await channel.send(withSuppressedMentions({ content: content.trim() }, suppressMentions));
+    console.log(`[MovieReminders] Sent "${latest.label}" reminder for ${event.id}.`);
 }

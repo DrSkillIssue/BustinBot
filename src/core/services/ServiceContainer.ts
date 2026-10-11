@@ -2,6 +2,7 @@ import type { BotStatsService } from './BotStatsService.js';
 import type { TaskService } from '../../modules/tasks/TaskService.js';
 import type { TaskEventStore } from '../../modules/tasks/TaskEventStore.js';
 import type { KeywordSelector } from '../../modules/tasks/KeywordSelector.js';
+import type { MovieAttendance } from '../../modules/movies/MovieAttendance.js';
 import type { ITaskRepository } from '../database/interfaces/ITaskRepo.js';
 import type { IPrizeDrawRepository } from '../database/interfaces/IPrizeDrawRepo.js';
 import type { IMovieRepository } from '../database/interfaces/IMovieRepo.js';
@@ -21,6 +22,8 @@ export interface ServiceContainer {
     guilds: GuildService;
     // In-progress /setup, /moviesetup and /tasksetup choices for this guild
     setup: SetupService;
+    // Attendance of this guild's movie night while it runs
+    movieAttendance: MovieAttendance;
     repos: {
         guildRepo?: IGuildRepository;
         taskRepo?: ITaskRepository;
