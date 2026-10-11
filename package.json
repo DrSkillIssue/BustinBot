@@ -54,5 +54,11 @@
     "undici": "^8.11.2",
     "vitest": "^5.0.3",
     "vitest-fail-on-console": "^0.10.1"
+  },
+  "allowScripts": {
+    "protobufjs": false,
+    "re2": false,
+    "@firebase/util": false,
+    "esbuild": false
   }
 }
