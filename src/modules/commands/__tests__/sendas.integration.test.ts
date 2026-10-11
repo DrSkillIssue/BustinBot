@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType, ChannelType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -18,6 +18,10 @@ function sendas(channel: { id: string; type: ChannelType.GuildText | ChannelType
 }
 
 const general = { id: IDS.channel, type: ChannelType.GuildText as const, name: "general" };
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
 
 describe("/sendas", () => {
     test("posts the message as the bot and confirms privately", async ({ discord, interact }) => {
