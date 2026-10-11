@@ -1,6 +1,6 @@
 import { EventEmitter, once } from "node:events";
 import { Collection } from "@discordjs/collection";
-import { Client, Events, type Interaction, type Message } from "discord.js";
+import { Client, Events, type Interaction, type Message, type VoiceState } from "discord.js";
 import {
     WebSocketShardEvents,
     WebSocketShardStatus,
@@ -23,6 +23,7 @@ import {
     type APIMessage,
     type APIModalInteractionResponseCallbackData,
     type GatewayChannelCreateDispatchData,
+    type GatewayVoiceStateUpdateDispatchData,
     type GatewayDispatchPayload,
     type GatewayGuildCreateDispatchData,
     type GatewayMessageCreateDispatchData,
@@ -196,6 +197,15 @@ export class DiscordHarness {
         const created = once(this.client, Events.ChannelCreate);
         this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.ChannelCreate, s: 0, d: channel });
         await created;
+    }
+
+    // A member joining, moving between or (channel_id null) leaving voice channels, as the gateway announces it
+    // Returns the member's voice state before and after, as discord.js reports them to the bot
+    async voiceStateUpdate(state: GatewayVoiceStateUpdateDispatchData): Promise<[VoiceState, VoiceState]> {
+        const updated = once(this.client, Events.VoiceStateUpdate);
+        this.send({ op: GatewayOpcodes.Dispatch, t: GatewayDispatchEvents.VoiceStateUpdate, s: 0, d: state });
+        const [oldState, newState] = await updated;
+        return [oldState, newState];
     }
 
     // Delivers an interaction the way the gateway does and returns the discord.js object created for it.

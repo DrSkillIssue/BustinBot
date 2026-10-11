@@ -21,6 +21,8 @@ import {
     type APIChatInputApplicationCommandGuildInteraction,
     type APIGuildMember,
     type APIGuildTextChannel,
+    type APIGuildVoiceChannel,
+    type APIVoiceState,
     type APIInteractionDataResolved,
     type APIInteractionGuildMember,
     type APIMessage,
@@ -109,6 +111,45 @@ export function apiTextChannel(
         last_message_id: null,
         rate_limit_per_user: 0,
         permission_overwrites: [],
+        ...overrides,
+    };
+}
+
+// A guild voice channel, as the gateway and REST API send one
+export function apiVoiceChannel(overrides: Partial<APIGuildVoiceChannel> = {}): APIGuildVoiceChannel & { guild_id: string } {
+    return {
+        id: nextId(),
+        type: ChannelType.GuildVoice,
+        guild_id: IDS.guild,
+        name: "Movie Night",
+        position: 1,
+        parent_id: null,
+        nsfw: false,
+        last_message_id: null,
+        rate_limit_per_user: 0,
+        permission_overwrites: [],
+        bitrate: 64000,
+        user_limit: 0,
+        rtc_region: null,
+        ...overrides,
+    };
+}
+
+// A member's voice connection: in a voice channel, or (channel_id null) in none
+export function apiVoiceState(userId: string, channelId: string | null, overrides: Partial<APIVoiceState> = {}): APIVoiceState & { guild_id: string } {
+    return {
+        guild_id: IDS.guild,
+        channel_id: channelId,
+        user_id: userId,
+        member: apiGuildMember({ user: apiUser({ id: userId }) }),
+        session_id: `session-${userId}`,
+        deaf: false,
+        mute: false,
+        self_deaf: false,
+        self_mute: false,
+        self_video: false,
+        suppress: false,
+        request_to_speak_timestamp: null,
         ...overrides,
     };
 }
