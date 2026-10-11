@@ -25,6 +25,7 @@ export interface ITaskRepository {
     getLatestTaskEvent(): Promise<TaskEvent | null>;
     getTaskEventById(id: string): Promise<TaskEvent | null>;
     getTaskEventsBetween(start: Date, end: Date): Promise<TaskEvent[]>;
+    updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void>;
     addCompletedUser(taskEventId: string, userId: string): Promise<void>;
     removeCompletedUser(taskEventId: string, userId: string): Promise<void>;
 
