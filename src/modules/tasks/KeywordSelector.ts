@@ -18,12 +18,11 @@ export class KeywordSelector {
             return b.lastUsedAt.getTime() - a.lastUsedAt.getTime();
         });
 
-        const excludeCount = Math.min(HISTORY_LIMIT, sorted.length);
+        // Leave out the most recently used, but always keep at least one keyword to pick from, so with few keywords
+        // the one used last is never picked again straight away
+        const excludeCount = Math.min(HISTORY_LIMIT, sorted.length - 1);
         const recent = sorted.slice(0, excludeCount).map(k => k.id);
-        const available = allKeywords.filter(k => !recent.includes(k.id));
-
-        // If all recently used, use full pool
-        const pool = available.length > 0 ? available : allKeywords;
+        const pool = allKeywords.filter(k => !recent.includes(k.id));
         const chosen = pool[Math.floor(Math.random() * pool.length)]!;
 
         // Mark as used

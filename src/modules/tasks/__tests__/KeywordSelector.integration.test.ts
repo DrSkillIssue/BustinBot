@@ -46,4 +46,15 @@ describe("KeywordSelector", () => {
             expect(await repo.getKeywordById(picked)).toMatchObject({ lastUsedEventId: `event-${random}`, timesUsed: 2 });
         }
     });
+
+    test("never repeats the keyword used last when there are only a few", async ({ repo, db }) => {
+        vi.spyOn(console, "log").mockImplementation(() => {});
+
+        for (const random of [0, 0.5, 0.99]) {
+            await storeKeywordsUsedInOrder(db, ["alpha", "bravo", "charlie"]);
+            vi.spyOn(Math, "random").mockReturnValue(random);
+
+            expect(await new KeywordSelector(repo).selectKeyword("event-next")).not.toBe("alpha");
+        }
+    });
 });
