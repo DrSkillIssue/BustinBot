@@ -1,12 +1,12 @@
 import path from "node:path";
-import type { ChatInputCommandInteraction, Message } from "discord.js";
-import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, GatewayMessageCreateDispatchData } from "discord-api-types/v10";
+import type { ChatInputCommandInteraction, Interaction, Message } from "discord.js";
+import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
 import { BotStatsService } from "../core/services/BotStatsService.js";
 import { BotRepository } from "../core/database/BotRepo.js";
 import { loadCommands } from "../core/services/CommandService.js";
-import { handleInteraction } from "../core/events/onInteraction.js";
+import { routeInteraction } from "../core/events/routeInteraction.js";
 import { handleMessage } from "../core/events/onMessage.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
 import { DiscordHarness } from "./discord/harness.js";
@@ -19,7 +19,8 @@ import { buildGuild } from "./fakes/builders.js";
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
 // - commands: the bot's real slash command registry
-// - slash: runs a slash command through the real router, the way a member invoking it would
+// - interact: delivers any interaction (button, select, form) and routes it exactly as the running bot does
+// - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
 // - prefix: sends a channel message through the real prefix command handler
 export const test = base
     .extend("discord", async ({}, { onCleanup }) => {
@@ -39,16 +40,19 @@ export const test = base
         return createServiceContainer(db, buildGuild().id, botStats);
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
-    .extend("slash", ({ discord, services, commands }) =>
-        async (
+    .extend("interact", ({ discord, services, commands }) =>
+        async <T extends Interaction = Interaction>(payload: APIInteraction): Promise<T> => {
+            const interaction = await discord.dispatch<T>(payload);
+            await routeInteraction(interaction, discord.client, commands, services);
+            return interaction;
+        }
+    )
+    .extend("slash", ({ interact }) =>
+        (
             name: string,
             options: APIApplicationCommandInteractionDataOption[] = [],
             overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
-        ): Promise<ChatInputCommandInteraction> => {
-            const interaction = await discord.dispatch<ChatInputCommandInteraction>(chatInputInteraction(name, options, overrides));
-            await handleInteraction(interaction, commands, services);
-            return interaction;
-        }
+        ): Promise<ChatInputCommandInteraction> => interact<ChatInputCommandInteraction>(chatInputInteraction(name, options, overrides))
     )
     .extend("prefix", ({ discord, services, commands }) =>
         async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {

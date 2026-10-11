@@ -2,9 +2,8 @@ import type { Client } from 'discord.js';
 import type { Firestore } from 'firebase-admin/firestore';
 import { loadCommands } from './core/services/CommandService.js';
 import { handleMessage } from './core/events/onMessage.js';
-import { handleInteraction } from './core/events/onInteraction.js';
+import { routeInteraction } from './core/events/routeInteraction.js';
 import { handleDirectMessage } from './modules/tasks/TaskInteractions.js';
-import { handleTaskInteraction } from './modules/tasks/TaskInteractionHandler.js';
 import { registerGuildCommands } from './utils/registerCommands.js';
 import { scheduleActivePollClosure } from './modules/movies/MoviePollScheduler.js';
 import { createServiceContainer } from './core/services/ServiceFactory.js';
@@ -13,7 +12,6 @@ import { BotStatsService } from './core/services/BotStatsService.js';
 import { BotRepository } from './core/database/BotRepo.js';
 import { GuildRepository } from './core/database/GuildRepo.js';
 import { initTaskScheduler } from './modules/tasks/TaskScheduler.js';
-import { handleMovieInteraction } from './modules/movies/MovieInteractionHandler.js';
 import { initMovieScheduler } from './modules/movies/MovieScheduler.js';
 import { SchedulerStatusReporter } from './core/services/SchedulerStatusReporter.js';
 
@@ -96,11 +94,7 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
     client.on('interactionCreate', async (interaction) => {
         try {
             const guildId = interaction.guildId ?? primaryGuildId;
-            const guildServices = getServices(guildId);
-
-            await handleInteraction(interaction, commands, guildServices);
-            await handleMovieInteraction(interaction, guildServices);
-            await handleTaskInteraction(interaction, client, guildServices);
+            await routeInteraction(interaction, client, commands, getServices(guildId));
         } catch (error) {
             console.error('Error handling interaction:', error);
         }
