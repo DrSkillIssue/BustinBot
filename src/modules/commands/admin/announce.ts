@@ -104,7 +104,9 @@ const announce: Command = {
 
         const fetchedChannel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
         if (!fetchedChannel || !fetchedChannel.isTextBased()) {
-            await interaction.editReply({ content: "Announcement channel not configured. Please run `/setup` first."});
+            await interaction.editReply({
+                content: `I can't reach the announcement channel <#${channelId}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`,
+            });
             return;
         }
         const channel = fetchedChannel;
