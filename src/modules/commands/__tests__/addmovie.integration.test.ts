@@ -33,7 +33,7 @@ const MEMBER = "100000000000000037";
 const asMember = (roles: string[] = []) => apiMember({ user: apiUser({ id: MEMBER }), roles });
 
 async function storeOwnMovies(services: ServiceContainer, count: number): Promise<void> {
-    for (let i = 0; i < count; i++) await services.repos.movieRepo!.upsertMovie(buildMovie({ id: `own-${i}`, tmdbId: 900 + i, addedBy: MEMBER }));
+    for (let i = 0; i < count; i++) await services.repos.movieRepo.upsertMovie(buildMovie({ id: `own-${i}`, tmdbId: 900 + i, addedBy: MEMBER }));
 }
 
 beforeEach(() => {
@@ -54,15 +54,15 @@ describe("/addmovie", () => {
         expect(JSON.stringify(results?.components)).toContain('"custom_id":"addmovie|select|604"');
         expect(discord.callbacks(pick)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         expect(discord.originalEdits(pick)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "Added: The Matrix" })], components: [] })]);
-        const [added] = await services.repos.movieRepo!.getAllMovies();
+        const [added] = await services.repos.movieRepo.getAllMovies();
         expect(added).toMatchObject({ tmdbId: 603, title: "The Matrix", releaseDate: 1999, runtime: 136, director: "Lana Wachowski", cast: ["Keanu Reeves"], addedBy: IDS.user, watched: false });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ moviesAdded: 1 });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ moviesAdded: 1 });
     });
 
     test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        await services.repos.movieRepo!.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: "100000000000000099" }));
-        await services.repos.movieRepo!.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
+        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: "100000000000000099" }));
+        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
         tmdbMovie(reloaded, 138, "Lana Wachowski");
 
         const duplicate = await interact(buttonInteraction("addmovie|select|603", resultsMessage));

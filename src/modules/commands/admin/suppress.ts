@@ -21,8 +21,8 @@ const suppress: Command = {
                 .setMaxValue(1440)
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
-        if (!interaction || !services) return;
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

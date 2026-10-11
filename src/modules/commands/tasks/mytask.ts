@@ -40,10 +40,6 @@ const mytask: Command = {
         const taskEventChoice = interaction.options.getString('task_event');
         const taskRepo = services.repos.taskRepo;
 
-        if (!taskRepo) {
-            await interaction.editReply({ content: 'Task repository not available.', flags: 1 << 6 });
-            return;
-        }
 
         try {
             const now = new Date();

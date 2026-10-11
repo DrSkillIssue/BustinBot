@@ -10,8 +10,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 async function storeTonight(services: ServiceContainer, overrides = {}) {
     const movie = buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, selectedAt: new Date() });
-    await services.repos.movieRepo!.upsertMovie(movie);
-    await services.repos.movieRepo!.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() - 60 * 60 * 1000), movie, ...overrides }));
+    await services.repos.movieRepo.upsertMovie(movie);
+    await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() - 60 * 60 * 1000), movie, ...overrides }));
 }
 
 describe("/endmovie", () => {
@@ -26,7 +26,7 @@ describe("/endmovie", () => {
 
         expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "The movie night for **Arrival** has ended and been archived." })]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: "🎞️ Movie night has ended. Thanks for watching **Arrival**!" })]);
-        expect(await services.repos.movieRepo!.getMovieById("movie-2")).toMatchObject({ watched: true });
+        expect(await services.repos.movieRepo.getMovieById("movie-2")).toMatchObject({ watched: true });
     });
 
     test("says so when no movie night is on", async ({ discord, slash }) => {
@@ -40,7 +40,7 @@ describe("/closemoviepoll", () => {
     test("closes the poll and announces the winner in the movie night channel", async ({ discord, slash, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const poll = buildMoviePoll({ options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { a: "movie-2", b: "movie-2" } });
-        await services.repos.movieRepo!.createPoll(poll);
+        await services.repos.movieRepo.createPoll(poll);
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
@@ -64,7 +64,7 @@ describe("/cancelmovie", () => {
     test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({ discord, slash, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         const poll = buildMoviePoll({ endsAt: new Date(Date.now() + DAY) });
-        await services.repos.movieRepo!.createPoll(poll);
+        await services.repos.movieRepo.createPoll(poll);
         await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
         for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
@@ -82,9 +82,9 @@ describe("/cancelmovie", () => {
         );
         expect(discord.messageEdits(IDS.channel, poll.messageId)).toEqual([expect.objectContaining({ content: `❌ This movie poll was cancelled by <@${IDS.user}>.`, components: [] })]);
         expect(discord.messageEdits(IDS.channel, ANNOUNCEMENT)).toEqual([expect.objectContaining({ content: `❌ Movie night has been cancelled by <@${IDS.user}>.` })]);
-        expect(await services.repos.movieRepo!.getActivePoll()).toBeNull();
-        expect(await services.repos.movieRepo!.getActiveEvent()).toBeNull();
-        expect((await services.repos.movieRepo!.getMovieById("movie-2"))?.selectedAt).toBeUndefined();
+        expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
+        expect(await services.repos.movieRepo.getActiveEvent()).toBeNull();
+        expect((await services.repos.movieRepo.getMovieById("movie-2"))?.selectedAt).toBeUndefined();
     });
 
     test("posts the cancellation in the movie night channel when its announcement is gone", async ({ discord, slash, services }) => {
@@ -106,7 +106,7 @@ describe("/cancelmovie", () => {
 
 describe("/listmovies", () => {
     test("says the queue is empty when every movie has been watched", async ({ discord, slash, services }) => {
-        await services.repos.movieRepo!.upsertMovie(buildMovie({ watched: true }));
+        await services.repos.movieRepo.upsertMovie(buildMovie({ watched: true }));
 
         const command = await slash("listmovies");
 

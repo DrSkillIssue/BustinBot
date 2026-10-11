@@ -18,8 +18,8 @@ const goodbot: Command = {
         const emoji = replaceBustinEmote("🥹", guild);
 
         await interaction?.deferReply();
-        await services?.botStats.incrementGoodBot();
-        const count = services?.botStats.getGoodBotCount();
+        await services.botStats.incrementGoodBot();
+        const count = services.botStats.getGoodBotCount();
 
         const reply = `*BustinBot has been called a good bot ${count} time${count !== 1 ? 's' : ''}!*`;
 

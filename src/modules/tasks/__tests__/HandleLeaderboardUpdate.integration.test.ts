@@ -17,7 +17,7 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
     for (let week = 0; week < count; week++) {
         const id = `week-${week + 1}`;
         const endTime = new Date(Date.now() + (week < ended ? -(ended - week) * DAY : (week + 1) * DAY));
-        await services.repos.taskRepo!.createTaskEvent(buildTaskEvent({
+        await services.repos.taskRepo.createTaskEvent(buildTaskEvent({
             id, task: buildTask({ id }), startTime: new Date(endTime.getTime() - 7 * DAY), endTime,
         }));
         ids.push(id);
@@ -26,12 +26,12 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
 }
 
 async function storePeriodic(services: ServiceContainer, overrides: Partial<TaskLeaderboard>): Promise<void> {
-    await services.repos.taskLeaderboardRepo!.createLeaderboard({
+    await services.repos.taskLeaderboardRepo.createLeaderboard({
         id: "periodic", points: {}, tierCounts: {}, createdAt: "", updatedAt: "",
         period: { length: 4, eventIds: [], startedAt: "", index: 1 },
         ...overrides,
     });
-    await services.repos.taskLeaderboardRepo!.createLeaderboard({ id: "lifetime", points: {}, createdAt: "", updatedAt: "" });
+    await services.repos.taskLeaderboardRepo.createLeaderboard({ id: "lifetime", points: {}, createdAt: "", updatedAt: "" });
 }
 
 // Champion roles set up in the guild, and the members who placed, as Discord knows them
@@ -78,14 +78,14 @@ describe("the weekly leaderboard update", () => {
 
         await Promise.all([postPeriodicLeaderboardUpdate(discord.client, services), postPeriodicLeaderboardUpdate(discord.client, services)]);
 
-        const stored = await services.repos.taskLeaderboardRepo!.getLeaderboard("periodic");
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored).toMatchObject({
             points: {}, period: { index: 2, eventIds: [] },
             completedPeriod: { index: 1, topThree: [{ userId: winner, points: 9 }, { userId: runnerUp, points: 6 }, { userId: third, points: 1 }] },
             champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: 1 },
         });
         expect(discord.memberRoleChanges("PUT").sort()).toEqual([`${winner}:${roles.first.id}`, `${runnerUp}:${roles.second.id}`, `${third}:${roles.third.id}`].sort());
-        expect(await services.repos.userRepo!.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
+        expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
         const finals = discord.messagesSentTo(IDS.channel).filter((message) => message.embeds?.[0]?.title === "🏆 Final Leaderboard Standings");
         expect(finals).toHaveLength(1);
         expect(finals[0]?.embeds?.[0]?.fields?.[0]?.value).toBe("🥇 member1\n🥈 member2\n🥉 member3");
@@ -112,7 +112,7 @@ describe("the weekly leaderboard update", () => {
 
         expect(warn).toHaveBeenCalledWith("[LeaderboardUpdate] Task channel not found for leaderboard update.");
         expect(discord.memberRoleChanges("PUT")).toHaveLength(1);
-        expect(await services.repos.userRepo!.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
+        expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
 
         await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskChannel: IDS.channel } });
         discord.acceptMessages(IDS.channel);
@@ -147,9 +147,9 @@ describe("the warning before a period ends", () => {
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
-            await services.repos.taskRepo!.createSubmission(buildTaskSubmission({ id: `pending-${index}`, taskEventId: eventId, status: SubmissionStatus.Pending }));
+            await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: `pending-${index}`, taskEventId: eventId, status: SubmissionStatus.Pending }));
         }
-        await services.repos.taskRepo!.createSubmission(buildTaskSubmission({ id: "reviewed", taskEventId: "week-4", status: SubmissionStatus.Gold }));
+        await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: "reviewed", taskEventId: "week-4", status: SubmissionStatus.Gold }));
         discord.acceptMessages(IDS.channel);
 
         await warnPendingLeaderboardFinalization(discord.client, services);
@@ -164,7 +164,7 @@ describe("the warning before a period ends", () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: { length: 4, eventIds: events, startedAt: "", index: 1 } });
-        await services.repos.taskRepo!.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
+        await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
         await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, taskVerification: DELETED_CHANNEL } });
         discord.api
             .intercept({ path: `/api/v10/channels/${DELETED_CHANNEL}`, method: "GET" })

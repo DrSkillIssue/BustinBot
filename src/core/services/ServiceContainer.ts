@@ -28,12 +28,12 @@ export interface ServiceContainer {
     // Movies each admin has picked so far for a poll they are putting together
     manualPolls: ManualPollSelections;
     repos: {
-        guildRepo?: IGuildRepository;
-        taskRepo?: ITaskRepository;
-        prizeRepo?: IPrizeDrawRepository;
-        movieRepo?: IMovieRepository;
-        keywordRepo?: IKeywordRepository;
-        userRepo?: IUserRepository;
-        taskLeaderboardRepo?: ITaskLeaderboardRepository;
+        guildRepo: IGuildRepository;
+        taskRepo: ITaskRepository;
+        prizeRepo: IPrizeDrawRepository;
+        movieRepo: IMovieRepository;
+        keywordRepo: IKeywordRepository;
+        userRepo: IUserRepository;
+        taskLeaderboardRepo: ITaskLeaderboardRepository;
     };
 }

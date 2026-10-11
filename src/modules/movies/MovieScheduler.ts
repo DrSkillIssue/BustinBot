@@ -34,7 +34,6 @@ export function startMovieScheduler(client: Client, guildServices: () => Service
 // has started, and end it once its movie has run. A failing step is logged and doesn't stop the others.
 export async function sweepMovieNight(client: Client, services: ServiceContainer, now: Date): Promise<void> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return;
 
     const step = async (name: string, work: () => Promise<void>) => {
         try {
@@ -61,7 +60,7 @@ export async function sweepMovieNight(client: Client, services: ServiceContainer
 }
 
 async function closeDuePoll(client: Client, services: ServiceContainer, now: Date): Promise<void> {
-    const poll = await services.repos.movieRepo!.getActivePoll();
+    const poll = await services.repos.movieRepo.getActivePoll();
     if (!poll?.isActive || poll.endsAt > now) return;
 
     const result = await closeActiveMoviePoll(services, client, 'Scheduler');
@@ -127,11 +126,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const { repos } = services;
     const movieRepo = repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieScheduler] No movie repository found in services.");
-        await interaction.editReply({ content: "Internal error: missing movie repository." });
-        return;
-    }
 
     const guildConfig = await services.guilds.get(interaction.guildId!);
     if (!guildConfig) {

@@ -28,14 +28,14 @@ const sendas: Command = {
                 .setRequired(true)
         ) as SlashCommandBuilder,
 
-    async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services?: ServiceContainer }) {
+    async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services: ServiceContainer }) {
         if (message) {
             await message.reply('The `!sendas` command has been replaced with a slash command. Please use `/sendas` instead.');
             return;
         }
 
         // Only bot admins reach this: the router enforces the command's BotAdmin role
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

@@ -21,7 +21,7 @@ function voteButtons(components: APIMessageTopLevelComponent[] | null | undefine
 async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
     const messageId = overrides.messageId ?? "100000000000000500";
     const poll = buildTaskPoll({ id: messageId, messageId, options, createdAt: new Date(Date.now() - HOUR), endsAt: new Date(Date.now() + HOUR), ...overrides });
-    await services.repos.taskRepo!.createTaskPoll(poll);
+    await services.repos.taskRepo.createTaskPoll(poll);
     return poll;
 }
 
@@ -33,7 +33,7 @@ describe("posting the weekly task polls", () => {
     test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
-        await services.repos.taskRepo!.seedTasks([
+        await services.repos.taskRepo.seedTasks([
             ...options,
             buildTask({ id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining }),
             buildTask({ id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing }),
@@ -54,7 +54,7 @@ describe("posting the weekly task polls", () => {
             expect(poll.files).toEqual(["category_icon.png"]);
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
-            const stored = await services.repos.taskRepo!.getActiveTaskPollByCategory(category);
+            const stored = await services.repos.taskRepo.getActiveTaskPollByCategory(category);
             expect(stored?.options).toHaveLength(3);
             // Votes find their poll by the message they were cast on
             expect(stored).toMatchObject({ isActive: true, channelId: IDS.channel, id: stored?.messageId });
@@ -71,10 +71,10 @@ describe("voting in a task poll", () => {
         const click = await interact(vote(poll, "PVM002"));
 
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thank you for your vote!" })]);
-        expect((await services.repos.taskRepo!.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM002" });
+        expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM002" });
         const [redrawn] = discord.messageEdits(IDS.channel, poll.messageId);
         expect(redrawn?.embeds?.[0]?.description).toContain("**1 vote**");
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
     test("lets a member change their vote without counting them twice", async ({ discord, interact, services }) => {
@@ -84,8 +84,8 @@ describe("voting in a task poll", () => {
         await interact(vote(poll, "PVM001"));
         await interact(vote(poll, "PVM003"));
 
-        expect((await services.repos.taskRepo!.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM003" });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
+        expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM003" });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
     test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services }) => {
@@ -98,7 +98,7 @@ describe("voting in a task poll", () => {
             expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thank you for your vote!" })]);
         }
 
-        expect(Object.keys((await services.repos.taskRepo!.getTaskPollById(poll.id))?.votes ?? {})).toEqual(voters);
+        expect(Object.keys((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes ?? {})).toEqual(voters);
     });
 
     test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services }) => {
@@ -108,7 +108,7 @@ describe("voting in a task poll", () => {
         for (const poll of [closed, expired]) {
             const click = await interact(vote(poll, "PVM001"));
             expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "This poll has closed." })]);
-            expect((await services.repos.taskRepo!.getTaskPollById(poll.id))?.votes).toEqual({});
+            expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({});
         }
     });
 
@@ -126,7 +126,7 @@ describe("voting in a task poll", () => {
 describe("closing a task poll", () => {
     test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
-        await services.repos.taskRepo!.seedTasks(options);
+        await services.repos.taskRepo.seedTasks(options);
         const poll = await storeOpenPoll(services, { votes: { "100000000000000031": "PVM002" } });
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
@@ -134,7 +134,7 @@ describe("closing a task poll", () => {
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "keyword");
 
-        expect((await services.repos.taskRepo!.getTaskPollById(poll.id))?.isActive).toBe(false);
+        expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.isActive).toBe(false);
         const [closedMessage] = discord.messageEdits(IDS.channel, poll.messageId);
         expect(voteButtons(closedMessage?.components)).toEqual([]);
     });

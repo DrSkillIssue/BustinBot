@@ -18,7 +18,7 @@ describe("milestone roles", () => {
     test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({ discord, services }) => {
         for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
-        await services.repos.userRepo!.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }), roles: [participant.id] }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
         const dm = discord.acceptDirectMessages(member);
@@ -33,7 +33,7 @@ describe("milestone roles", () => {
     test("still give the role to a member who doesn't accept DMs", async ({ discord, services }) => {
         for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
-        await services.repos.userRepo!.createUser(buildUserStats({ userId: member, tasksCompletedGold: 6 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedGold: 6 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
         const dm = "100000000000000097";
@@ -60,7 +60,7 @@ describe("champion roles", () => {
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: first.id, taskChampionSecond: second.id } });
         const previousChampion = "100000000000000032";
         const runnerUp = "100000000000000033";
-        await services.repos.taskLeaderboardRepo!.createLeaderboard({
+        await services.repos.taskLeaderboardRepo.createLeaderboard({
             id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z",
             period: { length: 4, eventIds: [], startedAt: "2026-01-05T00:00:00.000Z", index: 4 },
             champions: { first: [previousChampion] },
@@ -79,9 +79,9 @@ describe("champion roles", () => {
 
         expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);
-        expect(await services.repos.userRepo!.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
-        expect(await services.repos.userRepo!.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
-        expect((await services.repos.taskLeaderboardRepo!.getLeaderboard("periodic"))?.champions).toMatchObject({
+        expect(await services.repos.userRepo.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
+        expect(await services.repos.userRepo.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
+        expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.champions).toMatchObject({
             first: [member], second: [runnerUp], third: [], periodIndex: 3,
         });
     });

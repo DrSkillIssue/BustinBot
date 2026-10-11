@@ -19,7 +19,7 @@ function pageButton(action: string, page: number, emoji: string, style: ButtonSt
 
 // One page of the unwatched movies, oldest first, with buttons to the first, previous, next and last pages
 export async function buildMovieListPage(services: ServiceContainer, requestedPage: number): Promise<MovieListPage> {
-    const movies = (await services.repos.movieRepo!.getAllMovies())
+    const movies = (await services.repos.movieRepo.getAllMovies())
         .filter((movie) => !movie.watched)
         .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
 

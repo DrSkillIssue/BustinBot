@@ -15,15 +15,15 @@ const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
 // A poll for a category whose voting has just ended, with the given votes
 async function storePoll(services: ServiceContainer, category: TaskCategory, options: Task[], votes: Record<string, string>, overrides: Partial<TaskPoll> = {}): Promise<void> {
     const messageId = `${600000000000000000n + BigInt(Object.values(TaskCategory).indexOf(category))}`;
-    await services.repos.taskRepo!.seedTasks(options);
-    await services.repos.taskRepo!.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: new Date(Date.now() - 1000), ...overrides }));
+    await services.repos.taskRepo.seedTasks(options);
+    await services.repos.taskRepo.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: new Date(Date.now() - 1000), ...overrides }));
 }
 
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({ discord, slash, services, db }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
-        await services.repos.keywordRepo!.addKeyword("Bustin");
+        await services.repos.keywordRepo.addKeyword("Bustin");
         await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { a: "PVM002", b: "PVM002", c: "PVM001" });
         await storePoll(services, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), { a: "SKL003" });
         await storePoll(services, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), { a: "MIN001" });
@@ -42,7 +42,7 @@ describe("/taskstart", () => {
             expect(event.endTime.toMillis() - event.startTime.toMillis()).toBe(7 * DAY);
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
-            expect(await services.repos.taskRepo!.getActiveTaskPollByCategory(category)).toBeNull();
+            expect(await services.repos.taskRepo.getActiveTaskPollByCategory(category)).toBeNull();
         }
     });
 });
@@ -55,7 +55,7 @@ describe("starting a category's task", () => {
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
 
-        expect((await services.repos.taskRepo!.getLatestTaskEvent())?.task.id).toBe("PVM002");
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM002");
     });
 
     test("uses the poll that has just been closed, which is the usual case when polls end as tasks start", async ({ discord, services }) => {
@@ -65,7 +65,7 @@ describe("starting a category's task", () => {
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
 
-        expect((await services.repos.taskRepo!.getLatestTaskEvent())?.task.id).toBe("PVM003");
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM003");
     });
 
     test("keeps both events when the same task starts twice in a day", async ({ discord, services, db }) => {

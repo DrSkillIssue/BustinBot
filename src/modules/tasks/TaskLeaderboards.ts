@@ -32,7 +32,6 @@ function resolvePeriodKey(event: TaskEvent): string {
 
 async function loadPeriodicEvents(services: ServiceContainer, eventIds: string[]): Promise<TaskEvent[]> {
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) return [];
 
     const events = await Promise.all(eventIds.map(async (eventId) => await taskRepo.getTaskEventById(eventId)));
     return events.filter((event): event is TaskEvent => !!event);
@@ -166,7 +165,6 @@ export async function isPeriodicLeaderboardEnabled(services: ServiceContainer): 
 
 export async function ensureTaskLeaderboardsInitialized(services: ServiceContainer): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     const now = new Date().toISOString();
     const [lifetime, periodic] = await Promise.all([
@@ -177,10 +175,6 @@ export async function ensureTaskLeaderboardsInitialized(services: ServiceContain
     if (!lifetime) {
         const points: Record<string, number> = {};
         const userRepo = services.repos.userRepo;
-        if (!userRepo) {
-            throw new Error("Leaderboard initialisation failed. Please use /reportbug if it continues.");
-        }
-
         const users = await userRepo.getAllUsers();
         for (const stats of users) {
             const total = calculateLifetimePoints(stats);
@@ -236,7 +230,6 @@ export async function incrementLifetimePoints(
     amount: number
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     try {
         await repo.incrementPoints("lifetime", userId, amount);
@@ -253,7 +246,6 @@ export async function recordPeriodicTierChange(
     change: TaskTierChange
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     const leaderboard = await repo.getLeaderboard("periodic");
     const within = leaderboard?.period?.eventIds.includes(taskEventId)
@@ -275,7 +267,6 @@ export async function registerPeriodicTaskEvent(
     taskEventId: string
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     let leaderboard = await repo.getLeaderboard("periodic");
     if (!leaderboard) {
@@ -363,7 +354,6 @@ export async function getPeriodicLeaderboardTopEntries(
     limit = 5
 ): Promise<TaskLeaderboardEntry[]> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return [];
 
     let leaderboard = await repo.getLeaderboard("periodic");
     if (!leaderboard) {
@@ -387,8 +377,6 @@ export async function shouldFinalizePeriodicLeaderboard(
     asOf: Date = new Date()
 ): Promise<{ ready: boolean; leaderboard?: TaskLeaderboard }> {
     const repo = services.repos.taskLeaderboardRepo;
-    const taskRepo = services.repos.taskRepo;
-    if (!repo || !taskRepo) return { ready: false };
 
     const leaderboard = await repo.getLeaderboard("periodic");
     if (!leaderboard?.period) return { ready: false };
@@ -418,7 +406,6 @@ export async function finalizePeriodicLeaderboard(
     periodIndex: number
 ): Promise<FinalisedPeriod | null> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return null;
 
     const nextLength = await resolvePeriodLength(services);
 
@@ -460,7 +447,6 @@ export async function finalizePeriodicLeaderboard(
 
 export async function resetPeriodicLeaderboard(services: ServiceContainer): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     await ensureTaskLeaderboardsInitialized(services);
     const leaderboard = await repo.getLeaderboard("periodic");
@@ -557,7 +543,6 @@ export async function awardTaskChampionRoles(
     periodIndex: number,
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     const leaderboard = await repo.getLeaderboard("periodic");
     if (!leaderboard) return;
@@ -630,29 +615,26 @@ export async function awardTaskChampionRoles(
     }
 
     const userRepo = services.repos.userRepo;
-    if (userRepo) {
-        for (const assignment of roleAssignments) {
-            for (const winner of assignment.winners) {
-                if (!winner?.userId) continue;
-                try {
-                    switch (assignment.rank) {
-                        case "first":
-                            await userRepo.incrementStat(winner.userId, "taskChampionFirsts", 1);
-                            break;
-                        case "second":
-                            await userRepo.incrementStat(winner.userId, "taskChampionSeconds", 1);
-                            break;
-                        case "third":
-                            await userRepo.incrementStat(winner.userId, "taskChampionThirds", 1);
-                            break;
-                    }
-                } catch (err) {
-                    console.warn(`[TaskLeaderboards] Failed to update champion stats for ${winner.userId}:`, err);
+    for (const assignment of roleAssignments) {
+        for (const winner of assignment.winners) {
+            if (!winner?.userId) continue;
+            try {
+                switch (assignment.rank) {
+                    case "first":
+                        await userRepo.incrementStat(winner.userId, "taskChampionFirsts", 1);
+                        break;
+                    case "second":
+                        await userRepo.incrementStat(winner.userId, "taskChampionSeconds", 1);
+                        break;
+                    case "third":
+                        await userRepo.incrementStat(winner.userId, "taskChampionThirds", 1);
+                        break;
                 }
+            } catch (err) {
+                console.warn(`[TaskLeaderboards] Failed to update champion stats for ${winner.userId}:`, err);
             }
         }
     }
-
     const championsUpdate: TaskLeaderboardChampions = {
         first: placements.first.map((entry) => entry.userId),
         second: placements.second.map((entry) => entry.userId),
@@ -673,16 +655,6 @@ export async function buildLeaderboardMessage(
     context?: { client?: Client; guild?: Guild | null }
 ): Promise<{ embeds: EmbedBuilder[]; components: ActionRowBuilder<ButtonBuilder>[] }> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) {
-        const embed = new EmbedBuilder()
-            .setTitle("Task Leaderboard")
-            .setDescription("Leaderboard data is unavailable.")
-            .setColor(0xa60000);
-        return {
-            embeds: [embed],
-            components: [],
-        };
-    }
 
     await ensureTaskLeaderboardsInitialized(services);
     const leaderboard = await repo.getLeaderboard(view);
@@ -751,10 +723,6 @@ export async function buildLeaderboardMessage(
     }> = [];
 
     if (view === "lifetime") {
-        if (!userRepo) {
-            throw new Error("Leaderboard initialisation failed. Please use /reportbug if it continues.");
-        }
-
         const users = await userRepo.getAllUsers();
         const streaks: Record<string, number> = {};
         statsMap = new Map<string, UserStats>();

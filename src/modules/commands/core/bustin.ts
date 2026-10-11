@@ -14,7 +14,7 @@ const bustin: Command = {
     async execute({ message, interaction, services }) {
         const baseResponse = 'Bustin makes me feel good!';
         await interaction?.deferReply();
-        await services?.botStats.incrementBustin();
+        await services.botStats.incrementBustin();
         
         const guild = message?.guild ?? interaction?.guild ?? null;
         const response = appendBustinEmote(baseResponse, guild);

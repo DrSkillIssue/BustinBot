@@ -97,7 +97,7 @@ describe("slash command routing", () => {
     });
 
     test("counts the command in the member's stats once it has responded", async ({ discord, services }) => {
-        const users = services.repos.userRepo!;
+        const users = services.repos.userRepo;
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
         let statsWhenAcknowledged: unknown;
 
@@ -130,7 +130,7 @@ describe("/updatetask", () => {
     const idOption = (id: string) => [{ name: "id", type: ApplicationCommandOptionType.String as const, value: id }];
 
     test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, services }) => {
-        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 }));
+        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 }));
         const interaction = await discord.dispatch(
             chatInputInteraction("updatetask", idOption("PVM001"), { member: taskAdmin })
         );

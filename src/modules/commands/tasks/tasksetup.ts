@@ -14,7 +14,7 @@ const tasksetup: Command = {
         .setDescription('Configure channels and roles for the task module.'),
 
     async execute({ interaction, services }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         // Acknowledge before reading the guild's settings, which may take longer than Discord waits
         await interaction.deferReply({ flags: 1 << 6 });

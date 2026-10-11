@@ -9,17 +9,17 @@ const privateDeferral = { type: InteractionResponseType.DeferredChannelMessageWi
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({ discord, interact, services }) => {
-        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
 
         const click = await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
         expect(discord.callbacks(click)).toEqual([privateDeferral]);
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thanks for your feedback!" })]);
-        expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ weight: 51 });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
     });
 
     test("count two quick clicks of the same button once", async ({ discord, services, commands }) => {
-        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
         const first = await discord.dispatch(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
         const second = await discord.dispatch(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
@@ -27,21 +27,21 @@ describe("task feedback buttons", () => {
 
         const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content).sort();
         expect(replies).toEqual(["Thanks for your feedback!", "You already gave this task a 👍."]);
-        expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ weight: 51 });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test("let a member change their vote", async ({ discord, interact, services }) => {
-        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
         await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
         const change = await interact(buttonInteraction("task-feedback|down|PVM001|PVM001-20260105"));
 
         expect(discord.originalEdits(change)).toEqual([expect.objectContaining({ content: "Feedback updated!" })]);
-        expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ weight: 49 });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 49 });
     });
 
     test("still work on posts made before the button ids changed", async ({ discord, interact, services, db }) => {
-        await services.repos.taskRepo!.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
 
         const click = await interact(buttonInteraction("task-feedback-down-PVM001-20251006"));
 

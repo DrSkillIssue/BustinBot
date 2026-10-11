@@ -104,7 +104,7 @@ describe("startBot", () => {
         await shutdown();
 
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Bustin makes me feel good!" })]);
-        expect(await services.repos.userRepo!.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
+        expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
     test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, services }) => {
@@ -115,7 +115,7 @@ describe("startBot", () => {
         const event = buildTaskEvent({ endTime: new Date(Date.now() + 24 * 60 * 60 * 1000) });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
-        await services.repos.taskRepo!.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: new Date(Date.now() - 60_000) });
+        await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: new Date(Date.now() - 60_000) });
         await otherTasks.saveSubmissionDraft({ userId: IDS.user, taskEventId: event.id, createdAt: new Date() });
         const discord = DiscordHarness.create();
         const screenshot = apiAttachment();
@@ -133,7 +133,7 @@ describe("startBot", () => {
         expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: expect.stringContaining("received with 1 screenshot and sent for review!") })]);
         expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([expect.objectContaining({ taskEventId: event.id })]);
         expect(discord.messagesSentTo(otherChannel)).toHaveLength(2);
-        expect(await services.repos.taskRepo!.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
+        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 
     test("refuses to start when no guild is configured and no fallback is given", async ({ db, onTestFinished }) => {

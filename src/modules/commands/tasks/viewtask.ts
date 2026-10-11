@@ -70,10 +70,6 @@ const viewtask: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply('Task repository not available.');
-            return;
-        }
 
         const query = interaction.options.getString('search', true);
         const tasks = await taskRepo.getAllTasks();

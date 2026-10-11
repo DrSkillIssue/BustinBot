@@ -17,13 +17,7 @@ const leagues: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const repo = services.repos?.guildRepo;
-        if (!repo) {
-            await interaction.editReply({
-                content: "Guild repository unavailable.",
-            });
-            return;
-        }
+        const repo = services.repos.guildRepo;
 
         const guildId = interaction.guildId;
         if (!guildId) {

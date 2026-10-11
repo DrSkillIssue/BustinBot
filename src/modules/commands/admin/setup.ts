@@ -14,7 +14,7 @@ const setup: Command = {
         .setDescription('Configure the general bot channels (announcements, logs, archive).'),
 
     async execute({ interaction, services }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         // Acknowledge before reading or creating the guild's settings, which may take longer than Discord waits
         await interaction.deferReply({ flags: 1 << 6 });

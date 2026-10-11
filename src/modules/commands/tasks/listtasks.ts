@@ -112,10 +112,6 @@ const listtasks: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply('Task repository not available.');
-            return;
-        }
 
         const category = (interaction.options.getString('category') as CategoryFilter | null) ?? CATEGORY_ALL;
 

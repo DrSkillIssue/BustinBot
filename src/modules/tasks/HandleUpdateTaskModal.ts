@@ -18,11 +18,7 @@ function parseTaskType(input: string): TaskType | null {
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
     await interaction.deferReply({ flags: 1 << 6 });
 
-    const repo = services.repos?.taskRepo;
-    if (!repo) {
-        await interaction.editReply({ content: 'Task repository unavailable.' });
-        return;
-    }
+    const repo = services.repos.taskRepo;
 
     const taskId = interaction.customId.replace('update_task_modal_', '');
     const task = await repo.getTaskById(taskId);

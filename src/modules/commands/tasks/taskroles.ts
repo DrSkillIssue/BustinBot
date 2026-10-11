@@ -159,8 +159,8 @@ const taskroles: Command = {
                 .setDescription("Sync task roles with server roles and grant them to eligible users.")
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
-        if (!interaction || !services) return;
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -518,7 +518,7 @@ const taskroles: Command = {
 
             if (!enabled) {
                 try {
-                    const leaderboard = await services.repos.taskLeaderboardRepo?.getLeaderboard("periodic");
+                    const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
                     const champions = leaderboard?.champions;
                     const removalTargets = [
                         { roleId: guildConfig.roles?.taskChampionFirst, userIds: champions?.first ?? [] },
@@ -573,10 +573,6 @@ const taskroles: Command = {
             };
 
             const userRepo = services.repos.userRepo;
-            if (!userRepo) {
-                await respond("User stats are unavailable for role initialisation.");
-                return;
-            }
 
             const updates: Partial<GuildConfig> = {};
             const updatedMilestones = current.map((milestone) => ({ ...milestone }));
@@ -734,7 +730,7 @@ const taskroles: Command = {
                     }
                 }
             } else {
-                const leaderboard = await services.repos.taskLeaderboardRepo?.getLeaderboard("periodic");
+                const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
                 const champions = leaderboard?.champions ?? {};
                 const championAssignments = [
                     { roleId: championRoleIds.first, userIds: champions.first ?? [] },

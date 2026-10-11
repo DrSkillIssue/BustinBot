@@ -51,13 +51,6 @@ function normalizeLabel(title: string): string {
 // has been deferred, since the movie list is read first.
 export async function showMovieManualPollMenu(services: ServiceContainer, interaction: MessageComponentInteraction) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.followUp({
-            content: "Movie repository unavailable.",
-            flags: 1 << 6,
-        });
-        return;
-    }
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies())
         .filter((movie) => !movie.watched)
@@ -162,7 +155,6 @@ export async function changeManualPollPage(
     delta: number
 ) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return;
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
     if (!allMovies.length) return;

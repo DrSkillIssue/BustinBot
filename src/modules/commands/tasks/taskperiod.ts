@@ -36,8 +36,8 @@ const taskperiod: Command = {
                 .setDescription("Start a fresh periodic leaderboard so the next task event is counted as the first.")
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
-        if (!interaction || !services) return;
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+        if (!interaction) return;
 
         const guildId = interaction.guildId!;
         const subcommand = interaction.options.getSubcommand();

@@ -18,10 +18,6 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     }
 
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) {
-        await interaction.editReply({ content: "Task repository unavailable." });
-        return;
-    }
 
     const taskEvent = await taskRepo.getTaskEventById(taskEventId);
     if (!taskEvent) {

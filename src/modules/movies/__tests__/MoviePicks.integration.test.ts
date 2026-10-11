@@ -23,7 +23,7 @@ const DAY = 24 * 60 * 60 * 1000;
 // The movie list, oldest first, so list numbers are 1, 2, 3
 async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
     const stored = movies.map((movie, index) => buildMovie({ id: `movie-${index + 1}`, addedBy: SUBMITTER, addedAt: new Date(Date.UTC(2026, 0, index + 1)), ...movie }));
-    for (const movie of stored) await services.repos.movieRepo!.upsertMovie(movie);
+    for (const movie of stored) await services.repos.movieRepo.upsertMovie(movie);
     return stored;
 }
 
@@ -58,7 +58,7 @@ describe("a movie poll", () => {
         const posted = discord.messagesSentTo(IDS.channel).find((message) => message.content?.startsWith("📊 **Vote for the next movie night pick!**"));
         expect(buttonIds(posted?.components)).toEqual(["movie_vote_0", "movie_vote_1"]);
         expect(posted?.embeds?.map((embed) => embed.title)).toEqual(["Inception", "Arrival"]);
-        const poll = await services.repos.movieRepo!.getActivePoll();
+        const poll = await services.repos.movieRepo.getActivePoll();
         expect(poll).toMatchObject({ isActive: true, channelId: IDS.channel, messageId: expect.any(String) });
         expect(poll?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
@@ -70,12 +70,12 @@ describe("a movie poll", () => {
         await pollMovieWithList(services, click, movies);
 
         expect(discord.callbacks(click)).toEqual([{ type: 4, data: expect.objectContaining({ content: "You must select between 2 and 5 movies.", flags: MessageFlags.Ephemeral }) }]);
-        expect(await services.repos.movieRepo!.getActivePoll()).toBeNull();
+        expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
     });
 
     test("counts a member's vote once, lets them change it, and shows the counts", async ({ discord, interact, services }) => {
         const poll = buildMoviePoll();
-        await services.repos.movieRepo!.createPoll(poll);
+        await services.repos.movieRepo.createPoll(poll);
         const pollMessage = apiMessage({ id: poll.messageId, embeds: [{ title: "Inception", footer: { text: "🗳️ 0 votes" } }, { title: "Arrival", footer: { text: "🗳️ 0 votes" } }] });
         discord.acceptMessageEdits(IDS.channel);
 
@@ -85,8 +85,8 @@ describe("a movie poll", () => {
         for (const click of [first, changed]) {
             expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thank you for your vote!" })]);
         }
-        expect((await services.repos.movieRepo!.getActivePoll())?.votes).toEqual({ [IDS.user]: "movie-1" });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ moviePollsVoted: 1 });
+        expect((await services.repos.movieRepo.getActivePoll())?.votes).toEqual({ [IDS.user]: "movie-1" });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ moviePollsVoted: 1 });
         const footers = (embeds: APIEmbed[] | undefined) => embeds?.map((embed) => embed.footer?.text);
         expect(footers(discord.messageEdits(IDS.channel, poll.messageId).at(-1)?.embeds)).toEqual([
             "🗳️ 1 vote | ⏱️ 148 mins | Option 1",
@@ -98,7 +98,7 @@ describe("a movie poll", () => {
 describe("choosing the movie for movie night", () => {
     test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        await services.repos.movieRepo!.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() + DAY), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
+        await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() + DAY), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
         await services.guilds.update(IDS.guild, { channels: { ...(await services.guilds.get(IDS.guild))!.channels, movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
@@ -113,7 +113,7 @@ describe("choosing the movie for movie night", () => {
             "The following movie has been selected for movie night:",
             "The following movie has been selected for movie night:",
         ]);
-        expect(await services.repos.movieRepo!.getActiveEvent()).toMatchObject({ movie: { id: "movie-1", selectedBy: IDS.user }, voiceChannelId: VOICE });
+        expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({ movie: { id: "movie-1", selectedBy: IDS.user }, voiceChannelId: VOICE });
         expect(discord.messagesSentTo(dm)).toHaveLength(2);
     });
 
@@ -139,8 +139,8 @@ describe("choosing the movie for movie night", () => {
         expect(JSON.stringify(discord.callbacks(reroll))).toContain('"title":"🎲 Arrival"');
         expect(discord.originalEdits(lockWatched)).toEqual([expect.objectContaining({ content: "Could not find the selected movie in the active movie list." })]);
         expect(discord.originalEdits(lock)).toEqual([expect.objectContaining({ content: "Movie selected and posted!" })]);
-        expect(await services.repos.movieRepo!.getMovieById("movie-2")).toMatchObject({ selectedBy: IDS.user, selectedAt: expect.any(Date) });
-        expect((await services.repos.movieRepo!.getMovieById("movie-1"))?.selectedAt).toBeUndefined();
+        expect(await services.repos.movieRepo.getMovieById("movie-2")).toMatchObject({ selectedBy: IDS.user, selectedAt: expect.any(Date) });
+        expect((await services.repos.movieRepo.getMovieById("movie-1"))?.selectedAt).toBeUndefined();
     });
 });
 
@@ -178,7 +178,7 @@ describe("/pickmovie", () => {
         expect(button(discord.originalEdits(open)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: true });
         expect(button(discord.originalEdits(choose)[0]?.components, "movie_poll_manual_confirm")).toMatchObject({ disabled: false });
         expect(discord.originalEdits(confirm)).toEqual([expect.objectContaining({ content: "Poll confirmed and posted!" })]);
-        expect((await services.repos.movieRepo!.getActivePoll())?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
+        expect((await services.repos.movieRepo.getActivePoll())?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
 
     test("answers a menu choice when every movie has been watched", async ({ discord, interact, services }) => {
@@ -225,13 +225,13 @@ describe("the movie list", () => {
         for (const removal of [byAdmin, byOwner]) {
             expect(discord.originalEdits(removal)).toEqual([expect.objectContaining({ content: expect.stringMatching(/^Movie \*\*.+\*\* has been removed from the list\.$/) })]);
         }
-        expect(await services.repos.movieRepo!.getAllMovies()).toEqual([]);
+        expect(await services.repos.movieRepo.getAllMovies()).toEqual([]);
     });
 
     test("counts each movie a member adds", async ({ services }) => {
         await addMovieWithStats(buildMovie({ id: "movie-1", addedBy: SUBMITTER }), services);
 
-        expect(await services.repos.movieRepo!.getMovieById("movie-1")).toMatchObject({ addedBy: SUBMITTER });
-        expect(await services.repos.userRepo!.getUserById(SUBMITTER)).toMatchObject({ moviesAdded: 1 });
+        expect(await services.repos.movieRepo.getMovieById("movie-1")).toMatchObject({ addedBy: SUBMITTER });
+        expect(await services.repos.userRepo.getUserById(SUBMITTER)).toMatchObject({ moviesAdded: 1 });
     });
 });

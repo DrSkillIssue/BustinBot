@@ -28,7 +28,7 @@ async function submit(repo: ITaskRepository, eventId: string, submittedAt: Date,
 
 describe("task streaks", () => {
     test("start when the current week's task is completed", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-01-05T00:00:00Z");
         await storeWeeks(repo, start, ["week-1"]);
         await submit(repo, "week-1", at(start, 1));
@@ -41,7 +41,7 @@ describe("task streaks", () => {
     });
 
     test("continue across consecutive weeks", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-02-02T00:00:00Z");
         await storeWeeks(repo, start, ["week-1", "week-2"]);
         await submit(repo, "week-1", at(start, 1));
@@ -55,7 +55,7 @@ describe("task streaks", () => {
     });
 
     test("break when a week with a task is missed", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-03-02T00:00:00Z");
         await storeWeeks(repo, start, ["week-1", "week-2", "week-3"]);
         await submit(repo, "week-1", at(start, 1));
@@ -68,7 +68,7 @@ describe("task streaks", () => {
     });
 
     test("survive a break in which no tasks ran", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-04-06T00:00:00Z");
         const afterBreak = at(start, 35);
         await repo.createTaskEvent(buildTaskEvent({ id: "before-break", startTime: start, endTime: at(start, 7), createdAt: start }));
@@ -83,7 +83,7 @@ describe("task streaks", () => {
     });
 
     test("count a submission made before the week ended even if it was reviewed afterwards", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-05-04T00:00:00Z");
         await storeWeeks(repo, start, ["week-1"]);
         const end = at(start, 7);
@@ -96,7 +96,7 @@ describe("task streaks", () => {
     });
 
     test("ignore submissions that were rejected or are still pending", async ({ services }) => {
-        const repo = services.repos.taskRepo!;
+        const repo = services.repos.taskRepo;
         const start = new Date("2026-06-01T00:00:00Z");
         await storeWeeks(repo, start, ["week-1", "week-2"]);
         await submit(repo, "week-1", at(start, 1), { status: SubmissionStatus.Rejected });

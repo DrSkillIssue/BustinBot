@@ -38,15 +38,6 @@ const testtaskapproval: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply({ content: '❌ Task repository unavailable.' });
-            return;
-        }
-
-        if (!services.tasks) {
-            await interaction.editReply({ content: '❌ Task service unavailable.' });
-            return;
-        }
 
         // Resolve tier
         const tierArg = interaction.options.getString('tier');

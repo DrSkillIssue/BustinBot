@@ -38,11 +38,6 @@ const addmovie: Command = {
             return;
         }
 
-        if (!services.repos.movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
-
         try {
             const refusal = await checkCanAddMovie(services, interaction);
             if (refusal) {

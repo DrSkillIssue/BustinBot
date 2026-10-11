@@ -19,10 +19,6 @@ function getActiveMoviesSorted(movies: Movie[]): Movie[] {
 // the night once the movie's runtime has passed.
 export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieStorage] Movie repository not found in services.");
-        return;
-    }
 
     if (movie.watched) {
         console.warn(`[MovieStorage] Refusing to select watched movie: ${movie.title} (${movie.id})`);
@@ -78,12 +74,6 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     await interaction.deferReply({ flags: 1 << 6 });
 
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.editReply({
-            content: "Movie repository unavailable."
-        });
-        return;
-    }
 
     const input = interaction.fields.getTextInputValue("movie_input").trim();
     const movies: Movie[] = getActiveMoviesSorted(await movieRepo.getAllMovies());
@@ -167,12 +157,6 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     }
 
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.editReply({
-            content: "Movie repository unavailable."
-        });
-        return;
-    }
 
     const movies = await movieRepo.getAllMovies();
     const selectedMovie = movies.find((m) => m.id === movieId && !m.watched);
@@ -248,10 +232,6 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
     await interaction.deferReply({ flags: 1 << 6 });
 
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.editReply({ content: "Movie repository unavailable." });
-        return;
-    }
 
     const activePoll = await movieRepo.getActivePoll();
     if (!activePoll || !activePoll.isActive) {
@@ -287,14 +267,10 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
 
     if (firstTime) {
         const userRepo = services.repos.userRepo;
-        if (userRepo) {
-            try {
-                await userRepo.incrementStat(userId, "moviePollsVoted", 1);
-            } catch (err) {
-                console.warn(`[Stats] Failed to increment moviePollsVoted for ${interaction.user.username}:`, err);
-            }
-        } else {
-            console.warn("[Stats] UserRepo unavailable; skipping moviePollsVoted increment.");
+        try {
+            await userRepo.incrementStat(userId, "moviePollsVoted", 1);
+        } catch (err) {
+            console.warn(`[Stats] Failed to increment moviePollsVoted for ${interaction.user.username}:`, err);
         }
     }
 
@@ -399,13 +375,6 @@ export async function handleManualPollInteraction(services: ServiceContainer, in
             }
 
             const movieRepo = services.repos.movieRepo;
-            if (!movieRepo) {
-                await interaction.reply({
-                    content: "Movie repository unavailable.",
-                    flags: MessageFlags.Ephemeral,
-                });
-                return;
-            }
 
             const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
             const selectedMovieIds = Array.from(session.selected);

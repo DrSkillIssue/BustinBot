@@ -26,7 +26,7 @@ function importWith(filename: string) {
 
 describe("/importtasks", () => {
     test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({ discord, interact, services }) => {
-        const tasks = services.repos.taskRepo!;
+        const tasks = services.repos.taskRepo;
         await tasks.createTask(buildTask({ id: "PVM001", taskName: "Already stored" }));
         const upload = importWith("tasks.csv");
         mockAgent().get("https://cdn.discordapp.com").intercept({ path: upload.path, method: "GET" }).reply(200, CSV);

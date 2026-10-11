@@ -14,18 +14,18 @@ const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silve
 
 async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
     const task = buildTask({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
-    await services.repos.taskRepo!.createTask(task);
+    await services.repos.taskRepo.createTask(task);
     const event = buildTaskEvent({
         id: "PVM001-week", task, startTime: new Date(Date.now() - DAY), endTime: new Date(Date.now() + 6 * DAY),
         messageId: eventMessage, channelId: IDS.channel, ...overrides,
     });
-    await services.repos.taskRepo!.createTaskEvent(event);
+    await services.repos.taskRepo.createTaskEvent(event);
     return event;
 }
 
 describe("the update task form", () => {
     test("saves the task and redraws its running event and open poll, keeping their completions and votes", async ({ discord, interact, services }) => {
-        const tasks = services.repos.taskRepo!;
+        const tasks = services.repos.taskRepo;
         await storeRunningEvent(services);
         // A completion approved after the event was posted
         await tasks.createSubmission(buildTaskSubmission({ id: "approved", userId: "100000000000000031", taskEventId: "PVM001-week" }));
@@ -57,7 +57,7 @@ describe("the update task form", () => {
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
 
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Task **PVM001** updated successfully." })]);
-        expect(await services.repos.taskRepo!.getTaskEventById("PVM001-week")).toMatchObject({ task: { taskName: "Kill {amount} Zulrah" } });
+        expect(await services.repos.taskRepo.getTaskEventById("PVM001-week")).toMatchObject({ task: { taskName: "Kill {amount} Zulrah" } });
     });
 
     test("changes nothing when the type isn't one the bot knows", async ({ discord, interact, services }) => {
@@ -68,7 +68,7 @@ describe("the update task form", () => {
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({
             content: "Type must be one of: XP, KC, Drop, Inventory, Points, Materials, Other. Nothing was changed.",
         })]);
-        expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
     });
 
     test("changes nothing when an amount isn't a whole number", async ({ discord, interact, services }) => {
@@ -77,7 +77,7 @@ describe("the update task form", () => {
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, silver: "lots", gold: "1.5" }));
 
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "The silver, gold amount must be a whole number. Nothing was changed." })]);
-        expect(await services.repos.taskRepo!.getTaskById("PVM001")).toMatchObject({ amtGold: buildTask().amtGold });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ amtGold: buildTask().amtGold });
     });
 
     test("answers when the task no longer exists", async ({ discord, interact }) => {

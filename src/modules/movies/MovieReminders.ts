@@ -35,7 +35,6 @@ function formatRemaining(totalMinutes: number): string {
 // only the latest is sent, and only within the grace period.
 export async function sendDueReminders(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return;
 
     const start = DateTime.fromJSDate(event.startTime);
     const due = MOVIE_REMINDERS

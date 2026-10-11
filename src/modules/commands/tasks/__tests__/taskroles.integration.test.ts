@@ -169,7 +169,7 @@ describe("/taskroles toggle", () => {
         const gold = apiRole({ name: "Gold Champion" });
         serveRoles(discord, [gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
-        await services.repos.taskLeaderboardRepo!.createLeaderboard({
+        await services.repos.taskLeaderboardRepo.createLeaderboard({
             id: "periodic", points: {}, createdAt: "2026-01-05T00:00:00.000Z", updatedAt: "2026-01-05T00:00:00.000Z", champions: { first: [member] },
         });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }));
@@ -219,7 +219,7 @@ describe("/taskroles init", () => {
             apiRole({ name: "Task Champion (3rd)" }),
         ];
         for (const role of created) discord.roleCreated(IDS.guild, role);
-        await services.repos.userRepo!.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 

@@ -55,7 +55,6 @@ export async function applyTaskMilestoneRoles(
     userId: string
 ): Promise<void> {
     const userRepo = services.repos.userRepo;
-    if (!userRepo) return;
 
     const stats = await userRepo.getUserById(userId);
     if (!stats) return;

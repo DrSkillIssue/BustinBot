@@ -202,15 +202,11 @@ export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, sna
     console.log(`[PrizeDraw] Winner for ${snapshotId}: ${winnerId}`);
 
     const userRepo = services.repos.userRepo;
-    if (userRepo && winnerId) {
-        try {
-            await userRepo.incrementStat(winnerId, "taskPrizesWon", 1);
-            console.log(`[Stats] Incremented taskPrizesWon for ${winnerId}`);
-        } catch (err) {
-            console.warn(`[Stats] Failed to increment taskPrizesWon for ${winnerId}:`, err);
-        }
-    } else {
-        console.warn("[Stats] UserRepo unavailable or winnerId missing; skipping taskPrizesWon increment.");
+    try {
+        await userRepo.incrementStat(winnerId, "taskPrizesWon", 1);
+        console.log(`[Stats] Incremented taskPrizesWon for ${winnerId}`);
+    } catch (err) {
+        console.warn(`[Stats] Failed to increment taskPrizesWon for ${winnerId}:`, err);
     }
 
     return winnerId;

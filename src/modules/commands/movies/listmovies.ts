@@ -19,11 +19,6 @@ const listmovies: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        if (!services.repos.movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
-
         await interaction.editReply(await buildMovieListPage(services, 0));
     },
 };

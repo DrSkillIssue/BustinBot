@@ -28,7 +28,7 @@ export async function isMovieNightAdmin(services: ServiceContainer, interaction:
 // Why a member can't add a movie right now, or null if they can: they already have the most movies allowed in
 // the list, or the movie is already in it
 export async function checkCanAddMovie(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction, tmdbId?: number): Promise<string | null> {
-    const movies = await services.repos.movieRepo!.getAllMovies();
+    const movies = await services.repos.movieRepo.getAllMovies();
     const active = movies.filter((movie) => !movie.watched);
 
     const own = active.filter((movie) => movie.addedBy === interaction.user.id);

@@ -35,9 +35,9 @@ const tasktoggle: Command = {
         services,
     }: {
         interaction?: ChatInputCommandInteraction;
-        services?: ServiceContainer;
+        services: ServiceContainer;
     }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

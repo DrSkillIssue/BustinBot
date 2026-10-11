@@ -17,7 +17,7 @@ const importtasks: Command = {
             option.setName("file").setDescription("CSV file to import").setRequired(true)
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -27,11 +27,7 @@ const importtasks: Command = {
             return;
         }
 
-        const taskRepo = services?.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply({ content: "Task repository unavailable." });
-            return;
-        }
+        const taskRepo = services.repos.taskRepo;
 
         try {
             const res = await fetch(attachment.url);

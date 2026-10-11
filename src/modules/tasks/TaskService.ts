@@ -154,20 +154,15 @@ export class TaskService {
         const { userId, taskEventId } = submission;
         const userRepo = services.repos.userRepo;
 
-        if (userRepo) {
-            try {
-                if (heldTier) {
-                    await userRepo.updateTierStat(userId, TIER_STATS[heldTier], TIER_STATS[tier]);
-                } else {
-                    await userRepo.incrementStat(userId, TIER_STATS[tier], 1);
-                }
-            } catch (err) {
-                console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
+        try {
+            if (heldTier) {
+                await userRepo.updateTierStat(userId, TIER_STATS[heldTier], TIER_STATS[tier]);
+            } else {
+                await userRepo.incrementStat(userId, TIER_STATS[tier], 1);
             }
-        } else {
-            console.warn("[Stats] UserRepo unavailable; skipping task completion increment.");
+        } catch (err) {
+            console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
         }
-
         const points = getStatusPoints(tier) - (heldTier ? getStatusPoints(heldTier) : 0);
         await incrementLifetimePoints(services, userId, points);
         await recordPeriodicTierChange(services, taskEventId, { userId, points, from: heldTier, to: tier });
@@ -188,7 +183,7 @@ export class TaskService {
 
         try {
             const streak = await calculateTaskStreakSummary(userId, this.repo);
-            await userRepo?.updateUser(userId, { taskStreak: streak.currentStreak, longestTaskStreak: streak.longestStreak });
+            await userRepo.updateUser(userId, { taskStreak: streak.currentStreak, longestTaskStreak: streak.longestStreak });
             return `\n🔥 Task streak: **${streak.currentStreak}** (Longest: **${streak.longestStreak}**).`;
         } catch (err) {
             console.warn(`[TaskService] Failed to compute streak summary for ${userId}:`, err);

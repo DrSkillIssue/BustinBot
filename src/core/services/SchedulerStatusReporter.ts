@@ -23,15 +23,13 @@ export class SchedulerStatusReporter {
             if (prizeDate) console.log(`🏆 Next Prize Draw: ${prizeDate.toUTCString()}`);
 
             // MOVIE EVENTS
-            if (movieRepo) {
-                const activePoll = await movieRepo.getActivePoll();
-                const nextEvent = await movieRepo.getActiveEvent();
-                if (activePoll) {
-                    console.log(`Active Movie Poll ends: ${activePoll.endsAt.toUTCString()}`);
-                }
-                if (nextEvent) {
-                    console.log(`Next Movie Night: ${nextEvent.startTime.toUTCString()}`);
-                }
+            const activePoll = await movieRepo.getActivePoll();
+            const nextEvent = await movieRepo.getActiveEvent();
+            if (activePoll) {
+                console.log(`Active Movie Poll ends: ${activePoll.endsAt.toUTCString()}`);
+            }
+            if (nextEvent) {
+                console.log(`Next Movie Night: ${nextEvent.startTime.toUTCString()}`);
             }
         } catch (err) {
             console.error("[SchedulerStatusReporter] Failed to retrieve schedule info:", err);

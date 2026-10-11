@@ -40,7 +40,6 @@ async function resolveEventToFinish(
     targetEventId?: string
 ): Promise<MovieEvent | null> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return null;
 
     const allEvents = await movieRepo.getAllEvents();
     const activeEvents = allEvents.filter((event) => !event.completed);
@@ -83,10 +82,6 @@ export async function finishMovieNight(
     targetEventId?: string
 ): Promise<{ success: boolean; message: string; finishedMovie?: Movie }> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error('[MovieLifecycle] Movie repository not found.');
-        return { success: false, message: 'Internal error: repository missing.' };
-    }
 
     try {
         const latestEvent = await resolveEventToFinish(services, targetEventId);
@@ -128,7 +123,7 @@ export async function finishMovieNight(
         const attendees = services.movieAttendance.finish(latestEvent.id, now);
         for (const userId of attendees) {
             try {
-                await services.repos.userRepo?.incrementStat(userId, "moviesAttended", 1);
+                await services.repos.userRepo.incrementStat(userId, "moviesAttended", 1);
             } catch (err) {
                 console.warn(`[MovieLifecycle] Failed to count attendance for ${userId}:`, err);
             }

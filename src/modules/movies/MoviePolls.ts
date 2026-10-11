@@ -21,10 +21,6 @@ async function createAndSendMoviePoll(
     movies: Movie[]
 ) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MoviePoll] Movie repository not found in services.");
-        return;
-    }
 
     const activeMovies = movies.filter((movie) => !movie.watched);
     if (activeMovies.length < 2) {
@@ -129,10 +125,6 @@ async function createAndSendMoviePoll(
 
 export async function pollMovieRandom(services: ServiceContainer, interaction: RepliableInteraction, count: number | null) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.editReply("Movie repository not available.");
-        return;
-    }
 
     const client = interaction.client;
     let movies: Movie[] = await movieRepo.getAllMovies();
@@ -203,9 +195,6 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
 // counted as they stood when it closed, so a poll closed by an admin and by the scheduler at once is decided once.
 export async function closeActiveMoviePoll(services: ServiceContainer, client: Client, closedBy: string): Promise<{ success: boolean; message: string; winner?: Movie, winningVotes?: number, tieBreak?: boolean }> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        return { success: false, message: "Movie repository unavailable." };
-    }
 
     const openPoll = await movieRepo.getActivePoll();
     const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;

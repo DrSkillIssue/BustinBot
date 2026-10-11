@@ -12,14 +12,14 @@ import { buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
-    await services.repos.taskRepo!.createTaskEvent(
+    await services.repos.taskRepo.createTaskEvent(
         buildTaskEvent({ id, task: buildTask({ id }), keyword: id, startTime: new Date(start), endTime: new Date(end) })
     );
     return id;
 }
 
 async function periodic(services: ServiceContainer): Promise<TaskLeaderboard | null> {
-    return services.repos.taskLeaderboardRepo!.getLeaderboard("periodic");
+    return services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
 }
 
 beforeEach(() => {
@@ -28,30 +28,26 @@ beforeEach(() => {
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {
-        await services.repos.userRepo!.createUser(buildUserStats({ userId: "user-1", tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: "user-1", tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
 
         await ensureTaskLeaderboardsInitialized(services);
 
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("lifetime")).toMatchObject({ points: { "user-1": 8 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { "user-1": 8 } });
         expect(await periodic(services)).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
-    });
-
-    test("throws when user stats are unavailable", async ({ services }) => {
-        delete services.repos.userRepo;
-
-        await expect(ensureTaskLeaderboardsInitialized(services)).rejects.toThrow("Leaderboard initialisation failed");
     });
 });
 
 describe("the leaderboard buttons", () => {
     test("log why the leaderboard couldn't be built and tell the member", async ({ discord, interact, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
-        delete services.repos.userRepo;
+        // The emulator can't be made to fail one read, so the leaderboard read fails the way an unreachable Firestore fails it
+        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        vi.spyOn(services.repos.taskLeaderboardRepo, "getLeaderboard").mockRejectedValueOnce(unavailable);
 
         const click = await interact(buttonInteraction("task-leaderboard|lifetime"));
 
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Leaderboard initialisation failed. Please use /reportbug if it continues." })]);
-        expect(error).toHaveBeenCalledWith("[TaskInteractions] Failed to build the leaderboard:", expect.objectContaining({ message: expect.stringContaining("Leaderboard initialisation failed") }));
+        expect(error).toHaveBeenCalledWith("[TaskInteractions] Failed to build the leaderboard:", unavailable);
     });
 });
 

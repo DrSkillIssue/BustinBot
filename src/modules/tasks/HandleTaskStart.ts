@@ -34,10 +34,6 @@ export async function refreshTaskEventMessage(client: Client, event: TaskEvent):
 
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {
     const { keywords } = services;
-    if (!keywords) {
-        console.error('[TaskStart] Missing keywords service.');
-        return;
-    }
 
     const guildId = services.guildId;
     if (!guildId) {
@@ -102,13 +98,6 @@ export async function startTaskEventForCategory(
     channelOverride?: TextChannel
 ): Promise<void> {
     const { repos, taskEvents } = services;
-
-    if (!repos?.taskRepo || !taskEvents) {
-        console.error(
-            "[TaskStart] Missing required dependencies: taskRepo or taskEvents."
-        );
-        return;
-    }
 
     const guildId = services.guildId;
     if (!guildId) {

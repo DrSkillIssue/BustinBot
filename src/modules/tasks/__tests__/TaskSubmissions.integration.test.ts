@@ -52,7 +52,7 @@ async function storeEvent(services: ServiceContainer) {
         channelId: IDS.channel,
         messageId: EVENT_POST,
     });
-    await services.repos.taskRepo!.createTaskEvent(event);
+    await services.repos.taskRepo.createTaskEvent(event);
     return event;
 }
 
@@ -68,20 +68,20 @@ async function storePendingSubmission(services: ServiceContainer, overrides: Par
         screenshotMessage: SCREENSHOT_POST,
         ...overrides,
     });
-    await services.repos.taskRepo!.createSubmission(submission);
+    await services.repos.taskRepo.createSubmission(submission);
     return submission;
 }
 
 // A member's approval already counted, as it was stored when it was approved
 async function storeApproval(services: ServiceContainer, tier: SubmissionStatus.Bronze | SubmissionStatus.Silver) {
-    await services.repos.taskRepo!.createSubmission(buildTaskSubmission({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() }));
-    await services.repos.taskRepo!.createTaskEvent({
-        ...(await services.repos.taskRepo!.getTaskEventById(EVENT))!,
+    await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() }));
+    await services.repos.taskRepo.createTaskEvent({
+        ...(await services.repos.taskRepo.getTaskEventById(EVENT))!,
         completionCounts: { bronze: tier === SubmissionStatus.Bronze ? 1 : 0, silver: tier === SubmissionStatus.Silver ? 1 : 0, gold: 0 },
         completedUserIds: [IDS.user],
     });
     const field = tier === SubmissionStatus.Bronze ? "tasksCompletedBronze" : "tasksCompletedSilver";
-    await services.repos.userRepo!.createUser(buildUserStats({ userId: IDS.user, [field]: 1 }));
+    await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, [field]: 1 }));
 }
 
 // Discord's side of what follows a review: the member's DM, the archive copy made from the review post's
@@ -127,7 +127,7 @@ describe("submitting a task", () => {
 
         await sendDirectMessage(discord, services, directMessage("Got it on the first kill", { attachments: screenshots }));
 
-        const [submission, ...others] = await services.repos.taskRepo!.getSubmissionsByUser(IDS.user);
+        const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
         expect(others).toEqual([]);
         expect(submission).toMatchObject({
             taskEventId: EVENT, taskName: "Kill Zulrah", status: SubmissionStatus.Pending, notes: "Got it on the first kill",
@@ -155,7 +155,7 @@ describe("submitting a task", () => {
             "Please attach at least one image for your submission.",
             "✅ Submission for **Kill Zulrah** received with 1 screenshot and sent for review!",
         ]);
-        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toHaveLength(1);
+        expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
     });
 
     test("tells the member to send again when the Task Admins can't be reached, and takes the next try", async ({ discord, services }) => {
@@ -174,12 +174,12 @@ describe("submitting a task", () => {
         expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({
             content: "I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.",
         })]);
-        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toEqual([]);
+        expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toEqual([]);
 
         discord.acceptMessages(IDS.channel);
         await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
 
-        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toHaveLength(1);
+        expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
     });
 
     test("takes one submission when two DMs arrive at once, removing the other's review post", async ({ discord, services }) => {
@@ -201,7 +201,7 @@ describe("submitting a task", () => {
             "I've already received your submission for this task. To send another, click Submit on the task again.",
             "✅ Submission for **Kill Zulrah** received with 1 screenshot and sent for review!",
         ]);
-        const [submission, ...others] = await services.repos.taskRepo!.getSubmissionsByUser(IDS.user);
+        const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
         expect(others).toEqual([]);
         expect(discord.messagesSentTo(IDS.channel)).toHaveLength(4);
         expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
@@ -221,14 +221,14 @@ describe("submitting a task", () => {
         // The emulator can't be made to fail one write, so the repository's write fails the way an unreachable
         // Firestore fails it
         const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
-        vi.spyOn(services.repos.taskRepo!, "submitDraft").mockRejectedValueOnce(unavailable);
+        vi.spyOn(services.repos.taskRepo, "submitDraft").mockRejectedValueOnce(unavailable);
 
         await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
 
         expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: "Something went wrong saving your submission. Please send it again." })]);
         expect(discord.messagesSentTo(IDS.channel)).toHaveLength(2);
         expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
-        expect(await services.repos.taskRepo!.getSubmissionsByUser(IDS.user)).toEqual([]);
+        expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toEqual([]);
         expect(await services.tasks.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: EVENT });
         expect(error).toHaveBeenCalledWith("[TaskDM] Failed to store submission:", unavailable);
     });
@@ -292,7 +292,7 @@ describe("approving a submission", () => {
             type: InteractionResponseType.ChannelMessageWithSource,
             data: expect.objectContaining({ content: "Are you sure you want to approve this submission for **Silver** tier?", flags: MessageFlags.Ephemeral }),
         }]);
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
 
         const [confirmButton] = offeredButtons(discord, prompt);
         const confirm = await interact(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
@@ -300,10 +300,10 @@ describe("approving a submission", () => {
         expect(discord.callbacks(confirm)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         expect(discord.originalEdits(confirm)[0]).toMatchObject({ content: "⏳ Processing approval...", components: [] });
         expect(discord.originalEdits(confirm).at(-1)).toMatchObject({ content: "✅ Submission approved for **Silver tier** (1 roll) and archived.", components: [] });
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Silver, reviewedBy: reviewer });
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, taskStreak: 1 });
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 3 } });
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Silver, reviewedBy: reviewer });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, taskStreak: 1 });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 3 } });
         expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({
             content: expect.stringMatching(/^✅ Your submission for \*\*Kill Zulrah\*\* has been approved for 🥈 Silver tier!\n🔥 Task streak: \*\*1\*\*/),
         })]);
@@ -321,20 +321,20 @@ describe("approving a submission", () => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await storeApproval(services, SubmissionStatus.Bronze);
-        await services.repos.taskLeaderboardRepo!.createLeaderboard({
+        await services.repos.taskLeaderboardRepo.createLeaderboard({
             id: "periodic", points: { [IDS.user]: 1 }, tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } }, createdAt: "", updatedAt: "",
             period: { length: 4, eventIds: [EVENT], startedAt: "", index: 1 },
         });
-        await services.repos.taskLeaderboardRepo!.createLeaderboard({ id: "lifetime", points: { [IDS.user]: 1 }, createdAt: "", updatedAt: "" });
+        await services.repos.taskLeaderboardRepo.createLeaderboard({ id: "lifetime", points: { [IDS.user]: 1 }, createdAt: "", updatedAt: "" });
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
 
         await approve(discord, interact, "gold");
 
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 1 } });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedGold: 1 });
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 6 } });
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("periodic")).toMatchObject({
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 1 } });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedGold: 1 });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 6 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
             points: { [IDS.user]: 6 }, tierCounts: { [IDS.user]: { bronze: 0, silver: 0, gold: 1 } },
         });
     });
@@ -342,13 +342,13 @@ describe("approving a submission", () => {
     test("starts the lifetime leaderboard from the member's stats before this approval", async ({ discord, interact, services }) => {
         vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
-        await services.repos.userRepo!.createUser(buildUserStats({ userId: IDS.user, tasksCompletedBronze: 2 }));
+        await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedBronze: 2 }));
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
 
         await approve(discord, interact, "gold");
 
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 2 + 6 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 2 + 6 } });
     });
 
     test("counts once when two admins confirm at the same moment", async ({ discord, interact, services, commands }) => {
@@ -369,9 +369,9 @@ describe("approving a submission", () => {
             "⚠️ This submission has already been reviewed (bronze). Another admin may have processed it.",
             "✅ Submission approved for **Bronze tier** (1 roll) and archived.",
         ]);
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 } });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 1 });
-        expect(await services.repos.taskLeaderboardRepo!.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 1 } });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 } });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 1 });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 1 } });
         expect(discord.messagesSentTo(dm)).toHaveLength(1);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
@@ -386,9 +386,9 @@ describe("approving a submission", () => {
         expect(discord.originalEdits(confirm).at(-1)).toMatchObject({
             content: "✅ Submission approved for **Bronze tier** and archived. The member already holds 🥈 Silver for this task, so their tier is unchanged.",
         });
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Bronze });
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedSilver: 1 });
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Bronze });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedSilver: 1 });
         expect(discord.messageDeletions(IDS.channel).sort()).toEqual([REVIEW_POST, SCREENSHOT_POST]);
         expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({
             content: "✅ Your submission for **Kill Zulrah** has been approved for 🥉 Bronze tier. You already hold 🥈 Silver for this task, so your tier is unchanged.",
@@ -412,7 +412,7 @@ describe("approving a submission", () => {
         const confirm = await approve(discord, interact, "gold");
 
         expect(discord.originalEdits(confirm).at(-1)).toMatchObject({ content: "✅ Submission approved for **Gold tier** (1 roll). It couldn't be archived; check the logs." });
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 1 } });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 1 } });
         expect(discord.messageDeletions(IDS.channel).sort()).toEqual([REVIEW_POST, SCREENSHOT_POST]);
         expect(warn).toHaveBeenCalledWith(`[TaskService] Failed to DM user ${IDS.user} about submission-1:`, expect.objectContaining({ code: 50007 }));
         expect(warn).toHaveBeenCalledWith("[TaskService] Failed to archive submission submission-1:", expect.objectContaining({ code: 50013 }));
@@ -432,7 +432,7 @@ describe("approving a submission", () => {
         const confirm = await approve(discord, interact, "silver");
 
         expect(discord.originalEdits(confirm).at(-1)).toMatchObject({ content: "✅ Submission approved for **Silver tier** (1 roll) and archived." });
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
         expect(warn).toHaveBeenCalledWith(`[TaskService] Failed to redraw task event ${EVENT}:`, expect.objectContaining({ code: 10008 }));
     });
 
@@ -468,7 +468,7 @@ describe("approving a submission", () => {
         const confirm = await interact(buttonInteraction(customId!, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
 
         expect(discord.callbacks(confirm)).toEqual([{ type: InteractionResponseType.UpdateMessage, data: expect.objectContaining({ content: reply, components: [] }) }]);
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
     });
 
     test("can be cancelled, leaving the submission pending", async ({ discord, interact, services }) => {
@@ -482,7 +482,7 @@ describe("approving a submission", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: "Review action cancelled. No changes were made.", components: [] }),
         }]);
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
     });
 });
 
@@ -508,7 +508,7 @@ describe("rejecting a submission", () => {
 
         expect(discord.callbacks(submit)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: MessageFlags.Ephemeral } }]);
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "❌ Submission rejected and archived." })]);
-        expect(await services.repos.taskRepo!.getSubmissionById("submission-1")).toMatchObject({
+        expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({
             status: SubmissionStatus.Rejected, rejectionReason: "The keyword isn't visible", reviewedBy: reviewer,
         });
         expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({
@@ -519,7 +519,7 @@ describe("rejecting a submission", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({
             content: `❌ <@${reviewer}> rejected submission for **Kill Zulrah** by <@${IDS.user}>. Reason: The keyword isn't visible. Submission moved to archive channel.`,
         })]);
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 0 }, completedUserIds: [] });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 0 }, completedUserIds: [] });
     });
 
     test("leaves the tier the member already holds", async ({ discord, interact, services }) => {
@@ -531,8 +531,8 @@ describe("rejecting a submission", () => {
         const form = await openRejectionForm(discord, interact);
         await interact(modalSubmitInteraction(form, { reason: "" }, admin));
 
-        expect(await services.repos.taskRepo!.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
-        expect(await services.repos.userRepo!.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 1 });
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 1 });
     });
 
     test("answers a form that names no submission once", async ({ discord, interact }) => {
