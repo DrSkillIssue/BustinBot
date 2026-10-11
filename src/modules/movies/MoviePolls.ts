@@ -48,10 +48,7 @@ async function createAndSendMoviePoll(
     const fetchedChannel = await guild.channels.fetch(targetChannelId).catch(() => null);
     const channel = fetchedChannel as TextChannel | null;
     if (!channel) {
-        await interaction.reply({
-            content:
-                "Could not find the configured movie announcement channel. Please run `/moviesetup` again.", flags: 1 << 6,
-        });
+        await interaction.editReply("Could not find the configured movie announcement channel. Please run `/moviesetup` again.");
         return;
     }
 
