@@ -3,7 +3,7 @@ import { MovieRepository } from '../MovieRepo.js';
 import type { Movie } from '../../../models/Movie.js';
 import type { MovieEvent } from '../../../models/MovieEvent.js';
 import type { MoviePoll } from '../../../models/MoviePoll.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS, clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 
 const db = getEmulatorFirestore();
 const repo = new MovieRepository(db, 'guild-1');
@@ -110,7 +110,7 @@ describe('MovieRepository polls', () => {
         );
 
         expect(Object.keys((await repo.getActivePoll())?.votes ?? {})).toHaveLength(5);
-    });
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     it('clears all polls', async () => {
         await repo.createPoll(buildPoll());

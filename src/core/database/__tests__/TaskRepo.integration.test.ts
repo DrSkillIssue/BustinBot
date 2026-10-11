@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus } from '../../../models/TaskSubmission.js';
-import { clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS, clearEmulatorFirestore, getEmulatorFirestore } from '../../../tests/firestoreEmulator.js';
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
 
 const db = getEmulatorFirestore();
@@ -84,7 +84,7 @@ describe('TaskRepository polls', () => {
         );
 
         expect(Object.keys((await repo.getTaskPollById('poll-1'))?.votes ?? {})).toHaveLength(5);
-    });
+    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 });
 
 describe('TaskRepository events', () => {

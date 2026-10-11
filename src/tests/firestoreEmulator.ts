@@ -4,6 +4,11 @@ import { FIRESTORE_SETTINGS } from "../core/database/firestore.js";
 
 const APP_NAME = "firestore-emulator-tests";
 
+// Firebase: "When you're testing features that involve multiple concurrent writes to one document, the emulator may
+// be slow to complete write requests. In some cases, locks may take up to 30 seconds to be released."
+// (https://firebase.google.com/docs/emulator-suite/connect_firestore). Tests of concurrent transactions use this timeout.
+export const CONCURRENT_TRANSACTION_TIMEOUT_MS = 35_000;
+
 // firebase-admin talks to the emulator whenever FIRESTORE_EMULATOR_HOST is set, which `firebase emulators:exec`
 // does for the command it runs. Refusing to run without it, or against a non-demo project, means these tests can
 // never touch a real Firestore database.
