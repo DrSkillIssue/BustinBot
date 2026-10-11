@@ -55,12 +55,14 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const movieRepo = repos.movieRepo;
     if (!movieRepo) {
         console.error("[MovieScheduler] No movie repository found in services.");
-        return interaction.editReply({ content: "Internal error: missing movie repository." });
+        await interaction.editReply({ content: "Internal error: missing movie repository." });
+        return;
     }
 
     const guildConfig = await services.guilds.get(interaction.guildId!);
     if (!guildConfig) {
-        return interaction.editReply({ content: "Guild configuration not found. Please run `/setup` first." });
+        await interaction.editReply({ content: "Guild configuration not found. Please run `/setup` first." });
+        return;
     }
 
     const parts = interaction.customId.split('-');
@@ -70,9 +72,10 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(time)) {
-        return await interaction.editReply({
+        await interaction.editReply({
             content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30)."
         });
+        return;
     }
 
     const localDateTime = DateTime.fromISO(`${selectedDate}T${time}`, { zone: timezone });
@@ -149,9 +152,10 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const guild = interaction.guild;
     if (!guild) {
-        return interaction.editReply({
+        await interaction.editReply({
             content: "Could not identify the guild. Please try again in a server channel."
         });
+        return;
     }
 
     const channelId = guildConfig.channels?.movieNight;
