@@ -67,6 +67,41 @@ describe('handleInteraction', () => {
         );
     });
 
+    it('runs the command without waiting for the commandsRun stat write', async () => {
+        const commandExecute = vi.fn().mockResolvedValue(undefined);
+        const commandMap = new Map([
+            [
+                'ping',
+                {
+                    name: 'ping',
+                    description: 'Ping command',
+                    module: CommandModule.Core,
+                    allowedRoles: [CommandRole.Everyone],
+                    execute: commandExecute,
+                },
+            ],
+        ]);
+
+        const services: any = {
+            guilds: {
+                requireConfig: vi.fn(),
+                get: vi.fn().mockResolvedValue({
+                    setupComplete: { core: true },
+                }),
+            },
+            repos: {
+                userRepo: { incrementStat: vi.fn(() => new Promise(() => {})) },
+            },
+        };
+
+        const interaction = createBaseInteraction();
+
+        await handleInteraction(interaction, commandMap, services);
+
+        expect(services.repos.userRepo.incrementStat).toHaveBeenCalledWith('user-1', 'commandsRun', 1);
+        expect(commandExecute).toHaveBeenCalled();
+    });
+
     it('lets a command open a modal as its first response', async () => {
         const commandExecute = vi.fn(async ({ interaction }) => {
             await interaction.showModal({});
