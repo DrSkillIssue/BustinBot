@@ -1,7 +1,6 @@
 import { test as base, afterEach, describe, expect, vi } from '../../../tests/fixtures.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
 import type { PrizeDraw } from '../../../models/PrizeDraw.js';
-import { TaskCategory } from '../../../models/Task.js';
 
 const test = base.extend('repo', ({ db }) => new PrizeDrawRepository(db, 'guild-1'));
 
@@ -56,22 +55,14 @@ describe('PrizeDrawRepository', () => {
         });
     });
 
-    test('records winners and the overall winner', async ({ repo }) => {
+    test('records the winner and when they were rolled', async ({ repo }) => {
         await repo.createPrizeDraw(buildPrizeDraw());
 
-        await repo.setWinners('2026-01-05_to_2026-01-18', { [TaskCategory.PvM]: ['user-1'] } as Record<TaskCategory, string[]>, 'user-1');
+        await repo.setWinner('2026-01-05_to_2026-01-18', 'user-1');
 
         const draw = await repo.getPrizeDrawById('2026-01-05_to_2026-01-18');
-        expect(draw).toMatchObject({ winners: { PvM: ['user-1'] }, winnerId: 'user-1' });
+        expect(draw).toMatchObject({ winnerId: 'user-1' });
         expect(draw?.rolledAt).toEqual(expect.any(String));
-    });
-
-    test('leaves no overall winner when none is given', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw({ winnerId: 'stale-winner' }));
-
-        await repo.setWinners('2026-01-05_to_2026-01-18', {} as Record<TaskCategory, string[]>);
-
-        expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).not.toHaveProperty('winnerId');
     });
 
     test('deletes one draw or all draws', async ({ repo }) => {

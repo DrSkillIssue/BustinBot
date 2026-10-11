@@ -1,8 +1,7 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import type { Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IPrizeDrawRepository } from "./interfaces/IPrizeDrawRepo.js";
 import type { PrizeDraw } from "../../models/PrizeDraw.js";
-import { TaskCategory } from "../../models/Task.js";
 import { prizeDrawConverter } from "./converters.js";
 
 export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implements IPrizeDrawRepository {
@@ -64,16 +63,9 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
         });
     }
 
-    async setWinners(
-        drawId: string,
-        winners: Record<TaskCategory, string[]>,
-        overallWinnerId?: string
-    ): Promise<void> {
-        const docRef = this.collection.doc(drawId);
-        await docRef.update({
-            winners,
-            // Remove any previous overall winner rather than storing null in a string field
-            winnerId: overallWinnerId ?? FieldValue.delete(),
+    async setWinner(drawId: string, winnerId: string): Promise<void> {
+        await this.collection.doc(drawId).update({
+            winnerId,
             rolledAt: new Date().toISOString(),
         });
     }
