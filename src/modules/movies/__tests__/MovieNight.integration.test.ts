@@ -6,7 +6,7 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
-import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, stringSelectInteraction, apiMember } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
 import type { MovieEvent } from "../../../models/MovieEvent.js";
 import { startMovieScheduler, sweepMovieNight } from "../MovieScheduler.js";
@@ -232,7 +232,7 @@ describe("the movie night sweep", () => {
         await storeNight(services, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], withRoles(IDS.roles.movieAdmin));
+        await slash("cancelmovie", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
         await sweepMovieNight(discord.client, services, start.minus({ minutes: 30 }).toJSDate());
         await sweepMovieNight(discord.client, services, start.toJSDate());
 

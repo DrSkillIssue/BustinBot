@@ -3,11 +3,11 @@ import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPI
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
-import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, apiMember } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 
 const CHANNELS = { announce: SnowflakeUtil.generate().toString(), log: SnowflakeUtil.generate().toString(), archive: SnowflakeUtil.generate().toString() };
-const admin = withRoles(IDS.roles.admin);
+const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const MOVIE_ADMIN_ROLE = SnowflakeUtil.generate().toString();
 const MOVIE_USER_ROLE = SnowflakeUtil.generate().toString();
 const MOVIE_CHANNEL = SnowflakeUtil.generate().toString();

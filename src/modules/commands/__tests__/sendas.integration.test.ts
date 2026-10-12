@@ -2,9 +2,9 @@ import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, ChannelType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
-import { IDS, apiMember, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
 
-const admin = withRoles(IDS.roles.admin);
+const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 // /sendas aimed at a channel, as Discord delivers it with the channel resolved
 function sendas(channel: { id: string; type: ChannelType.GuildText | ChannelType.GuildCategory; name: string }, text: string, overrides = admin) {

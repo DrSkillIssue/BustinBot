@@ -10,7 +10,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { GuildRepository } from "../../database/GuildRepo.js";
 import { buildGuild, buildTask } from "../../../tests/fakes/builders.js";
 
-const taskAdmin = apiMember({ roles: [IDS.roles.taskAdmin] });
+const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 
 function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyone]): Command {
     return {
@@ -126,12 +126,10 @@ describe("slash command routing", () => {
 });
 
 describe("/updatetask", () => {
-    const idOption = (id: string) => [{ name: "id", type: ApplicationCommandOptionType.String as const, value: id }];
-
     test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, services }) => {
         await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 }));
         const interaction = await discord.dispatch(
-            chatInputInteraction("updatetask", idOption("PVM001"), { member: taskAdmin })
+            chatInputInteraction("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }], taskAdmin)
         );
 
         await handleInteraction(interaction, new Map([["updatetask", updatetask]]), services);
@@ -146,7 +144,7 @@ describe("/updatetask", () => {
 
     test("replies privately when the task does not exist", async ({ discord, services }) => {
         const interaction = await discord.dispatch(
-            chatInputInteraction("updatetask", idOption("NOPE"), { member: taskAdmin })
+            chatInputInteraction("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }], taskAdmin)
         );
 
         await handleInteraction(interaction, new Map([["updatetask", updatetask]]), services);

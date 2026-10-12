@@ -1,17 +1,17 @@
 import { SnowflakeUtil } from "discord.js";
-import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 import type { Movie } from "../../../models/Movie.js";
 import { addMovieWithStats } from "../MovieService.js";
 
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const VOICE = SnowflakeUtil.generate().toString();
-const movieAdmin = withRoles(IDS.roles.movieAdmin);
+const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
@@ -188,9 +188,9 @@ describe("the movie list", () => {
         const someoneElse = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }) }) };
         const admin = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }), permissions: String(PermissionFlagsBits.Administrator) }) };
 
-        const refused = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], someoneElse);
-        const byAdmin = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], admin);
-        const byOwner = await slash("removemovie", [{ type: 3, name: "title", value: "Arrival" }], { member: apiMember({ user: apiUser({ id: SUBMITTER }) }) });
+        const refused = await slash("removemovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }], someoneElse);
+        const byAdmin = await slash("removemovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }], admin);
+        const byOwner = await slash("removemovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "Arrival" }], { member: apiMember({ user: apiUser({ id: SUBMITTER }) }) });
 
         expect(discord.originalEdits(refused)).toEqual([expect.objectContaining({ content: "You can only remove movies you have added." })]);
         for (const removal of [byAdmin, byOwner]) {

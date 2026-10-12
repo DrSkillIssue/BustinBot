@@ -235,11 +235,6 @@ export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): A
     return { ...apiGuildMember(), permissions: "0", ...overrides };
 }
 
-// The harness user holding the given roles, as an interaction's member
-export function withRoles(...roleIds: string[]): { member: APIInteractionGuildMember } {
-    return { member: apiMember({ roles: roleIds }) };
-}
-
 const interactionBase = {
     application_id: IDS.application,
     guild_id: IDS.guild,

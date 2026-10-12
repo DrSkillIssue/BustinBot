@@ -1,9 +1,9 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
-import { IDS, apiAttachment, chatInputInteraction, withRoles } from "../../../../tests/discord/payloads.js";
+import { IDS, apiAttachment, chatInputInteraction, apiMember } from "../../../../tests/discord/payloads.js";
 import { buildTask } from "../../../../tests/fakes/builders.js";
 
-const admin = withRoles(IDS.roles.admin);
+const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const CSV = [
     "ID,Task Name,Category,Type,Skill,Bronze Amount,Silver Amount,Gold Amount,Weight,Short Name,Wilderness Required?",
     "PVM001,Kill {amount} Zulrah,PvM,KC,,10,25,50,,Zulrah,TRUE",

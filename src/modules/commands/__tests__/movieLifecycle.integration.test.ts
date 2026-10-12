@@ -3,10 +3,10 @@ import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMessage, apiUser, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, apiUser, apiMember } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 
-const movieAdmin = withRoles(IDS.roles.movieAdmin);
+const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const ANNOUNCEMENT = SnowflakeUtil.generate().toString();
 

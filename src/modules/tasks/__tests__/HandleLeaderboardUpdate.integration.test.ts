@@ -1,9 +1,10 @@
+import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
-import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuildMember, apiMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
@@ -107,7 +108,7 @@ describe("the weekly leaderboard update", () => {
 
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.channel } });
         discord.acceptMessages(IDS.channel);
-        const command = await slash("taskboard", [{ type: 1, name: "final" }], { member: { ...apiGuildMember({ user: apiUser() }), roles: [IDS.roles.admin], permissions: "0" } });
+        const command = await slash("taskboard", [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }], { member: apiMember({ roles: [IDS.roles.admin] }) });
 
         expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "Final leaderboard posted." })]);
         expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]).toMatchObject({ title: "🏆 Final Leaderboard Standings" });
@@ -121,7 +122,7 @@ describe("/taskboard", () => {
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
-        const command = await slash("taskboard", [{ type: 1, name: "update" }], { member: { ...apiGuildMember({ user: apiUser() }), roles: [IDS.roles.admin], permissions: "0" } });
+        const command = await slash("taskboard", [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }], { member: apiMember({ roles: [IDS.roles.admin] }) });
 
         expect(discord.originalEdits(command)).toEqual([expect.objectContaining({
             content: "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",

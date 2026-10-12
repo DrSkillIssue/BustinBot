@@ -1,15 +1,14 @@
 import { SnowflakeUtil } from "discord.js";
-import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
 import { buildMovie } from "../../../tests/fakes/builders.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
 const reloaded = { id: 604, title: "The Matrix Reloaded", release_date: "2003-05-15", overview: "Neo returns." };
-const title = (value: string) => ({ type: 3, name: "title", value });
 const resultsMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // TMDb answering a search
@@ -42,7 +41,7 @@ describe("/addmovie", () => {
         tmdbSearch(http, "The Matrix", [matrix, reloaded]);
         tmdbMovie(http, matrix, 136, "Lana Wachowski");
 
-        const command = await slash("addmovie", [title("The Matrix")]);
+        const command = await slash("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }]);
         const [results] = discord.originalEdits(command);
         const pick = await interact(buttonInteraction("addmovie|select|603", resultsMessage));
 
@@ -76,9 +75,9 @@ describe("/addmovie", () => {
         tmdbSearch(http, "The Matrix", [matrix]);
         tmdbSearch(http, "The Matrix", [matrix]);
 
-        const member = await slash("addmovie", [title("The Matrix")]);
-        const admin = await slash("addmovie", [title("The Matrix")], withRoles(IDS.roles.movieAdmin));
-        const owner = await slash("addmovie", [title("The Matrix")], { member: apiMember({ user: apiUser({ id: IDS.owner }) }) });
+        const member = await slash("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }]);
+        const admin = await slash("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        const owner = await slash("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }], { member: apiMember({ user: apiUser({ id: IDS.owner }) }) });
 
         expect(discord.originalEdits(member)).toEqual([expect.objectContaining({
             content: "You have reached the maximum of 3 active movies. Remove one or wait for a movie night to conclude before adding more.",
@@ -92,9 +91,9 @@ describe("/addmovie", () => {
         await storeFullList(services, IDS.user);
         tmdbSearch(http, "The Matrix", [matrix]);
 
-        const command = await interact(chatInputInteraction("addmovie", [title("The Matrix")], {
+        const command = await interact(chatInputInteraction("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }], {
             ...uncachedGuild,
-            ...withRoles(IDS.roles.movieAdmin),
+            member: apiMember({ roles: [IDS.roles.movieAdmin] }),
         }));
 
         expect(discord.originalEdits(command)[0]?.embeds).toHaveLength(1);
@@ -109,7 +108,7 @@ describe("/addmovie", () => {
     test("is refused until the bot is set up", async ({ discord, slash, db }) => {
         await db.doc(`guilds/${IDS.guild}`).delete();
 
-        const command = await slash("addmovie", [title("The Matrix")]);
+        const command = await slash("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }]);
 
         expect(discord.callbacks(command)).toEqual([{
             type: InteractionResponseType.ChannelMessageWithSource,

@@ -2,13 +2,13 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
 import { TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
-const admin = withRoles(IDS.roles.admin);
+const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) => buildTask({ id: `${prefix}00${n}`, category, taskName: `${prefix} task ${n}`, amtBronze: n, amtSilver: n * 2, amtGold: n * 3 }));
