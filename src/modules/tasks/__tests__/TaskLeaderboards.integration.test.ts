@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import {
     ensureTaskLeaderboardsInitialized,
     finalizePeriodicLeaderboard,
@@ -21,10 +21,6 @@ async function storeEvent(services: ServiceContainer, id: string, start: string,
 async function periodic(services: ServiceContainer): Promise<TaskLeaderboard | null> {
     return services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
 }
-
-beforeEach(() => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-});
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {

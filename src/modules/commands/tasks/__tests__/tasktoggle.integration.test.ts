@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../../tests/fixtures.js";
+import { afterEach, describe, expect, test } from "../../../../tests/fixtures.js";
 import { createServiceContainer } from "../../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
 import { IDS, withRoles } from "../../../../tests/discord/payloads.js";
@@ -23,8 +23,6 @@ afterEach(async () => {
 
 describe("/tasktoggle schedule", () => {
     test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-
         const interaction = await slash("tasktoggle", subcommand("schedule"), admin);
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -35,7 +33,6 @@ describe("/tasktoggle schedule", () => {
     });
 
     test("stops only this guild's task jobs when switched off", async ({ discord, slash, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
         await initTaskScheduler(discord.client, createServiceContainer(db, IDS.otherGuild, services.botStats));
         await slash("tasktoggle", subcommand("schedule"), admin);
@@ -51,7 +48,6 @@ describe("/tasktoggle schedule", () => {
     });
 
     test("works for a guild stored without any toggles", async ({ discord, slash, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const { toggles: _toggles, ...withoutToggles } = buildGuild();
         await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
 
@@ -66,8 +62,6 @@ describe("/tasktoggle schedule", () => {
 
 describe("/tasktoggle leaderboard", () => {
     test("switches periodic leaderboard automation off and back on", async ({ discord, slash, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-
         const off = await slash("tasktoggle", subcommand("leaderboard"), admin);
         expect(discord.originalEdits(off)).toEqual([
             expect.objectContaining({ content: "🧊 Periodic leaderboard automation **disabled** (read-only mode)." }),

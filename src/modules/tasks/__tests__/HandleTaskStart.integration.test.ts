@@ -21,7 +21,6 @@ async function storePoll(services: ServiceContainer, category: TaskCategory, opt
 
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({ discord, slash, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.keywordRepo.addKeyword("Bustin");
         await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { a: "PVM002", b: "PVM002", c: "PVM001" });
@@ -49,7 +48,6 @@ describe("/taskstart", () => {
 
 describe("starting a category's task", () => {
     test("breaks a tie in favour of the option listed first in the poll", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { a: "PVM003", b: "PVM002" });
         discord.acceptMessages(IDS.channel);
 
@@ -59,7 +57,6 @@ describe("starting a category's task", () => {
     });
 
     test("uses the poll that has just been closed, which is the usual case when polls end as tasks start", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { a: "PVM003" }, { isActive: false });
         discord.acceptMessages(IDS.channel);
 
@@ -69,7 +66,6 @@ describe("starting a category's task", () => {
     });
 
     test("keeps both events when the same task starts twice in a day", async ({ discord, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { a: "PVM001" });
         discord.acceptMessages(IDS.channel);
 

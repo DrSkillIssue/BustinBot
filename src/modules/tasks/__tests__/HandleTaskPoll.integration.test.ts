@@ -25,7 +25,6 @@ function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
 
 describe("posting the weekly task polls", () => {
     test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.taskRepo.seedTasks([
             ...options,
@@ -119,7 +118,6 @@ describe("voting in a task poll", () => {
 
 describe("closing a task poll", () => {
     test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await services.repos.taskRepo.seedTasks(options);
         const poll = await storeOpenPoll(services, { votes: { [nextId()]: "PVM002" } });
         discord.acceptMessages(IDS.channel);

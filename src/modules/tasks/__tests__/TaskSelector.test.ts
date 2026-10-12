@@ -16,7 +16,6 @@ function seedRandom(seed: number): void {
 
 describe('pickWeightedRandom', () => {
     test('favours tasks in proportion to their weight', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         seedRandom(7);
         const tasks = [buildTask({ id: 'common', weight: 75 }), buildTask({ id: 'rare', weight: 25 })];
 
@@ -26,7 +25,6 @@ describe('pickWeightedRandom', () => {
     });
 
     test('never picks a task weighted zero while another task is left', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         vi.spyOn(Math, 'random').mockReturnValue(0);
         const tasks = [buildTask({ id: 'voted-out', weight: 0 }), buildTask({ id: 'normal', weight: 50 })];
 
@@ -35,7 +33,6 @@ describe('pickWeightedRandom', () => {
     });
 
     test('picks each task at most once', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         seedRandom(3);
         const tasks = Array.from({ length: 5 }, (_, index) => buildTask({ id: `PVM00${index}` }));
 
@@ -59,7 +56,6 @@ describe('selectTasksForCategory', () => {
     ];
 
     test('offers three PvM tasks from the PvM tasks only', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         seedRandom(11);
         const tasks = [...skilling, ...Array.from({ length: 5 }, (_, index) => buildTask({ id: `PVM00${index}`, category: TaskCategory.PvM }))];
 
@@ -70,7 +66,6 @@ describe('selectTasksForCategory', () => {
     });
 
     test('offers skilling tasks from three different skills', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         seedRandom(5);
 
         const skills = selectTasksForCategory(TaskCategory.Skilling, skilling).map((task) => task.skill);
@@ -80,7 +75,6 @@ describe('selectTasksForCategory', () => {
     });
 
     test('offers every skill equally often', () => {
-        vi.spyOn(console, 'log').mockImplementation(() => {});
         seedRandom(42);
         const offered = new Map<string | undefined, number>();
         const polls = 4000;

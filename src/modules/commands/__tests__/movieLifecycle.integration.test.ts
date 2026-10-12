@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, apiUser, nextId, withRoles } from "../../../tests/discord/payloads.js";
@@ -17,7 +17,6 @@ async function storeTonight(services: ServiceContainer, overrides = {}) {
 
 describe("/endmovie", () => {
     test("ends tonight's movie night, archives the movie and thanks everyone in the movie night channel", async ({ discord, slash, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeTonight(services);
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
@@ -39,7 +38,6 @@ describe("/endmovie", () => {
 
 describe("/closemoviepoll", () => {
     test("closes the poll and announces the winner in the movie night channel", async ({ discord, slash, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const poll = buildMoviePoll({ options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { a: "movie-2", b: "movie-2" } });
         await services.repos.movieRepo.createPoll(poll);
         discord.message(apiMessage({ id: poll.messageId }));
@@ -63,7 +61,6 @@ describe("/closemoviepoll", () => {
 
 describe("/cancelmovie", () => {
     test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({ discord, slash, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const poll = buildMoviePoll({ endsAt: new Date(Date.now() + DAY) });
         await services.repos.movieRepo.createPoll(poll);
         await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
@@ -89,8 +86,6 @@ describe("/cancelmovie", () => {
     });
 
     test("posts the cancellation in the movie night channel when its announcement is gone", async ({ discord, slash, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-        vi.spyOn(console, "info").mockImplementation(() => {});
         await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);

@@ -59,7 +59,6 @@ describe('KeywordRepository', () => {
         await repo.addKeyword('alpha');
         await repo.addKeyword('beta');
         await repo.markKeywordUsed('alpha', 'event-1');
-        vi.spyOn(console, 'log').mockImplementation(() => {});
 
         await repo.resetAllUsage();
         expect(await repo.getKeywordById('alpha')).toMatchObject({ timesUsed: 0, lastUsedEventId: '', usageHistory: [] });

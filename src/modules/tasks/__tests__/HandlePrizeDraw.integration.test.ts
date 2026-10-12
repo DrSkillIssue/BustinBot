@@ -41,7 +41,6 @@ function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
 
 describe("a prize draw snapshot", () => {
     test("gives one entry per task however many times the member upgraded their submission", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services, "pvm", daysAgo(2), [
             { userId: winner, status: SubmissionStatus.Bronze },
             { userId: winner, status: SubmissionStatus.Silver },
@@ -52,7 +51,6 @@ describe("a prize draw snapshot", () => {
     });
 
     test("gives one entry for each task the member completed", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         for (const id of ["pvm", "skilling", "minigame"]) {
             await storeEvent(services, id, daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
         }
@@ -61,7 +59,6 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services, "pvm", daysAgo(2), [
             { userId: winner, status: SubmissionStatus.Pending },
             { userId: second, status: SubmissionStatus.Rejected },
@@ -71,7 +68,6 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out a task event that is still running", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services, "finished", daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
         await storeEvent(services, "running", new Date(Date.now() + 60 * 60 * 1000), [{ userId: second, status: SubmissionStatus.Gold }]);
 
@@ -79,7 +75,6 @@ describe("a prize draw snapshot", () => {
     });
 
     test("carries over approvals the previous draw's snapshot missed", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const previousEnd = daysAgo(21);
         const previousSnapshot = new Date(previousEnd.getTime() + 1 * DAY);
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({
@@ -107,7 +102,6 @@ describe("a prize draw snapshot", () => {
     });
 
     test("carries over only from the most recent rolled draw", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         for (const [id, endDaysAgo] of [["older", 42], ["latest", 21]] as const) {
             const end = daysAgo(endDaysAgo);
             await services.repos.prizeRepo.createPrizeDraw(storedDraw({
@@ -131,7 +125,6 @@ describe("a prize draw snapshot", () => {
 
 describe("rolling a prize draw", () => {
     test("finds no winner without entries", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({ participants: {}, entries: [], totalEntries: 0 }));
 
         expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBeNull();
@@ -144,7 +137,6 @@ describe("rolling a prize draw", () => {
     });
 
     test("picks a winner by entries, stores them and counts the win", async ({ services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(Math, "random").mockReturnValue(0);
         await services.repos.prizeRepo.createPrizeDraw(storedDraw());
 
@@ -156,7 +148,6 @@ describe("rolling a prize draw", () => {
 
 describe("announcing a prize draw winner", () => {
     test("posts one message mentioning the task role with the winner's embed, and congratulates the winner", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const taskUser = apiRole({ name: "Task User" });
         await discord.addRole(IDS.guild, taskUser);
         await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
@@ -176,7 +167,6 @@ describe("announcing a prize draw winner", () => {
     });
 
     test("still posts the winner's embed when no task role is configured", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: winner }));
         discord.user(apiUser({ id: winner, username: "lucky" }));
@@ -192,7 +182,6 @@ describe("announcing a prize draw winner", () => {
     });
 
     test("reports that the task channel can't be reached instead of posting anywhere else", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: winner }));
         discord.user(apiUser({ id: winner, username: "lucky" }));

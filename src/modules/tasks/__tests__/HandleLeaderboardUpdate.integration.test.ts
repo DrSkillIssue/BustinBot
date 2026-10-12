@@ -47,7 +47,6 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
 
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const events = await storeWeeks(services, 2, 1);
         await storePeriodic(services, { points: { [winner]: 6 }, tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } }, period: buildLeaderboardPeriod({ eventIds: events }) });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: winner, username: "member1", global_name: "member1" }) }));
@@ -64,7 +63,6 @@ describe("the weekly leaderboard update", () => {
     });
 
     test("ends the period once however many runs see it finished: champions, final standings and congratulations", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
         const period = buildLeaderboardPeriod({ eventIds: events });
@@ -92,7 +90,6 @@ describe("the weekly leaderboard update", () => {
     });
 
     test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({ discord, services, slash }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { points: { [winner]: 9 }, period: buildLeaderboardPeriod({ eventIds: events }) });
@@ -118,7 +115,6 @@ describe("the weekly leaderboard update", () => {
 
 describe("/taskboard", () => {
     test("says so when the task channel can't be reached", async ({ discord, services, slash }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(services, {});
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
@@ -134,7 +130,6 @@ describe("/taskboard", () => {
 
 describe("the warning before a period ends", () => {
     test("tells the task admins how many submissions still need reviewing", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
@@ -151,7 +146,6 @@ describe("the warning before a period ends", () => {
     });
 
     test("is skipped with a warning when the verification channel is gone", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
         await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });

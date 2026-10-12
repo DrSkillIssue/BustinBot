@@ -25,8 +25,6 @@ afterEach(async () => {
 
 describe("task scheduler", () => {
     test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-
         await initTaskScheduler(discord.client, services);
 
         expect(jobsOf(IDS.guild)).toEqual({
@@ -43,7 +41,6 @@ describe("task scheduler", () => {
     });
 
     test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({ discord, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
         const otherServices = createServiceContainer(db, IDS.otherGuild, services.botStats);
 

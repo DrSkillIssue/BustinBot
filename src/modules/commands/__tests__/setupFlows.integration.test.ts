@@ -1,5 +1,5 @@
 import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPIWebhookWithTokenMessageJSONBody } from "discord-api-types/v10";
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
@@ -55,7 +55,6 @@ describe("the setup commands", () => {
 
 describe("/setup choices", () => {
     test("saves the chosen channels and marks the core setup complete", async ({ discord, interact, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
         await interact(channelSelectInteraction("setup_log", [CHANNELS.log]));
         await interact(channelSelectInteraction("setup_archive", [CHANNELS.archive]));
@@ -115,7 +114,6 @@ describe("/setup choices", () => {
         const button = await interact(buttonInteraction("setup_timezone"));
         expect(discord.modal(button)?.custom_id).toBe("setup_timezone_modal");
 
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const submit = await interact(modalSubmitInteraction("setup_timezone_modal", { timezone_input: "Australia/Melbourne" }));
 
         expect(discord.callbacks(submit)).toEqual([{
@@ -138,7 +136,6 @@ describe("/setup choices", () => {
 
 describe("/moviesetup choices", () => {
     test("saves the movie roles and channels without touching other settings", async ({ discord, interact, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await interact(roleSelectInteraction("moviesetup_admin_role", ["100000000000000301"]));
         await interact(roleSelectInteraction("moviesetup_user_role", ["100000000000000302"]));
         await interact(channelSelectInteraction("moviesetup_channel", ["100000000000000303"]));
@@ -170,7 +167,6 @@ describe("/moviesetup choices", () => {
 
 describe("/tasksetup choices", () => {
     test("saves the task roles, channels and leaderboard period", async ({ discord, interact, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await interact(roleSelectInteraction("tasksetup_admin_role", ["100000000000000401"]));
         await interact(roleSelectInteraction("tasksetup_user_role", ["100000000000000402"]));
         await interact(channelSelectInteraction("tasksetup_channel", ["100000000000000403"]));

@@ -104,7 +104,6 @@ describe("scheduling a movie night", () => {
 
 describe("the movie night sweep", () => {
     test("sends each reminder once when it comes due", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() + 3 * HOUR);
         await storeNight(services, { startTime: start });
@@ -123,7 +122,6 @@ describe("the movie night sweep", () => {
     });
 
     test("sends only the latest reminder that came due while the bot was down, and none once it is too late", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() + HOUR);
@@ -140,7 +138,6 @@ describe("the movie night sweep", () => {
     });
 
     test("holds a reminder while the movie night channel can't be reached, and sends it once it can", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         await services.guilds.update(IDS.guild, { channels: { movieNight: "" } });
@@ -157,7 +154,6 @@ describe("the movie night sweep", () => {
     });
 
     test("keeps working from what is stored after a restart", async ({ discord, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() + 30 * MINUTE);
         await storeNight(services, { startTime: start, remindersSent: ["2 hours before"] });
@@ -173,7 +169,6 @@ describe("the movie night sweep", () => {
     });
 
     test("closes the poll once its time is up, picks the winner and announces it once", async ({ discord, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const poll = buildMoviePoll({
             options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })],
@@ -202,7 +197,6 @@ describe("the movie night sweep", () => {
     });
 
     test("counts attendance from the start time and ends the night once its movie has run", async ({ discord, services, voice }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() - 10 * MINUTE);
         // Its reminders have gone out; this is about the night itself
@@ -237,8 +231,6 @@ describe("the movie night sweep", () => {
     });
 
     test("sends nothing more for a night that was cancelled", async ({ discord, services, slash }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-        vi.spyOn(console, "info").mockImplementation(() => {});
         await setUpMovieNight(discord, services);
         const start = new Date(Date.now() + HOUR);
         await storeNight(services, { startTime: start });
@@ -254,7 +246,6 @@ describe("the movie night sweep", () => {
     });
 
     test("keeps each guild's movie night to itself", async ({ discord, services, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
         await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { movieNight: IDS.otherGuildChannel } }));
         const other = createServiceContainer(db, IDS.otherGuild, services.botStats);

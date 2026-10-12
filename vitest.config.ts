@@ -11,6 +11,8 @@ export default defineConfig({
         unstubEnvs: true,
         // and with every spy restored
         restoreMocks: true,
+        // Console output is shown for failing tests only
+        silent: "passed-only",
         coverage: { provider: "v8", reporter: ["text", "html"] },
         projects: [
             {

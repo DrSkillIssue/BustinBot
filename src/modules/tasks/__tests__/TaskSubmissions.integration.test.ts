@@ -262,7 +262,6 @@ describe("approving a submission", () => {
     }
 
     test("asks the admin to confirm, then records the tier and everything that follows from it", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await storePendingSubmission(services);
         const { dm, screenshot } = await acceptReviewEffects(discord, services);
@@ -299,7 +298,6 @@ describe("approving a submission", () => {
     });
 
     test("moves the member's counts, stats and points up to a higher tier rather than adding to them", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await storeApproval(services, SubmissionStatus.Bronze);
         await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({
@@ -321,7 +319,6 @@ describe("approving a submission", () => {
     });
 
     test("starts the lifetime leaderboard from the member's stats before this approval", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedBronze: 2 }));
         await storePendingSubmission(services);
@@ -333,7 +330,6 @@ describe("approving a submission", () => {
     });
 
     test("counts once when two admins confirm at the same moment", async ({ discord, interact, services, commands }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         await storeEvent(services);
         await storePendingSubmission(services);
         const { dm } = await acceptReviewEffects(discord, services);
@@ -377,7 +373,6 @@ describe("approving a submission", () => {
     });
 
     test("still completes when the member can't be DMed and the archive channel refuses the copy", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeEvent(services);
         await storePendingSubmission(services);
@@ -396,7 +391,6 @@ describe("approving a submission", () => {
     });
 
     test("still completes when the task's post has been deleted", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeEvent(services);
         await storePendingSubmission(services);
@@ -412,7 +406,6 @@ describe("approving a submission", () => {
     });
 
     test("still completes when no archive channel is configured", async ({ discord, interact, services }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeEvent(services);
         await storePendingSubmission(services);

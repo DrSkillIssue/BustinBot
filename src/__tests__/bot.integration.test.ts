@@ -77,7 +77,6 @@ describe("startBot", () => {
 
     test("stops every scheduled job and disconnects when shut down", async ({ db, http }) => {
         await new GuildRepository(db).initGuild(IDS.guild, buildGuild({ toggles: { taskScheduler: true, leaguesEnabled: false } }));
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const discord = DiscordHarness.create(http);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });

@@ -39,7 +39,6 @@ beforeEach(() => {
 
 describe("/addmovie", () => {
     test("shows TMDb's results and adds the one the member picks", async ({ discord, slash, interact, services, http }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         tmdbSearch(http, "The Matrix", [matrix, reloaded]);
         tmdbMovie(http, matrix, 136, "Lana Wachowski");
 
@@ -57,7 +56,6 @@ describe("/addmovie", () => {
     });
 
     test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
         const lister = nextId();
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));

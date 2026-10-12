@@ -31,7 +31,6 @@ describe("KeywordSelector", () => {
 
     test("never picks one of the 26 most recently used keywords, and records the pick", async ({ repo, db }) => {
         const words = Array.from({ length: 30 }, (_, index) => `word${String(index).padStart(2, "0")}`);
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         for (const random of [0, 0.5, 0.99]) {
             await storeKeywordsUsedInOrder(db, words);
@@ -45,8 +44,6 @@ describe("KeywordSelector", () => {
     });
 
     test("never repeats the keyword used last when there are only a few", async ({ repo, db }) => {
-        vi.spyOn(console, "log").mockImplementation(() => {});
-
         for (const random of [0, 0.5, 0.99]) {
             await storeKeywordsUsedInOrder(db, ["alpha", "bravo", "charlie"]);
             vi.spyOn(Math, "random").mockReturnValue(random);
