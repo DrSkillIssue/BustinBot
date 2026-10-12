@@ -178,7 +178,7 @@ describe("the weekly leaderboard update", () => {
 
 describe("/taskboard", () => {
     test("says so when the task channel can't be reached", async ({ discord, services, slash, factories }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(factories, {});
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
@@ -193,6 +193,7 @@ describe("/taskboard", () => {
                     "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
             }),
         ]);
+        expect(warn).toHaveBeenCalledWith("[LeaderboardUpdate] Task channel not found for leaderboard update.");
     });
 });
 

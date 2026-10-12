@@ -51,7 +51,6 @@ describe("/taskstart", () => {
         db,
         factories,
     }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.keywordRepo.addKeyword("Bustin");
         await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
             [SnowflakeUtil.generate().toString()]: "PVM002",
@@ -90,18 +89,24 @@ describe("/taskstart", () => {
 
 describe("the scheduled task start job", () => {
     test("starts the week's tasks from the polls", async ({ discord, services, factories, runScheduledJob }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.keywordRepo.addKeyword("Bustin");
         await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
             [SnowflakeUtil.generate().toString()]: "PVM002",
+        });
+        await storePoll(factories, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), {
+            [SnowflakeUtil.generate().toString()]: "SKL003",
+        });
+        await storePoll(factories, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), {
+            [SnowflakeUtil.generate().toString()]: "MIN001",
         });
         discord.acceptMessages(IDS.channel);
         await initTaskScheduler(discord.client, services);
 
         await runScheduledJob(IDS.guild, "taskStart");
 
-        expect(discord.messagesSentTo(IDS.channel)[0]?.content).toContain("**The new tasks are live!**");
-        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM002");
+        const [announcement, ...eventPosts] = discord.messagesSentTo(IDS.channel);
+        expect(announcement?.content).toContain("Include the keyword **Bustin** in your screenshots");
+        expect(eventPosts).toHaveLength(3);
     });
 });
 

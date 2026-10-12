@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "../../../../fixtures.js";
+import { describe, expect, test, storePollableTasks } from "../../../../fixtures.js";
 import { IDS, apiMember } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 
@@ -6,9 +6,7 @@ const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 describe("/taskpoll", () => {
     test("posts the task polls now", async ({ discord, slash, services, factories }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
-        for (const id of ["PVM001", "PVM002", "PVM003"])
-            await factories.task.create({ id, category: TaskCategory.PvM });
+        await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
 
         const command = await slash("taskpoll", [], botAdmin);

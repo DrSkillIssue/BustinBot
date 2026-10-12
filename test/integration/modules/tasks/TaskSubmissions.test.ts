@@ -2,6 +2,7 @@ import { SnowflakeUtil } from "discord.js";
 import {
     InteractionResponseType,
     MessageFlags,
+    RESTJSONErrorCodes,
     type APIAttachment,
     type GatewayMessageCreateDispatchData,
 } from "discord-api-types/v10";
@@ -218,7 +219,7 @@ describe("submitting a task", () => {
         services,
         factories,
     }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeEvent(factories);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
@@ -235,6 +236,10 @@ describe("submitting a task", () => {
             }),
         ]);
         expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringMatching(/^\[TaskService\] Couldn't post submission \w+ for review:$/),
+            expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
+        );
 
         discord.acceptMessages(IDS.channel);
         await sendDirectMessage(discord, services, directMessage("", { attachments: [screenshot] }));
@@ -604,7 +609,7 @@ describe("approving a submission", () => {
         );
         expect(warn).toHaveBeenCalledWith(
             `[TaskService] Failed to archive submission ${submission.id}:`,
-            expect.objectContaining({ code: 50013 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
         );
     });
 

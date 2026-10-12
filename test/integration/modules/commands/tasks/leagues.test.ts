@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "../../../../fixtures.js";
+import { describe, expect, test, storePollableTasks } from "../../../../fixtures.js";
 import { IDS, apiMember } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 import { postAllTaskPolls } from "../../../../../src/modules/tasks/HandleTaskPoll.js";
@@ -12,9 +12,7 @@ describe("/leagues", () => {
         services,
         factories,
     }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
-        for (const id of ["LEA001", "LEA002", "LEA003"])
-            await factories.task.create({ id, category: TaskCategory.Leagues });
+        await storePollableTasks(factories, Object.values(TaskCategory));
         discord.acceptMessages(IDS.channel);
 
         const command = await slash("leagues", [], taskAdmin);

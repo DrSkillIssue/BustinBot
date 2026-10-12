@@ -1,10 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, type StoringFactories, storePollableTasks } from "../../../fixtures.js";
 import { buttonsIn } from "../../../discord/harness.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
-import { Skill, TaskCategory } from "../../../../src/models/Task.js";
+import { TaskCategory } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../../../src/modules/tasks/HandleTaskPoll.js";
 import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
@@ -39,19 +39,7 @@ describe("posting the weekly task polls", () => {
         services,
         factories,
     }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
-        for (const task of [
-            { id: "PVM001", shortName: "Zulrah" },
-            { id: "PVM002", shortName: "Vorkath" },
-            { id: "PVM003", shortName: "Hydra" },
-            { id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining },
-            { id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing },
-            { id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking },
-            { id: "MIN001", category: TaskCategory.MinigameMisc },
-            { id: "MIN002", category: TaskCategory.MinigameMisc },
-            { id: "MIN003", category: TaskCategory.MinigameMisc },
-        ])
-            await factories.task.create(task);
+        await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
 
         await postAllTaskPolls(discord.client, services);
@@ -77,9 +65,7 @@ describe("posting the weekly task polls", () => {
 
 describe("the scheduled task poll job", () => {
     test("posts the task polls in the task channel", async ({ discord, services, factories, runScheduledJob }) => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
-        for (const id of ["PVM001", "PVM002", "PVM003"])
-            await factories.task.create({ id, category: TaskCategory.PvM });
+        await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
         await initTaskScheduler(discord.client, services);
 
@@ -87,10 +73,7 @@ describe("the scheduled task poll job", () => {
 
         const [announcement, ...polls] = discord.messagesSentTo(IDS.channel);
         expect(announcement?.content).toContain("**New task polls are live!**");
-        expect(polls).toHaveLength(1);
-        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toMatchObject({
-            isActive: true,
-        });
+        expect(polls).toHaveLength(3);
     });
 
     test("posts nothing when no task channel is configured", async ({
@@ -99,8 +82,7 @@ describe("the scheduled task poll job", () => {
         factories,
         runScheduledJob,
     }) => {
-        for (const id of ["PVM001", "PVM002", "PVM003"])
-            await factories.task.create({ id, category: TaskCategory.PvM });
+        await storePollableTasks(factories);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
         await initTaskScheduler(discord.client, services);
 

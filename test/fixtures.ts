@@ -18,6 +18,7 @@ import { routeInteraction } from "../src/core/events/routeInteraction.js";
 import { handleMessage } from "../src/core/events/onMessage.js";
 import { GuildRepository } from "../src/core/database/GuildRepo.js";
 import type { ServiceContainer } from "../src/core/services/ServiceContainer.js";
+import { Skill, TaskCategory } from "../src/models/Task.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
 import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
@@ -77,6 +78,31 @@ function storingFactories(db: Firestore, services: ServiceContainer) {
 }
 
 export type StoringFactories = ReturnType<typeof storingFactories>;
+
+const TASK_ID_PREFIXES: Record<TaskCategory, string> = {
+    [TaskCategory.PvM]: "PVM",
+    [TaskCategory.Skilling]: "SKL",
+    [TaskCategory.MinigameMisc]: "MIN",
+    [TaskCategory.Leagues]: "LEA",
+};
+const POLL_SKILLS = [Skill.Mining, Skill.Fishing, Skill.Cooking];
+
+// Enough tasks for a poll in each of the given categories: three in each (PVM001 to PVM003 and so on), the skilling
+// ones each in its own skill
+export async function storePollableTasks(
+    factories: StoringFactories,
+    categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc],
+): Promise<void> {
+    for (const category of categories) {
+        for (const [index, skill] of POLL_SKILLS.entries()) {
+            await factories.task.create({
+                id: `${TASK_ID_PREFIXES[category]}00${index + 1}`,
+                category,
+                ...(category === TaskCategory.Skilling ? { skill } : {}),
+            });
+        }
+    }
+}
 
 // Delivers an interaction and routes it as the running bot does (the `interact` fixture)
 export type Interact = (payload: APIInteraction) => Promise<Interaction>;
