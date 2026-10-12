@@ -1,4 +1,4 @@
-import { SnowflakeUtil } from "discord.js";
+import { SlashCommandBuilder, SnowflakeUtil } from "discord.js";
 import { Factory } from "fishery";
 import { TaskCategory, TaskType, type Task } from "../src/models/Task.js";
 import type { TaskEvent } from "../src/models/TaskEvent.js";
@@ -14,6 +14,7 @@ import type { PrizeDraw } from "../src/models/PrizeDraw.js";
 import type { BotStats } from "../src/models/BotStats.js";
 import type { Keyword } from "../src/models/Keyword.js";
 import type { TaskFeedback } from "../src/models/TaskFeedback.js";
+import { CommandModule, CommandRole, type Command } from "../src/models/Command.js";
 import { IDS } from "./discord/payloads.js";
 
 // fishery factories: each builds a complete, valid domain object; tests pass only the fields they care about.
@@ -29,19 +30,26 @@ export const taskFactory = Factory.define<Task>(() => ({
     weight: 50,
 }));
 
+// A week-long task event, as the bot starts them: give its start or its end and the other follows. It was created when
+// it started.
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const taskEventFactory = Factory.define<TaskEvent>(({ params }) => {
     const task = taskFactory.build(params.task);
+    const startTime =
+        params.startTime ??
+        (params.endTime ? new Date(params.endTime.getTime() - WEEK_MS) : new Date("2026-01-05T00:00:00.000Z"));
+    const endTime = params.endTime ?? new Date(startTime.getTime() + WEEK_MS);
     return {
         id: `${task.id}-20260105`,
         task,
         category: task.category,
         amounts: { bronze: task.amtBronze, silver: task.amtSilver, gold: task.amtGold },
         keyword: "keyword",
-        startTime: new Date("2026-01-05T00:00:00.000Z"),
-        endTime: new Date("2026-01-12T00:00:00.000Z"),
+        startTime,
+        endTime,
         completionCounts: { bronze: 0, silver: 0, gold: 0 },
         completedUserIds: [],
-        createdAt: new Date("2026-01-05T00:00:00.000Z"),
+        createdAt: startTime,
     };
 });
 
@@ -207,3 +215,16 @@ export const botStatsFactory = Factory.define<BotStats>(() => ({
     errorCount: 0,
     lastUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
 }));
+
+// A slash command anyone may run that does nothing; its description and slash data follow its name
+export const commandFactory = Factory.define<Command>(({ params }) => {
+    const name = params.name ?? "probe";
+    return {
+        name,
+        description: name,
+        module: CommandModule.Core,
+        allowedRoles: [CommandRole.Everyone],
+        slashData: new SlashCommandBuilder().setName(name).setDescription(name),
+        execute: async () => {},
+    };
+});

@@ -29,7 +29,6 @@ async function storeWeeks(factories: StoringFactories, count: number, ended: num
         await factories.taskEvent.create({
             id,
             task: taskFactory.build({ id }),
-            startTime: endTime.minus({ days: 7 }).toJSDate(),
             endTime: endTime.toJSDate(),
         });
         ids.push(id);

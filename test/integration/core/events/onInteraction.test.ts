@@ -1,24 +1,12 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { SlashCommandBuilder } from "discord.js";
 import { describe, expect, test, vi } from "../../../fixtures.js";
 import { handleInteraction } from "../../../../src/core/events/onInteraction.js";
-import { CommandModule, CommandRole, type Command } from "../../../../src/models/Command.js";
+import { CommandRole } from "../../../../src/models/Command.js";
 import { IDS, apiGuild, apiMember, apiRole, chatInputInteraction } from "../../../discord/payloads.js";
 import type { DiscordHarness } from "../../../discord/harness.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { GuildRepository } from "../../../../src/core/database/GuildRepo.js";
-import { guildFactory } from "../../../factories.js";
-
-function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyone]): Command {
-    return {
-        name: "probe",
-        description: "Test command",
-        module: CommandModule.Core,
-        allowedRoles,
-        slashData: new SlashCommandBuilder().setName("probe").setDescription("Test command"),
-        execute,
-    };
-}
+import { commandFactory, guildFactory } from "../../../factories.js";
 
 describe("slash command routing", () => {
     // Interactions from a guild discord.js hasn't cached carry the member as raw data with role ids only
@@ -42,12 +30,12 @@ describe("slash command routing", () => {
         const interaction = await discord.dispatch(
             chatInputInteraction("probe", [], await fromUncachedGuild(discord, db, "BustinBot Admin")),
         );
-        const ran = command(
-            async ({ interaction: probe }) => {
+        const ran = commandFactory.build({
+            allowedRoles: [CommandRole.BotAdmin],
+            execute: async ({ interaction: probe }) => {
                 await probe?.reply({ content: "ran" });
             },
-            [CommandRole.BotAdmin],
-        );
+        });
 
         await handleInteraction(interaction, new Map([["probe", ran]]), services);
 
@@ -106,7 +94,11 @@ describe("slash command routing", () => {
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
         const execute = vi.fn();
 
-        await handleInteraction(interaction, new Map([["probe", command(execute, [CommandRole.TaskAdmin])]]), services);
+        await handleInteraction(
+            interaction,
+            new Map([["probe", commandFactory.build({ execute, allowedRoles: [CommandRole.TaskAdmin] })]]),
+            services,
+        );
 
         expect(execute).not.toHaveBeenCalled();
         expect(discord.callbacks(interaction)).toEqual([
@@ -126,7 +118,11 @@ describe("slash command routing", () => {
         });
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
 
-        await handleInteraction(interaction, new Map([["probe", command(vi.fn())]]), services);
+        await handleInteraction(
+            interaction,
+            new Map([["probe", commandFactory.build({ execute: vi.fn() })]]),
+            services,
+        );
 
         expect(discord.callbacks(interaction)).toEqual([
             {
@@ -149,9 +145,11 @@ describe("slash command routing", () => {
             new Map([
                 [
                     "probe",
-                    command(async ({ interaction }) => {
-                        await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
-                        statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
+                    commandFactory.build({
+                        execute: async ({ interaction }) => {
+                            await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
+                            statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
+                        },
                     }),
                 ],
             ]),
@@ -172,8 +170,10 @@ describe("slash command routing", () => {
             new Map([
                 [
                     "probe",
-                    command(async () => {
-                        throw new Error("boom");
+                    commandFactory.build({
+                        execute: async () => {
+                            throw new Error("boom");
+                        },
                     }),
                 ],
             ]),

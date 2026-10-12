@@ -27,9 +27,7 @@ async function storeEvent(
 ) {
     await factories.taskEvent.create({
         id,
-        startTime: endTime.minus({ days: 7 }).toJSDate(),
         endTime: endTime.toJSDate(),
-        createdAt: endTime.minus({ days: 7 }).toJSDate(),
     });
     for (const [index, submission] of submissions.entries()) {
         await factories.taskSubmission.create({ id: `${id}-${index}`, taskEventId: id, ...submission });

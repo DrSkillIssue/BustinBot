@@ -10,8 +10,6 @@ async function storeWeeks(factories: StoringFactories, start: DateTime, ids: str
         await factories.taskEvent.create({
             id,
             startTime: start.plus({ weeks: week }).toJSDate(),
-            endTime: start.plus({ weeks: week + 1 }).toJSDate(),
-            createdAt: start.plus({ weeks: week }).toJSDate(),
         });
     }
 }
@@ -83,14 +81,10 @@ describe("task streaks", () => {
         await factories.taskEvent.create({
             id: "before-break",
             startTime: start.toJSDate(),
-            endTime: start.plus({ days: 7 }).toJSDate(),
-            createdAt: start.toJSDate(),
         });
         await factories.taskEvent.create({
             id: "after-break",
             startTime: afterBreak.toJSDate(),
-            endTime: afterBreak.plus({ days: 7 }).toJSDate(),
-            createdAt: afterBreak.toJSDate(),
         });
         await submit(factories, "before-break", start.plus({ days: 1 }).toJSDate());
 
