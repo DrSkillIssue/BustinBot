@@ -1,3 +1,4 @@
+import { UNPICKED_MOVIE_ID } from "../../../../src/models/MovieEvent.js";
 import { SnowflakeUtil } from "discord.js";
 import {
     ApplicationCommandOptionType,
@@ -144,7 +145,7 @@ describe("choosing the movie for movie night", () => {
         await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }]);
         await factories.movieEvent.create({
             startTime: DateTime.now().plus({ days: 1 }).toJSDate(),
-            movie: movieFactory.build({ id: "TBD", title: "TBD" }),
+            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
         });
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);

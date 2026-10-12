@@ -170,10 +170,10 @@ export const test = base
         return db;
     })
     .extend("services", async ({ db }) => {
-        await new GuildRepository(db).initGuild(guildFactory.build().id, guildFactory.build());
+        await new GuildRepository(db).initGuild(IDS.guild, guildFactory.build());
         const botStats = new BotStatsService(new BotRepository(db));
         await botStats.init();
-        return createServiceContainer(db, guildFactory.build().id, botStats);
+        return createServiceContainer(db, IDS.guild, botStats);
     })
     .extend("factories", ({ db, services }) => storingFactories(db, services))
     .extend("otherGuild", async ({ db, services }) => {

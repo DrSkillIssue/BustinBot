@@ -1,3 +1,4 @@
+import { UNPICKED_MOVIE_ID } from "../../../../../src/models/MovieEvent.js";
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
@@ -41,7 +42,10 @@ describe("/currentmovie", () => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
         discord.user(host);
         // A night scheduled with no movie picked stores this placeholder until one is
-        const night = await factories.movieEvent.create({ movie: { id: "TBD", title: "TBD" }, hostedBy: host.id });
+        const night = await factories.movieEvent.create({
+            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
+            hostedBy: host.id,
+        });
         const start = night.startTime;
 
         const command = await interact(chatInputInteraction("currentmovie"));

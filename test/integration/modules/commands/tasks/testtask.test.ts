@@ -1,3 +1,4 @@
+import { Duration } from "luxon";
 import assert from "node:assert";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
@@ -14,7 +15,7 @@ describe("/testtask", () => {
         const event = await services.repos.taskRepo.getLatestTaskEvent();
         assert(event);
         expect(event.id).toMatch(new RegExp(`^test-${event.task.id}-\\d+$`));
-        expect(event.endTime.getTime() - event.startTime.getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+        expect(event.endTime.getTime() - event.startTime.getTime()).toBe(Duration.fromObject({ days: 7 }).toMillis());
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
             expect.objectContaining({
                 embeds: [

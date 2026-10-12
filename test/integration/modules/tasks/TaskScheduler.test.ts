@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
-import { ChannelType } from "discord-api-types/v10";
+import { ChannelType, RESTJSONErrorCodes } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS } from "../../../discord/payloads.js";
@@ -86,7 +86,7 @@ describe("the task channel", () => {
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
         expect(warn).toHaveBeenCalledWith(
             `[TaskScheduler] Can't reach the task channel ${IDS.missingChannel} in ${IDS.guild}:`,
-            expect.objectContaining({ code: 10003 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
     });
 });

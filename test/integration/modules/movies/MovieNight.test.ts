@@ -1,3 +1,4 @@
+import { UNPICKED_MOVIE_ID } from "../../../../src/models/MovieEvent.js";
 import assert from "node:assert";
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import cron from "node-cron";
@@ -46,7 +47,10 @@ async function setUpMovieNight(discord: DiscordHarness, services: ServiceContain
     return movieUsers;
 }
 
-async function storeNight(factories: StoringFactories, overrides: Partial<MovieEvent> = {}): Promise<MovieEvent> {
+async function storeNight(
+    factories: StoringFactories,
+    overrides: Parameters<StoringFactories["movieEvent"]["create"]>[0] = {},
+): Promise<MovieEvent> {
     return factories.movieEvent.create({
         movie: { id: "movie-2", title: "Arrival", addedBy: SUBMITTER, runtime: 30 },
         voiceChannelId: VOICE,
@@ -177,7 +181,9 @@ describe("scheduling a movie night", () => {
         expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]?.description).toContain(
             `A poll is currently running in <#${pollChannel}>`,
         );
-        expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({ movie: { id: "TBD", title: "TBD" } });
+        expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({
+            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
+        });
     });
 
     test("rejects a time that isn't HH:MM, scheduling nothing", async ({ discord, interact, services }) => {
@@ -315,7 +321,7 @@ describe("the movie night sweep", () => {
         });
         await storeNight(factories, {
             startTime: now.plus({ hours: 3 }).toJSDate(),
-            movie: movieFactory.build({ id: "TBD", title: "TBD" }),
+            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
         });
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);

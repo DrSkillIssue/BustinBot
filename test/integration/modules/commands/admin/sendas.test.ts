@@ -4,6 +4,7 @@ import {
     ChannelType,
     InteractionResponseType,
     MessageFlags,
+    RESTJSONErrorCodes,
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../../discord/harness.js";
@@ -78,7 +79,10 @@ describe("/sendas", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Failed to send message." }),
         ]);
-        expect(error).toHaveBeenCalledWith("Error sending message:", expect.objectContaining({ code: 50013 }));
+        expect(error).toHaveBeenCalledWith(
+            "Error sending message:",
+            expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
+        );
     });
 
     test("refuses a channel that can't hold messages", async ({ discord, interact }) => {

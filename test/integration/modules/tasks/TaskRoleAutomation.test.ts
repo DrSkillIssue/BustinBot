@@ -1,9 +1,10 @@
+import { RESTJSONErrorCodes } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test, vi } from "../../../fixtures.js";
 import type { DiscordHarness } from "../../../discord/harness.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../discord/payloads.js";
-import { milestoneRoleFactory, leaderboardPeriodFactory } from "../../../factories.js";
+import { milestoneRoleFactory } from "../../../factories.js";
 import { applyTaskMilestoneRoles } from "../../../../src/modules/tasks/TaskMilestones.js";
 import { awardTaskChampionRoles } from "../../../../src/modules/tasks/TaskLeaderboards.js";
 
@@ -60,7 +61,7 @@ describe("milestone roles", () => {
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${participant.id}`]);
         expect(warn).toHaveBeenCalledWith(
             `[TaskMilestones] Granted Task Participant to ${member} but couldn't DM them:`,
-            expect.objectContaining({ code: 50007 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.CannotSendMessagesToThisUser }),
         );
     });
 });
@@ -82,7 +83,7 @@ describe("champion roles", () => {
         // Champions are awarded once their period has ended and the next one has begun
         const endedPeriod = 3;
         await factories.periodicLeaderboard.create({
-            period: leaderboardPeriodFactory.build({ index: endedPeriod + 1 }),
+            period: { index: endedPeriod + 1 },
             champions: { first: [previousChampion] },
         });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));

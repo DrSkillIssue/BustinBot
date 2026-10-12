@@ -23,7 +23,7 @@ import {
     directMessage,
     modalSubmitInteraction,
 } from "../../../discord/payloads.js";
-import { leaderboardPeriodFactory, taskSubmissionFactory } from "../../../factories.js";
+import { taskSubmissionFactory } from "../../../factories.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../../src/models/TaskSubmission.js";
 import { handleDirectMessage } from "../../../../src/modules/tasks/TaskInteractions.js";
 
@@ -466,7 +466,7 @@ describe("approving a submission", () => {
         await factories.periodicLeaderboard.create({
             points: { [IDS.user]: 1 },
             tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } },
-            period: leaderboardPeriodFactory.build({ eventIds: [EVENT] }),
+            period: { eventIds: [EVENT] },
         });
         await factories.lifetimeLeaderboard.create({ points: { [IDS.user]: 1 } });
         const submission = await storePendingSubmission(factories);
@@ -604,7 +604,7 @@ describe("approving a submission", () => {
         expect(discord.messageDeletions(IDS.channel).sort()).toEqual([REVIEW_POST, SCREENSHOT_POST]);
         expect(warn).toHaveBeenCalledWith(
             `[TaskService] Failed to DM user ${IDS.user} about ${submission.id}:`,
-            expect.objectContaining({ code: 50007 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.CannotSendMessagesToThisUser }),
         );
         expect(warn).toHaveBeenCalledWith(
             `[TaskService] Failed to archive submission ${submission.id}:`,
@@ -635,7 +635,7 @@ describe("approving a submission", () => {
         });
         expect(warn).toHaveBeenCalledWith(
             `[TaskService] Failed to redraw task event ${EVENT}:`,
-            expect.objectContaining({ code: 10008 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownMessage }),
         );
     });
 

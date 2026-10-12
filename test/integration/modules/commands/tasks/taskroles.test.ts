@@ -1,5 +1,5 @@
 import { SnowflakeUtil } from "discord.js";
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, RESTJSONErrorCodes } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { DiscordError } from "../../../../discord/harness.js";
 import { milestoneRoleFactory } from "../../../../factories.js";
@@ -310,7 +310,7 @@ describe("/taskroles delete", () => {
         ]);
         expect(warn).toHaveBeenCalledWith(
             "[TaskRoles] Failed to delete task role:",
-            expect.objectContaining({ code: 50013 }),
+            expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
         );
     });
 });

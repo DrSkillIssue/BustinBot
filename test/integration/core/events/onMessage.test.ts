@@ -1,19 +1,16 @@
 import { describe, expect, test, vi } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { handleMessage } from "../../../../src/core/events/onMessage.js";
-import { CommandModule, CommandRole, type Command } from "../../../../src/models/Command.js";
 import { AS, IDS, apiUser, messageCreate } from "../../../discord/payloads.js";
+import { commandFactory } from "../../../factories.js";
 
 // A prefix command that always throws
-const failing: Command = {
+const failing = commandFactory.build({
     name: "fail",
-    description: "Always fails",
-    module: CommandModule.Core,
-    allowedRoles: [CommandRole.Everyone],
     execute: async () => {
         throw new Error("boom");
     },
-};
+});
 // A message from a bot admin carries the member without its user or permissions
 const { user: _user, permissions: _permissions, ...botAdmin } = AS.botAdmin.member;
 
