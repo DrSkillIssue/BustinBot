@@ -45,7 +45,7 @@ const botinfo: Command = {
                 {
                     name: "Attribution",
                     value:
-                        "🎥 **Movie Metadata:** [TMDb](https://www.themoviedb.org/) (The Movie Datbase)\n" +
+                        "🎥 **Movie Metadata:** [TMDb](https://www.themoviedb.org/) (The Movie Database)\n" +
                         "🖼️ **Icons**: [Freepik](https://www.freepik.com/)",
                 },
                 {
