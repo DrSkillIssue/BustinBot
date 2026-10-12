@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { handleMessage } from "../../../../src/core/events/onMessage.js";
 import { CommandModule, CommandRole, type Command } from "../../../../src/models/Command.js";
-import { IDS, apiMember, apiUser, messageCreate } from "../../../discord/payloads.js";
+import { AS, IDS, apiUser, messageCreate } from "../../../discord/payloads.js";
 
 // A prefix command that always throws
 const failing: Command = {
@@ -14,7 +14,8 @@ const failing: Command = {
         throw new Error("boom");
     },
 };
-const { user: _user, permissions: _permissions, ...botAdmin } = apiMember({ roles: [IDS.roles.admin] });
+// A message from a bot admin carries the member without its user or permissions
+const { user: _user, permissions: _permissions, ...botAdmin } = AS.botAdmin.member;
 
 describe("prefix commands", () => {
     test("!goodbot replies with an emoji then posts the praise count", async ({ discord, prefix }) => {
