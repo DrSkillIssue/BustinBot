@@ -145,10 +145,14 @@ export async function handleInteraction(
             await command.execute({ interaction, services });
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'There was an error executing that command.', flags: 1 << 6 });
-            } else {
+            // A deferred command's "thinking…" reply is edited into the error; once a command has replied, the
+            // error follows its reply
+            if (interaction.deferred && !interaction.replied) {
+                await interaction.editReply({ content: 'There was an error executing that command.' });
+            } else if (interaction.replied) {
                 await interaction.followUp({ content: 'There was an error executing that command.', flags: 1 << 6 });
+            } else {
+                await interaction.reply({ content: 'There was an error executing that command.', flags: 1 << 6 });
             }
         }
         return;

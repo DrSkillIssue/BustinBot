@@ -170,4 +170,34 @@ describe("slash command routing", () => {
             expect.objectContaining({ message: "boom" }),
         );
     });
+
+    test("turns the deferred reply into the error when a command fails after deferring", async ({
+        discord,
+        services,
+    }) => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+
+        await handleInteraction(
+            interaction,
+            new Map([
+                [
+                    "probe",
+                    commandFactory.build({
+                        execute: async ({ interaction: probe }) => {
+                            await probe?.deferReply({ flags: MessageFlags.Ephemeral });
+                            throw new Error("boom");
+                        },
+                    }),
+                ],
+            ]),
+            services,
+        );
+
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "There was an error executing that command." }),
+        ]);
+        expect(discord.followUps(interaction)).toEqual([]);
+    });
 });
