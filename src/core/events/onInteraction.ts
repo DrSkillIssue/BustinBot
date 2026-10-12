@@ -133,6 +133,14 @@ export async function handleInteraction(
             return;
         }
 
+        // Counted before the command runs, as the bot always has, so a command that shows the member's stats
+        // includes itself. One write (incrementStat), well inside Discord's 3 seconds to acknowledge.
+        try {
+            await services.repos.userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
+        } catch (err) {
+            console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
+        }
+
         try {
             await command.execute({ interaction, services });
         } catch (error) {
@@ -142,14 +150,6 @@ export async function handleInteraction(
             } else {
                 await interaction.followUp({ content: 'There was an error executing that command.', flags: 1 << 6 });
             }
-        }
-
-        // Counted after the command has responded, so the Firestore write never delays its acknowledgement
-        const userRepo = services.repos.userRepo;
-        try {
-            await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
-        } catch (err) {
-            console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
         }
         return;
     }

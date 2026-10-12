@@ -61,4 +61,11 @@ describe("/stats", () => {
             }),
         ]);
     });
+
+    test("counts itself, so a member's first command shows their stats", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("stats"));
+
+        const [reply] = discord.originalEdits(command);
+        expect(reply?.embeds?.[0]?.fields).toContainEqual({ name: "🕹️ Commands Run", value: "1", inline: true });
+    });
 });

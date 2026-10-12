@@ -19,6 +19,8 @@ describe("/taskstreak", () => {
             status: SubmissionStatus.Bronze,
             submittedAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
         });
+        // The member's streak as the approval stored it (TaskService records it in their stats)
+        await factories.userStats.create({ userId: IDS.user, taskStreak: 1, longestTaskStreak: 1 });
 
         const command = await interact(chatInputInteraction("taskstreak"));
 

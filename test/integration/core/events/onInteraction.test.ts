@@ -137,33 +137,6 @@ describe("slash command routing", () => {
         ]);
     });
 
-    test("counts the command in the member's stats once it has responded", async ({ discord, services }) => {
-        const users = services.repos.userRepo;
-        const interaction = await discord.dispatch(chatInputInteraction("probe"));
-        let statsWhenAcknowledged: unknown;
-
-        await handleInteraction(
-            interaction,
-            new Map([
-                [
-                    "probe",
-                    commandFactory.build({
-                        execute: async ({ interaction }) => {
-                            if (!interaction) return;
-                            await interaction.reply({ content: "pong", flags: MessageFlags.Ephemeral });
-                            statsWhenAcknowledged = await users.getUserById(interaction.user.id);
-                        },
-                    }),
-                ],
-            ]),
-            services,
-        );
-
-        expect(discord.callbacks(interaction)).toHaveLength(1);
-        expect(statsWhenAcknowledged).toBeNull();
-        expect(await users.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
-    });
-
     test("replies with a private error when a command fails before responding", async ({ discord, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
