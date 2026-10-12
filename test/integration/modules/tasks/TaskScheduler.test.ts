@@ -1,15 +1,33 @@
 import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
+import { DateTime } from "luxon";
 import cron from "node-cron";
 import { ChannelType, RESTJSONErrorCodes } from "discord-api-types/v10";
-import { describe, expect, test, vi } from "../../../fixtures.js";
+import { beforeEach, describe, expect, storePollableTasks, test, vi } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS } from "../../../discord/payloads.js";
+import { TaskCategory } from "../../../../src/models/Task.js";
 import {
     getDefaultChannel,
+    getNextEventDate,
+    getNextPollDate,
+    getNextPrizeDrawDate,
     initTaskScheduler,
     stopTaskScheduler,
 } from "../../../../src/modules/tasks/TaskScheduler.js";
+
+// A guild's scheduled job, by its name
+function scheduledJob(guildId: string, name: string) {
+    const job = [...cron.getTasks().values()].find(
+        (candidate) => candidate.name === `taskScheduler:${guildId}:${name}`,
+    );
+    assert(job);
+    return job;
+}
+
+// Today at the given minute past noon, on the host's clock that the dev-mode cycle reads
+const atMinute = (minute: number): Date =>
+    DateTime.now().set({ hour: 12, minute, second: 0, millisecond: 0 }).toJSDate();
 
 describe("task scheduler", () => {
     test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({
@@ -57,12 +75,96 @@ describe("task scheduler", () => {
         // The emulator can't be made to fail one read, so the guild read fails the way an unreachable Firestore fails it
         const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
         vi.spyOn(services.guilds, "get").mockRejectedValueOnce(unavailable);
-        const poll = [...cron.getTasks().values()].find((job) => job.name === `taskScheduler:${IDS.guild}:poll`);
-        assert(poll);
 
-        await expect(poll.execute()).rejects.toBe(unavailable);
+        await expect(scheduledJob(IDS.guild, "poll").execute()).rejects.toBe(unavailable);
 
         expect(error).toHaveBeenCalledWith(`[taskScheduler:${IDS.guild}:poll]`, unavailable);
+    });
+});
+
+describe("the dev-mode task cycle", () => {
+    // BOT_MODE=dev runs the weekly cycle every 7 minutes so it can be tried out on the dev server
+    beforeEach(() => {
+        vi.stubEnv("BOT_MODE", "dev");
+        vi.stubEnv("DISCORD_GUILD_ID_DEV", IDS.guild);
+    });
+
+    test("is one job that runs every minute", async ({ discord, services, scheduledJobs }) => {
+        await initTaskScheduler(discord.client, services);
+
+        expect(scheduledJobs(IDS.guild)).toEqual({ test: "* * * * *" });
+    });
+
+    test("reports when its next poll, task start and prize draw come", async ({ discord, services }) => {
+        vi.setSystemTime(atMinute(2));
+
+        await initTaskScheduler(discord.client, services);
+
+        expect([getNextPollDate(), getNextEventDate(), getNextPrizeDrawDate()]).toEqual([
+            atMinute(6),
+            atMinute(7),
+            atMinute(15),
+        ]);
+    });
+
+    test("posts the polls the minute before each 7-minute mark and starts their tasks on the mark", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await storePollableTasks(factories);
+        await services.repos.keywordRepo.addKeyword("Bustin");
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessageEdits(IDS.channel);
+        await initTaskScheduler(discord.client, services);
+        const job = scheduledJob(IDS.guild, "test");
+
+        vi.setSystemTime(atMinute(6));
+        await job.execute();
+        const categories = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
+        const polls = await Promise.all(
+            categories.map((category) => services.repos.taskRepo.getActiveTaskPollByCategory(category)),
+        );
+        expect(polls).toEqual(categories.map((category) => expect.objectContaining({ category, isActive: true })));
+        expect(await services.repos.taskRepo.getLatestTaskEvent()).toBeNull();
+
+        vi.setSystemTime(atMinute(7));
+        await job.execute();
+        // Nobody voted, so each category starts its poll's first option
+        const started = await services.repos.taskRepo.getTaskEventsBetween(
+            atMinute(7),
+            DateTime.fromJSDate(atMinute(7)).plus({ weeks: 2 }).toJSDate(),
+        );
+        expect(started.map((event) => event.task.id).sort()).toEqual(polls.map((poll) => poll?.options[0]?.id).sort());
+    });
+
+    test("draws the prize one minute after every other 7-minute mark", async ({ discord, services }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await initTaskScheduler(discord.client, services);
+        const job = scheduledJob(IDS.guild, "test");
+
+        vi.setSystemTime(atMinute(8));
+        await job.execute();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
+
+        vi.setSystemTime(atMinute(15));
+        await job.execute();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([
+            expect.objectContaining({ totalEntries: 0 }),
+        ]);
+        expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
+    });
+
+    test("does nothing on the other minutes", async ({ discord, services, factories }) => {
+        await storePollableTasks(factories);
+        await initTaskScheduler(discord.client, services);
+
+        vi.setSystemTime(atMinute(2));
+        await scheduledJob(IDS.guild, "test").execute();
+
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
+        expect(discord.requests()).toEqual([]);
     });
 });
 
