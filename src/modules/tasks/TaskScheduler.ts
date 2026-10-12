@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
+import { DateTime } from 'luxon';
 import { Client, TextChannel } from 'discord.js';
 import { postAllTaskPolls } from './HandleTaskPoll.js';
 import { startAllTaskEvents } from './HandleTaskStart.js';
@@ -110,13 +111,12 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
 
 // A Tuesday the prize draw ran on. Draws run every prizeFrequencyWeeks weeks counted from it, which keeps them evenly
 // spaced across new years; calendar week numbers restart each January and put three weeks between two draws.
-const PRIZE_DRAW_ANCHOR_MS = Date.UTC(2026, 9, 13);
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const PRIZE_DRAW_ANCHOR = DateTime.fromISO('2026-10-13T00:00:00Z', { zone: 'utc' });
 
 // Whether the prize draw runs in the week of this date
 export function isPrizeDrawWeek(date: Date): boolean {
     const { prizeFrequencyWeeks, prizeWeekOffset } = defaultSchedule;
-    const weeks = Math.floor((date.getTime() - PRIZE_DRAW_ANCHOR_MS) / WEEK_MS) + prizeWeekOffset;
+    const weeks = Math.floor(DateTime.fromJSDate(date, { zone: 'utc' }).diff(PRIZE_DRAW_ANCHOR, 'weeks').weeks) + prizeWeekOffset;
     return ((weeks % prizeFrequencyWeeks) + prizeFrequencyWeeks) % prizeFrequencyWeeks === 0;
 }
 

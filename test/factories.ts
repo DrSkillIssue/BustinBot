@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, SnowflakeUtil } from "discord.js";
 import { Factory } from "fishery";
+import { DateTime } from "luxon";
 import { TaskCategory, TaskType, type Task } from "../src/models/Task.js";
 import type { TaskEvent } from "../src/models/TaskEvent.js";
 import { newUserStats, type UserStats } from "../src/models/UserStats.js";
@@ -32,13 +33,14 @@ export const taskFactory = Factory.define<Task>(() => ({
 
 // A week-long task event, as the bot starts them: give its start or its end and the other follows. It was created when
 // it started.
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const taskEventFactory = Factory.define<TaskEvent>(({ params }) => {
     const task = taskFactory.build(params.task);
     const startTime =
         params.startTime ??
-        (params.endTime ? new Date(params.endTime.getTime() - WEEK_MS) : new Date("2026-01-05T00:00:00.000Z"));
-    const endTime = params.endTime ?? new Date(startTime.getTime() + WEEK_MS);
+        (params.endTime
+            ? DateTime.fromJSDate(params.endTime, { zone: "utc" }).minus({ weeks: 1 }).toJSDate()
+            : new Date("2026-01-05T00:00:00.000Z"));
+    const endTime = params.endTime ?? DateTime.fromJSDate(startTime, { zone: "utc" }).plus({ weeks: 1 }).toJSDate();
     return {
         id: `${task.id}-20260105`,
         task,
