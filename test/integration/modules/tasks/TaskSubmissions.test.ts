@@ -107,9 +107,8 @@ async function acceptReviewEffects(
 ): Promise<{ dm: string; screenshot: APIAttachment }> {
     await discord.addChannel(apiTextChannel({ id: ARCHIVE, name: "bot-archive" }));
     await services.guilds.update(IDS.guild, { channels: { botArchive: ARCHIVE } });
-    discord.user(apiUser());
     discord.member(IDS.guild, apiGuildMember({ user: apiUser() }));
-    const dm = discord.acceptDirectMessages(IDS.user);
+    const dm = discord.acceptDirectMessages(apiUser());
     const screenshot = apiAttachment();
     discord.message(apiMessage({ id: SCREENSHOT_POST, attachments: [screenshot] }));
     discord.serveAttachment(screenshot);
@@ -137,7 +136,7 @@ describe("submitting a task", () => {
         factories,
     }) => {
         await storeEvent(factories);
-        const dm = discord.acceptDirectMessages(IDS.user);
+        const dm = discord.acceptDirectMessages(apiUser());
 
         const click = await interact(buttonInteraction(`task-submit-${EVENT}`));
 
@@ -586,7 +585,7 @@ describe("approving a submission", () => {
         await storeEvent(factories);
         const submission = await storePendingSubmission(factories);
         // Registered first, so these answer before the routes that accept
-        discord.refuseDirectMessages(IDS.user);
+        discord.refuseDirectMessages(apiUser());
         discord.refuse("POST", `/channels/${ARCHIVE}/messages`, DiscordError.missingPermissions);
         await acceptReviewEffects(discord, services);
 

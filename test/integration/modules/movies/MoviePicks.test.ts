@@ -147,8 +147,7 @@ describe("choosing the movie for movie night", () => {
         });
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        const dm = discord.acceptDirectMessages(SUBMITTER);
+        const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
         const byNumber = await interact(modalSubmitInteraction("movie_pick_choose_modal", { movie_input: "2" }));
         const byTitle = await interact(modalSubmitInteraction("movie_pick_choose_modal", { movie_input: "incepshun" }));
@@ -188,8 +187,7 @@ describe("choosing the movie for movie night", () => {
     }) => {
         await storeMovies(factories, [{ title: "Inception", watched: true }, { title: "Arrival" }]);
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        discord.acceptDirectMessages(SUBMITTER);
+        discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
         const randomPick = apiMessage({ embeds: [{ title: "🎲 Arrival" }] });
 
         const reroll = await interact(buttonInteraction("reroll_random_movie", randomPick));

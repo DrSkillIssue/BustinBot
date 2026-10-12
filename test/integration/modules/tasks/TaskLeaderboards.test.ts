@@ -29,6 +29,8 @@ async function storeEvent(factories: StoringFactories, id: string, start: string
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services, factories }) => {
+        // A new leaderboard starts at its first period
+        const firstPeriod = 1;
         await factories.userStats.create({ userId: IDS.user, tasksCompletedGold: 1, tasksCompletedBronze: 2 });
 
         await ensureTaskLeaderboardsInitialized(services);
@@ -38,7 +40,7 @@ describe("TaskLeaderboards initialisation", () => {
         });
         expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
             points: {},
-            period: { length: 4, eventIds: [], index: 1 },
+            period: { length: 4, eventIds: [], index: firstPeriod },
         });
     });
 });

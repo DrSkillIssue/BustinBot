@@ -68,7 +68,7 @@ describe("TaskLeaderboardRepository", () => {
         const period = leaderboardPeriodFactory.build({
             eventIds: ["week-5"],
             startedAt: "2026-02-02T00:00:00.000Z",
-            index: 2,
+            index: leaderboardPeriodFactory.build().index + 1,
         });
         await repo.createLeaderboard(
             periodicLeaderboardFactory.build({ pendingPeriod: { period, points: {}, tierCounts: {} } }),

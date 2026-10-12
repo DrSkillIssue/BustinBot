@@ -4,26 +4,21 @@ import { ChannelType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS } from "../../../discord/payloads.js";
-import { getDefaultChannel, initTaskScheduler, stopTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
-
-// The guild's jobs as node-cron records them, by job name
-function jobsOf(guildId: string): Record<string, string> {
-    const prefix = `taskScheduler:${guildId}:`;
-    return Object.fromEntries(
-        [...cron.getTasks().values()]
-            .filter((job) => job.name?.startsWith(prefix))
-            .map((job) => [job.name!.slice(prefix.length), job.getPattern()]),
-    );
-}
+import {
+    getDefaultChannel,
+    initTaskScheduler,
+    stopTaskScheduler,
+} from "../../../../src/modules/tasks/TaskScheduler.js";
 
 describe("task scheduler", () => {
     test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({
         discord,
         services,
+        scheduledJobs,
     }) => {
         await initTaskScheduler(discord.client, services);
 
-        expect(jobsOf(IDS.guild)).toEqual({
+        expect(scheduledJobs(IDS.guild)).toEqual({
             poll: "0 0 * * 0",
             taskStart: "0 0 * * 1",
             prizeDraw: "0 0 * * 2",
@@ -40,19 +35,20 @@ describe("task scheduler", () => {
         discord,
         services,
         otherGuild,
+        scheduledJobs,
     }) => {
         await initTaskScheduler(discord.client, services);
         await initTaskScheduler(discord.client, otherGuild);
         await initTaskScheduler(discord.client, services);
 
-        expect(Object.keys(jobsOf(IDS.guild))).toHaveLength(5);
-        expect(Object.keys(jobsOf(IDS.otherGuild))).toHaveLength(5);
+        expect(Object.keys(scheduledJobs(IDS.guild))).toHaveLength(5);
+        expect(Object.keys(scheduledJobs(IDS.otherGuild))).toHaveLength(5);
         expect(cron.getTasks().size).toBe(10);
 
         await stopTaskScheduler(IDS.guild);
 
-        expect(jobsOf(IDS.guild)).toEqual({});
-        expect(Object.keys(jobsOf(IDS.otherGuild))).toHaveLength(5);
+        expect(scheduledJobs(IDS.guild)).toEqual({});
+        expect(Object.keys(scheduledJobs(IDS.otherGuild))).toHaveLength(5);
     });
 });
 

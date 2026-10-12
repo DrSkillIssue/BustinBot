@@ -32,8 +32,7 @@ describe("/endmovie", () => {
     }) => {
         await storeTonight(factories);
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        discord.acceptDirectMessages(SUBMITTER);
+        discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
         const command = await slash("endmovie", [], movieAdmin);
 
@@ -74,8 +73,7 @@ describe("/closemoviepoll", () => {
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        discord.acceptDirectMessages(SUBMITTER);
+        discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
         const command = await slash("closemoviepoll", [], movieAdmin);
 

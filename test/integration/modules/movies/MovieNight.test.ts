@@ -1,6 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { DateTime } from "luxon";
+import type { APIRole } from "discord-api-types/v10";
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
@@ -25,7 +26,6 @@ import { startMovieScheduler, sweepMovieNight } from "../../../../src/modules/mo
 
 const VOICE = SnowflakeUtil.generate().toString();
 const SUBMITTER = SnowflakeUtil.generate().toString();
-const movieUsers = apiRole({ name: "Movie Night" });
 const [present, joiner, leaver] = [
     SnowflakeUtil.generate().toString(),
     SnowflakeUtil.generate().toString(),
@@ -33,13 +33,15 @@ const [present, joiner, leaver] = [
 ];
 
 // The guild's movie night set up as /moviesetup leaves it: the harness channel, a voice channel and a role to ping
-async function setUpMovieNight(discord: DiscordHarness, services: ServiceContainer): Promise<void> {
+async function setUpMovieNight(discord: DiscordHarness, services: ServiceContainer): Promise<APIRole> {
+    const movieUsers = apiRole({ name: "Movie Night" });
     await discord.addChannel(apiVoiceChannel({ id: VOICE }));
     await discord.addRole(IDS.guild, movieUsers);
     await services.guilds.update(IDS.guild, {
         channels: { movieNight: IDS.channel, movieVC: VOICE },
         roles: { movieUser: movieUsers.id },
     });
+    return movieUsers;
 }
 
 async function storeNight(factories: StoringFactories, overrides: Partial<MovieEvent> = {}): Promise<MovieEvent> {
@@ -65,7 +67,7 @@ describe("scheduling a movie night", () => {
         services,
         factories,
     }) => {
-        await setUpMovieNight(discord, services);
+        const movieUsers = await setUpMovieNight(discord, services);
         const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
         const start = DateTime.fromISO(`${date}T20:30:00.000Z`);
         const movies = services.repos.movieRepo;
@@ -160,7 +162,7 @@ describe("scheduling a movie night", () => {
 
 describe("the movie night sweep", () => {
     test("sends each reminder once when it comes due", async ({ discord, services, factories }) => {
-        await setUpMovieNight(discord, services);
+        const movieUsers = await setUpMovieNight(discord, services);
         const start = DateTime.now().plus({ hours: 3 });
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
@@ -189,7 +191,7 @@ describe("the movie night sweep", () => {
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await setUpMovieNight(discord, services);
+        const movieUsers = await setUpMovieNight(discord, services);
         const start = DateTime.now().plus({ hours: 1 });
         const night = await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
@@ -265,8 +267,7 @@ describe("the movie night sweep", () => {
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        const dm = discord.acceptDirectMessages(SUBMITTER);
+        const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
         await sweepMovieNight(discord.client, services, new Date());
         await sweepMovieNight(discord.client, services, new Date());
@@ -304,8 +305,7 @@ describe("the movie night sweep", () => {
         await factories.movie.create(night.movie);
         for (const userId of [present, leaver]) await voice(apiVoiceState(userId, VOICE));
         discord.acceptMessages(IDS.channel);
-        discord.user(apiUser({ id: SUBMITTER }));
-        const dm = discord.acceptDirectMessages(SUBMITTER);
+        const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
         await factories.userStats.create({ userId: present });
 
         await sweepMovieNight(discord.client, services, start.minus({ minutes: 5 }).toJSDate());
@@ -371,8 +371,7 @@ describe("the movie night sweep", () => {
         await otherGuild.repos.movieRepo.createPoll(duePoll);
         await factories.moviePoll.create({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate() });
         discord.acceptMessages(IDS.otherGuildChannel);
-        discord.user(apiUser());
-        discord.acceptDirectMessages(IDS.user);
+        discord.acceptDirectMessages(apiUser());
 
         for (const guild of [services, otherGuild]) await sweepMovieNight(discord.client, guild, new Date());
 

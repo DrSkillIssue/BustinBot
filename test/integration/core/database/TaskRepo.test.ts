@@ -391,12 +391,10 @@ describe("TaskRepository feedback", () => {
 
     test("treats a vote stored under an older id as the member's previous vote and moves it", async ({ repo, db }) => {
         await repo.createTask(taskFactory.build({ id: "PVM001", weight: 51 }));
-        await db
-            .doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`)
-            .set({
-                id: "1730000000000",
-                ...taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" }),
-            });
+        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({
+            id: "1730000000000",
+            ...taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" }),
+        });
 
         expect(
             await repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "down" })),

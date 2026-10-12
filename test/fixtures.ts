@@ -1,4 +1,5 @@
 import path from "node:path";
+import cron from "node-cron";
 import type { Interaction, Message } from "discord.js";
 import type {
     APIApplicationCommandInteractionDataOption,
@@ -93,6 +94,7 @@ export type Interact = (payload: APIInteraction) => Promise<Interaction>;
 // - interact: delivers any interaction (button, select, form) and routes it exactly as the running bot does
 // - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
 // - prefix: sends a channel message through the real prefix command handler
+// - scheduledJobs: the node-cron jobs scheduled for a guild, by job name, with their cron patterns
 // - voice: delivers a member's voice state change and hands it to the guild's movie attendance, as the bot does
 export const test = base
     .extend("http", ({}, { onCleanup }) => {
@@ -149,7 +151,9 @@ export const test = base
         discord.guild(apiGuild({ id: IDS.uncachedGuild }));
         return { guild_id: IDS.uncachedGuild };
     })
-    .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../src/modules/commands")))
+    .extend("commands", { scope: "file" }, () =>
+        loadCommands(path.join(import.meta.dirname, "../src/modules/commands")),
+    )
     .extend("interact", ({ discord, services, commands }): Interact => async (payload) => {
         const interaction = await discord.dispatch(payload);
         await routeInteraction(interaction, discord.client, commands, services);
@@ -165,6 +169,14 @@ export const test = base
             ): Promise<Interaction> =>
                 interact(chatInputInteraction(name, options, overrides)),
     )
+    .extend("scheduledJobs", () => (guildId: string): Record<string, string> => {
+        const prefix = `taskScheduler:${guildId}:`;
+        return Object.fromEntries(
+            [...cron.getTasks().values()]
+                .filter((job) => job.name?.startsWith(prefix))
+                .map((job) => [job.name!.slice(prefix.length), job.getPattern()]),
+        );
+    })
     .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
         const [oldState, newState] = await discord.voiceStateUpdate(state);
         services.movieAttendance.voiceStateChanged(oldState, newState);

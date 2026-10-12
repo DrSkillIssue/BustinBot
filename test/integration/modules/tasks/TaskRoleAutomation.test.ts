@@ -1,19 +1,30 @@
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test, vi } from "../../../fixtures.js";
+import type { DiscordHarness } from "../../../discord/harness.js";
+import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../discord/payloads.js";
 import { milestoneRoleFactory, leaderboardPeriodFactory } from "../../../factories.js";
 import { applyTaskMilestoneRoles } from "../../../../src/modules/tasks/TaskMilestones.js";
 import { awardTaskChampionRoles } from "../../../../src/modules/tasks/TaskLeaderboards.js";
 
 const member = SnowflakeUtil.generate().toString();
-const participant = apiRole({ name: "Task Participant" });
-const enthusiast = apiRole({ name: "Task Enthusiast" });
-const expert = apiRole({ name: "Task Expert" });
-const milestoneRoles = [
-    milestoneRoleFactory.build({ roleId: participant.id, label: "Task Participant", requiredSubmissions: 5 }),
-    milestoneRoleFactory.build({ roleId: enthusiast.id, label: "Task Enthusiast", requiredSubmissions: 25 }),
-    milestoneRoleFactory.build({ roleId: expert.id, label: "Task Expert", requiredSubmissions: 50 }),
-];
+// The guild's milestone roles at 5, 25 and 50 submissions, in Discord and in the guild's settings
+async function setUpMilestoneRoles(discord: DiscordHarness, services: ServiceContainer) {
+    const participant = apiRole({ name: "Task Participant" });
+    const enthusiast = apiRole({ name: "Task Enthusiast" });
+    const expert = apiRole({ name: "Task Expert" });
+    for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
+    await services.guilds.update(IDS.guild, {
+        taskSettings: {
+            milestoneRoles: [
+                milestoneRoleFactory.build({ roleId: participant.id, label: participant.name, requiredSubmissions: 5 }),
+                milestoneRoleFactory.build({ roleId: enthusiast.id, label: enthusiast.name, requiredSubmissions: 25 }),
+                milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 50 }),
+            ],
+        },
+    });
+    return { participant, enthusiast, expert };
+}
 
 describe("milestone roles", () => {
     test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({
@@ -21,12 +32,10 @@ describe("milestone roles", () => {
         services,
         factories,
     }) => {
-        for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
-        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
+        const { participant, enthusiast } = await setUpMilestoneRoles(discord, services);
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }), roles: [participant.id] }));
-        discord.acceptMemberRoleChanges(IDS.guild, member);
-        const dm = discord.acceptDirectMessages(member);
+        const dm = discord.acceptDirectMessages(apiUser({ id: member }));
 
         await applyTaskMilestoneRoles(discord.client, services, member);
 
@@ -40,12 +49,10 @@ describe("milestone roles", () => {
     });
 
     test("still give the role to a member who doesn't accept DMs", async ({ discord, services, factories }) => {
-        for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
-        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
+        const { participant } = await setUpMilestoneRoles(discord, services);
         await factories.userStats.create({ userId: member, tasksCompletedGold: 6 });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
-        discord.acceptMemberRoleChanges(IDS.guild, member);
-        discord.refuseDirectMessages(member);
+        discord.refuseDirectMessages(apiUser({ id: member }));
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         await applyTaskMilestoneRoles(discord.client, services, member);
@@ -81,7 +88,6 @@ describe("champion roles", () => {
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: runnerUp }) }));
-        for (const userId of [previousChampion, member, runnerUp]) discord.acceptMemberRoleChanges(IDS.guild, userId);
 
         await awardTaskChampionRoles(
             discord.client,

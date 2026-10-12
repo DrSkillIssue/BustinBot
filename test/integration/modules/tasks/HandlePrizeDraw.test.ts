@@ -4,7 +4,11 @@ import { describe, expect, test, vi, type StoringFactories } from "../../../fixt
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS, apiRole, apiUser } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
-import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../../../../src/modules/tasks/HandlePrizeDraw.js";
+import {
+    announcePrizeDrawWinner,
+    generatePrizeDrawSnapshot,
+    rollWinnerForSnapshot,
+} from "../../../../src/modules/tasks/HandlePrizeDraw.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -219,9 +223,8 @@ describe("announcing a prize draw winner", () => {
         await discord.addRole(IDS.guild, taskUser);
         await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
-        discord.user(apiUser({ id: winner, username: "lucky" }));
         discord.acceptMessages(IDS.channel);
-        const dm = discord.acceptDirectMessages(winner);
+        const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(true);
 
@@ -244,9 +247,8 @@ describe("announcing a prize draw winner", () => {
     test("still posts the winner's embed when no task role is configured", async ({ discord, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
-        discord.user(apiUser({ id: winner, username: "lucky" }));
         discord.acceptMessages(IDS.channel);
-        discord.acceptDirectMessages(winner);
+        discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(true);
 

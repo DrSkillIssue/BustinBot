@@ -1,4 +1,3 @@
-import cron from "node-cron";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { IDS, apiMember } from "../../../../discord/payloads.js";
@@ -7,12 +6,8 @@ import { initTaskScheduler } from "../../../../../src/modules/tasks/TaskSchedule
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
-function jobCount(guildId: string): number {
-    return [...cron.getTasks().values()].filter((job) => job.name?.startsWith(`taskScheduler:${guildId}:`)).length;
-}
-
 describe("/tasktoggle schedule", () => {
-    test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, services }) => {
+    test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, services, scheduledJobs }) => {
         const interaction = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
@@ -22,11 +17,17 @@ describe("/tasktoggle schedule", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
         ]);
-        expect(jobCount(IDS.guild)).toBe(5);
+        expect(Object.keys(scheduledJobs(IDS.guild))).toHaveLength(5);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskScheduler).toBe(true);
     });
 
-    test("stops only this guild's task jobs when switched off", async ({ discord, slash, otherGuild, services }) => {
+    test("stops only this guild's task jobs when switched off", async ({
+        discord,
+        slash,
+        otherGuild,
+        services,
+        scheduledJobs,
+    }) => {
         await initTaskScheduler(discord.client, otherGuild);
         await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
 
@@ -39,12 +40,12 @@ describe("/tasktoggle schedule", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "⏹️ Task scheduler **disabled** and stopped for this guild." }),
         ]);
-        expect(jobCount(IDS.guild)).toBe(0);
-        expect(jobCount(IDS.otherGuild)).toBe(5);
+        expect(Object.keys(scheduledJobs(IDS.guild))).toHaveLength(0);
+        expect(Object.keys(scheduledJobs(IDS.otherGuild))).toHaveLength(5);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskScheduler).toBe(false);
     });
 
-    test("works for a guild stored without any toggles", async ({ discord, slash, db }) => {
+    test("works for a guild stored without any toggles", async ({ discord, slash, db, scheduledJobs }) => {
         const { toggles: _toggles, ...withoutToggles } = guildFactory.build();
         await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
 
@@ -57,7 +58,7 @@ describe("/tasktoggle schedule", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
         ]);
-        expect(jobCount(IDS.guild)).toBe(5);
+        expect(Object.keys(scheduledJobs(IDS.guild))).toHaveLength(5);
     });
 });
 

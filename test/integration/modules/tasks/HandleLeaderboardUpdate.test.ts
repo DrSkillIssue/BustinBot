@@ -8,7 +8,10 @@ import { IDS, apiGuildMember, apiMember, apiRole, apiUser } from "../../../disco
 import { leaderboardPeriodFactory, taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../../src/models/TaskLeaderboard.js";
-import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from "../../../../src/modules/tasks/HandleLeaderboardUpdate.js";
+import {
+    postPeriodicLeaderboardUpdate,
+    warnPendingLeaderboardFinalization,
+} from "../../../../src/modules/tasks/HandleLeaderboardUpdate.js";
 
 const [winner, runnerUp, third] = [
     SnowflakeUtil.generate().toString(),
@@ -56,10 +59,8 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
     const dms: Record<string, string> = {};
     for (const [index, userId] of [winner, runnerUp, third].entries()) {
         const user = apiUser({ id: userId, username: `member${index + 1}`, global_name: `member${index + 1}` });
-        discord.user(user);
         discord.member(IDS.guild, apiGuildMember({ user }));
-        discord.acceptMemberRoleChanges(IDS.guild, userId);
-        dms[userId] = discord.acceptDirectMessages(userId);
+        dms[userId] = discord.acceptDirectMessages(user);
     }
     return { roles, dms };
 }

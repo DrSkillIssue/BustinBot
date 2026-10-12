@@ -199,6 +199,7 @@ export class DiscordHarness {
     private constructor(
         readonly client: Client,
         private readonly http: MockAgent,
+        private readonly guildPayload: GatewayGuildCreateDispatchData,
     ) {
         this.api = http.get("https://discord.com");
     }
@@ -224,7 +225,7 @@ export class DiscordHarness {
                 },
             },
         });
-        harness = new DiscordHarness(client, http);
+        harness = new DiscordHarness(client, http, guild);
         return harness;
     }
 
@@ -464,27 +465,11 @@ export class DiscordHarness {
             .persist();
     }
 
-    // Discord opening a DM with a user and accepting messages in it; returns the DM channel's id
-    acceptDirectMessages(userId: string): string {
-        const dmChannelId = SnowflakeUtil.generate().toString();
-        const dm: APIDMChannel = {
-            id: dmChannelId,
-            type: ChannelType.DM,
-            name: null,
-            last_message_id: null,
-            recipients: [apiUser({ id: userId })],
-        };
-        this.api
-            .intercept({
-                path: `${API}/users/@me/channels`,
-                method: "POST",
-                body: (body) => {
-                    const request: { recipient_id?: string } = JSON.parse(body);
-                    return request.recipient_id === userId;
-                },
-            })
-            .reply(this.answered(() => ({ statusCode: 200, data: dm, responseOptions: JSON_RESPONSE })))
-            .persist();
+    // A user Discord knows about, who accepts DMs: Discord opens the DM channel and accepts messages in it.
+    // Returns the DM channel's id
+    acceptDirectMessages(user: APIUser): string {
+        this.user(user);
+        const dmChannelId = this.openDirectMessages(user);
         this.acceptMessages(dmChannelId);
         return dmChannelId;
     }
@@ -509,35 +494,24 @@ export class DiscordHarness {
             .persist();
     }
 
-    // A member who doesn't accept DMs: Discord opens the DM channel, then refuses messages in it
-    refuseDirectMessages(userId: string): void {
-        const dmChannelId = SnowflakeUtil.generate().toString();
-        const dm: APIDMChannel = {
-            id: dmChannelId,
-            type: ChannelType.DM,
-            name: null,
-            last_message_id: null,
-            recipients: [apiUser({ id: userId })],
-        };
-        this.api
-            .intercept({
-                path: `${API}/users/@me/channels`,
-                method: "POST",
-                body: (body) => {
-                    const request: { recipient_id?: string } = JSON.parse(body);
-                    return request.recipient_id === userId;
-                },
-            })
-            .reply(this.answered(() => ({ statusCode: 200, data: dm, responseOptions: JSON_RESPONSE })))
-            .persist();
+    // A user Discord knows about, who doesn't accept DMs: Discord opens the DM channel, then refuses messages in it
+    refuseDirectMessages(user: APIUser): void {
+        this.user(user);
+        const dmChannelId = this.openDirectMessages(user);
         this.refuse("POST", `/channels/${dmChannelId}/messages`, DiscordError.cannotMessageUser, { persist: true });
     }
 
-    // Discord listing a guild's roles
-    guildRoles(guildId: string, roles: APIRole[]): void {
+    // Discord listing the harness guild's roles, plus any a test adds
+    guildRoles(extra: APIRole[] = []): void {
         this.api
-            .intercept({ path: `${API}/guilds/${guildId}/roles`, method: "GET" })
-            .reply(this.answered(() => ({ statusCode: 200, data: roles, responseOptions: JSON_RESPONSE })))
+            .intercept({ path: `${API}/guilds/${this.guildPayload.id}/roles`, method: "GET" })
+            .reply(
+                this.answered(() => ({
+                    statusCode: 200,
+                    data: [...this.guildPayload.roles, ...extra],
+                    responseOptions: JSON_RESPONSE,
+                })),
+            )
             .persist();
     }
 
@@ -575,19 +549,15 @@ export class DiscordHarness {
             .persist();
     }
 
-    // A member Discord knows about; members a test doesn't declare get no answer
+    // A member Discord knows about, whose roles the bot may add and remove; members a test doesn't declare get no answer
     member(guildId: string, member: APIGuildMember): void {
         this.api
             .intercept({ path: `${API}/guilds/${guildId}/members/${member.user.id}`, method: "GET" })
             .reply(this.answered(() => ({ statusCode: 200, data: member, responseOptions: JSON_RESPONSE })))
             .persist();
-    }
-
-    // Discord accepting roles being added to and removed from a member
-    acceptMemberRoleChanges(guildId: string, userId: string): void {
         for (const method of ["PUT", "DELETE"]) {
             this.api
-                .intercept({ path: startingWith(`${API}/guilds/${guildId}/members/${userId}/roles/`), method })
+                .intercept({ path: startingWith(`${API}/guilds/${guildId}/members/${member.user.id}/roles/`), method })
                 .reply(this.answered(() => ({ statusCode: 204 })))
                 .persist();
         }
@@ -684,6 +654,30 @@ export class DiscordHarness {
             this.arrivals.emit("request", toDiscordRequest(options.method, options.path, options.body));
             return reply(options);
         };
+    }
+
+    // Discord opening a DM channel with a user; returns the channel's id
+    private openDirectMessages(user: APIUser): string {
+        const dmChannelId = SnowflakeUtil.generate().toString();
+        const dm: APIDMChannel = {
+            id: dmChannelId,
+            type: ChannelType.DM,
+            name: null,
+            last_message_id: null,
+            recipients: [user],
+        };
+        this.api
+            .intercept({
+                path: `${API}/users/@me/channels`,
+                method: "POST",
+                body: (body) => {
+                    const request: { recipient_id?: string } = JSON.parse(body);
+                    return request.recipient_id === user.id;
+                },
+            })
+            .reply(this.answered(() => ({ statusCode: 200, data: dm, responseOptions: JSON_RESPONSE })))
+            .persist();
+        return dmChannelId;
     }
 
     private send(payload: GatewayDispatchPayload): void {

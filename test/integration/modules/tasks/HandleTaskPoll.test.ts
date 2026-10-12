@@ -4,16 +4,10 @@ import { describe, expect, test, vi, type StoringFactories } from "../../../fixt
 import { buttonsIn } from "../../../discord/harness.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
-import { Skill, TaskCategory, type Task } from "../../../../src/models/Task.js";
+import { Skill, TaskCategory } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../../../src/modules/tasks/HandleTaskPoll.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
-
-const options: Task[] = [
-    taskFactory.build({ id: "PVM001", shortName: "Zulrah" }),
-    taskFactory.build({ id: "PVM002", shortName: "Vorkath" }),
-    taskFactory.build({ id: "PVM003", shortName: "Hydra" }),
-];
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(factories: StoringFactories, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
@@ -21,7 +15,11 @@ async function storeOpenPoll(factories: StoringFactories, overrides: Partial<Tas
     return factories.taskPoll.create({
         id: messageId,
         messageId,
-        options,
+        options: [
+            taskFactory.build({ id: "PVM001", shortName: "Zulrah" }),
+            taskFactory.build({ id: "PVM002", shortName: "Vorkath" }),
+            taskFactory.build({ id: "PVM003", shortName: "Hydra" }),
+        ],
         createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
         endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
         ...overrides,
@@ -42,7 +40,9 @@ describe("posting the weekly task polls", () => {
     }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         for (const task of [
-            ...options,
+            { id: "PVM001", shortName: "Zulrah" },
+            { id: "PVM002", shortName: "Vorkath" },
+            { id: "PVM003", shortName: "Hydra" },
             { id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining },
             { id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing },
             { id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking },
@@ -179,8 +179,8 @@ describe("closing a task poll", () => {
         services,
         factories,
     }) => {
-        for (const task of options) await factories.task.create(task);
         const poll = await storeOpenPoll(factories, { votes: { [SnowflakeUtil.generate().toString()]: "PVM002" } });
+        for (const task of poll.options) await factories.task.create(task);
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
         discord.message(apiMessage({ id: poll.messageId }));

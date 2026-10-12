@@ -14,8 +14,7 @@ import {
     chatInputInteraction,
     directMessage,
 } from "../discord/payloads.js";
-import { GuildRepository } from "../../src/core/database/GuildRepo.js";
-import { guildFactory, submissionDraftFactory, taskEventFactory } from "../factories.js";
+import { submissionDraftFactory, taskEventFactory } from "../factories.js";
 import { getNextPollDate } from "../../src/modules/tasks/TaskScheduler.js";
 
 const commandsDir = path.join(import.meta.dirname, "../../src/modules/commands");
@@ -125,11 +124,8 @@ describe("startBot", () => {
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("stops every scheduled job and disconnects when shut down", async ({ db, http }) => {
-        await new GuildRepository(db).initGuild(
-            IDS.guild,
-            guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false } }),
-        );
+    test("stops every scheduled job and disconnects when shut down", async ({ db, http, services }) => {
+        await services.guilds.update(IDS.guild, { toggles: { taskScheduler: true, leaguesEnabled: false } });
         const discord = DiscordHarness.create(http);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });

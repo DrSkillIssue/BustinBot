@@ -1,11 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
-import { ApplicationCommandOptionType, type APIRole } from "discord-api-types/v10";
+import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
-import { DiscordError, type DiscordHarness } from "../../../../discord/harness.js";
+import { DiscordError } from "../../../../discord/harness.js";
 import { milestoneRoleFactory } from "../../../../factories.js";
 import {
     IDS,
-    apiGuild,
     apiGuildMember,
     apiRole,
     apiUser,
@@ -17,14 +16,9 @@ const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 const member = SnowflakeUtil.generate().toString();
 const NEUTRAL = 0x95a5a6;
 
-// The guild's roles as Discord lists them: the harness guild's own plus any a test adds
-function serveRoles(discord: DiscordHarness, extra: APIRole[] = []): void {
-    discord.guildRoles(IDS.guild, [...apiGuild().roles, ...extra]);
-}
-
 describe("/taskroles list", () => {
     test("shows the milestone thresholds and which champion roles are set", async ({ discord, slash }) => {
-        serveRoles(discord);
+        discord.guildRoles();
 
         const interaction = await slash(
             "taskroles",
@@ -62,7 +56,7 @@ describe("/taskroles add", () => {
         slash,
         services,
     }) => {
-        serveRoles(discord);
+        discord.guildRoles();
         const legend = apiRole({ name: "Task Legend" });
         discord.roleCreated(IDS.guild, legend);
 
@@ -91,7 +85,7 @@ describe("/taskroles add", () => {
     });
 
     test("rejects a milestone threshold of zero without creating a role", async ({ discord, slash }) => {
-        serveRoles(discord);
+        discord.guildRoles();
 
         const interaction = await slash(
             "taskroles",
@@ -117,7 +111,7 @@ describe("/taskroles add", () => {
 
     test("sets an existing role as a champion role", async ({ discord, slash, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        serveRoles(discord, [gold]);
+        discord.guildRoles([gold]);
 
         const interaction = await slash(
             "taskroles",
@@ -142,7 +136,7 @@ describe("/taskroles add", () => {
     });
 
     test("rejects a champion placement other than 1 to 3 without creating a role", async ({ discord, slash }) => {
-        serveRoles(discord);
+        discord.guildRoles();
 
         const interaction = await slash(
             "taskroles",
@@ -170,7 +164,7 @@ describe("/taskroles add", () => {
 describe("/taskroles edit", () => {
     test("renames a milestone role and changes its threshold", async ({ discord, slash, services }) => {
         const expert = apiRole({ name: "Task Expert" });
-        serveRoles(discord, [expert]);
+        discord.guildRoles([expert]);
         await services.guilds.update(IDS.guild, {
             taskSettings: {
                 milestoneRoles: [
@@ -209,7 +203,7 @@ describe("/taskroles edit", () => {
 
     test("moves a champion role to another placement", async ({ discord, slash, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        serveRoles(discord, [gold]);
+        discord.guildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
 
         const interaction = await slash(
@@ -246,7 +240,7 @@ describe("/taskroles delete", () => {
     }) => {
         const expert = apiRole({ name: "Task Expert" });
         const master = apiRole({ name: "Task Master" });
-        serveRoles(discord, [expert, master]);
+        discord.guildRoles([expert, master]);
         await services.guilds.update(IDS.guild, {
             taskSettings: {
                 milestoneRoles: [
@@ -279,7 +273,7 @@ describe("/taskroles delete", () => {
 
     test("says so when Discord won't delete the role it stopped using", async ({ discord, slash, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        serveRoles(discord, [gold]);
+        discord.guildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
         discord.refuse("DELETE", `/guilds/${IDS.guild}/roles/${gold.id}`, DiscordError.missingPermissions);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -311,7 +305,7 @@ describe("/taskroles delete", () => {
 
 describe("/taskroles toggle", () => {
     test("disables milestone roles", async ({ discord, slash, services }) => {
-        serveRoles(discord);
+        discord.guildRoles();
 
         const interaction = await slash(
             "taskroles",
@@ -345,14 +339,13 @@ describe("/taskroles toggle", () => {
         factories,
     }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        serveRoles(discord, [gold]);
+        discord.guildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
         await factories.periodicLeaderboard.create({ champions: { first: [member] } });
         discord.member(
             IDS.guild,
             apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }),
         );
-        discord.acceptMemberRoleChanges(IDS.guild, member);
 
         const interaction = await slash(
             "taskroles",
@@ -384,10 +377,9 @@ describe("/taskroles toggle", () => {
 describe("/taskroles grant", () => {
     test("gives a member a role", async ({ discord, interact }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        serveRoles(discord, [gold]);
+        discord.guildRoles([gold]);
         const target = apiUser({ id: member, username: "champ" });
         discord.member(IDS.guild, apiGuildMember({ user: target }));
-        discord.acceptMemberRoleChanges(IDS.guild, member);
 
         const interaction = await interact(
             chatInputInteraction(
@@ -421,7 +413,7 @@ describe("/taskroles init", () => {
         services,
         factories,
     }) => {
-        serveRoles(discord);
+        discord.guildRoles();
         const created = [
             apiRole({ name: "Task Participant" }),
             apiRole({ name: "Task Enthusiast" }),
@@ -434,7 +426,6 @@ describe("/taskroles init", () => {
         for (const role of created) discord.roleCreated(IDS.guild, role);
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
-        discord.acceptMemberRoleChanges(IDS.guild, member);
 
         const interaction = await slash(
             "taskroles",
@@ -470,7 +461,7 @@ describe("/taskroles init", () => {
 
 describe("/taskroles with an option it doesn't know", () => {
     test("answers instead of leaving the reply pending", async ({ discord, slash }) => {
-        serveRoles(discord);
+        discord.guildRoles();
 
         const interaction = await slash(
             "taskroles",
