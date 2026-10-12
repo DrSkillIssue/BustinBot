@@ -4,8 +4,7 @@ import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
 import type { Movie } from "../../../models/Movie.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-
-const MOVIE_CAP = 3;
+import { MAX_ACTIVE_MOVIES_PER_USER } from "../../movies/MovieSelector.js";
 
 const mymovies: Command = {
     name: 'mymovies',
@@ -27,9 +26,9 @@ const mymovies: Command = {
             // Fetch all movies from Firestore
             const movies: Movie[] = await movieRepo.getAllMovies();
 
-            // Filter by user
-            const userMovies = movies.filter((m) => m.addedBy === interaction.user.id);
-            const remaining = MOVIE_CAP - userMovies.length;
+            // The member's movies still in the list; watched ones no longer count toward the cap
+            const userMovies = movies.filter((m) => m.addedBy === interaction.user.id && !m.watched);
+            const remaining = MAX_ACTIVE_MOVIES_PER_USER - userMovies.length;
 
             // Handle edge cases
             if (userMovies.length > 10) {
@@ -42,7 +41,7 @@ const mymovies: Command = {
 
             if (userMovies.length === 0) {
                 await interaction.editReply({
-                    content: `You haven't added any movies yet. You can add up to ${MOVIE_CAP} movies using /addmovie.`,
+                    content: `You haven't added any movies yet. You can add up to ${MAX_ACTIVE_MOVIES_PER_USER} movies using /addmovie.`,
                 });
                 return;
             }
@@ -51,7 +50,7 @@ const mymovies: Command = {
             const embeds = userMovies.map((m) => createMovieEmbed(m));
 
             await interaction.editReply({
-                content: `You have added **${userMovies.length}/${MOVIE_CAP}** movies. You can still add **${remaining}** more using /addmovie.`,
+                content: `You have added **${userMovies.length}/${MAX_ACTIVE_MOVIES_PER_USER}** movies. You can still add **${remaining}** more using /addmovie.`,
                 embeds,
             });
 
