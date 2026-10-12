@@ -3,7 +3,6 @@ import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPI
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
-import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
@@ -106,13 +105,11 @@ describe("/setup choices", () => {
         ]);
     });
 
-    test("keeps one guild's choices separate from another's", async ({ discord, interact, services, commands, db }) => {
-        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
-        const otherServices = createServiceContainer(db, IDS.otherGuild, services.botStats);
+    test("keeps one guild's choices separate from another's", async ({ discord, interact, otherGuild, commands }) => {
         await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
 
         const confirmElsewhere = await discord.dispatch(buttonInteraction("setup_confirm", undefined, { guild_id: IDS.otherGuild }));
-        await routeInteraction(confirmElsewhere, discord.client, commands, otherServices);
+        await routeInteraction(confirmElsewhere, discord.client, commands, otherGuild);
 
         expect(discord.callbacks(confirmElsewhere)).toEqual([
             expect.objectContaining({ data: expect.objectContaining({ content: "Please select: announcements, botLog, botArchive" }) }),

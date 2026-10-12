@@ -1,7 +1,5 @@
 import { describe, expect, test } from "../../../tests/fixtures.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiGuild, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../tests/fakes/builders.js";
+import { IDS, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
 
 function listedCommands(description: string | undefined): string[] {
     return [...(description ?? "").matchAll(/\*\*(\/\w+)\*\*/g)].map(([, name]) => name!);
@@ -17,12 +15,10 @@ describe("/moviehelp", () => {
         expect(commandsFor(admin)).toContain("/movienight");
     });
 
-    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, db }) => {
+    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, uncachedGuild }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
-        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild }));
-        discord.guild(apiGuild({ id: IDS.uncachedGuild }));
 
-        const command = await interact(chatInputInteraction("moviehelp", [], { guild_id: IDS.uncachedGuild, ...withRoles(IDS.roles.movieAdmin) }));
+        const command = await interact(chatInputInteraction("moviehelp", [], { ...uncachedGuild, ...withRoles(IDS.roles.movieAdmin) }));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields?.at(-1)?.name).toBe("Available Commands (User + Admin)");
     });

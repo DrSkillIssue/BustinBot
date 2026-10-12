@@ -1,4 +1,6 @@
+import cron from "node-cron";
 import { MockAgent, setGlobalDispatcher } from "undici";
+import { afterEach } from "vitest";
 import failOnConsole from "vitest-fail-on-console";
 
 // Every HTTP request the bot makes goes through undici: Discord REST through @discordjs/rest's undici client and
@@ -14,3 +16,6 @@ setGlobalDispatcher(offline);
 // A test fails if the bot logs an error or warning it didn't declare by spying on the console method and
 // asserting the call, so failures the bot catches and logs can't pass unnoticed
 failOnConsole({ shouldPrintMessage: true });
+
+// Scheduled jobs a test started never outlive it
+afterEach(() => cron.shutdown());

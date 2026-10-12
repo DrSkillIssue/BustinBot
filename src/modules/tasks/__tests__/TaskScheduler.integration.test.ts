@@ -1,14 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { ChannelType } from "discord-api-types/v10";
-import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
-import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS } from "../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../tests/fakes/builders.js";
 import { getDefaultChannel, initTaskScheduler, stopTaskScheduler } from "../TaskScheduler.js";
-
 
 // The guild's jobs as node-cron records them, by job name
 function jobsOf(guildId: string): Record<string, string> {
@@ -19,10 +15,6 @@ function jobsOf(guildId: string): Record<string, string> {
             .map((job) => [job.name!.slice(prefix.length), job.getPattern()])
     );
 }
-
-afterEach(async () => {
-    await cron.shutdown();
-});
 
 describe("task scheduler", () => {
     test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({ discord, services }) => {
@@ -41,12 +33,10 @@ describe("task scheduler", () => {
         }
     });
 
-    test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({ discord, services, db }) => {
-        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
-        const otherServices = createServiceContainer(db, IDS.otherGuild, services.botStats);
+    test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({ discord, services, otherGuild }) => {
 
         await initTaskScheduler(discord.client, services);
-        await initTaskScheduler(discord.client, otherServices);
+        await initTaskScheduler(discord.client, otherGuild);
         await initTaskScheduler(discord.client, services);
 
         expect(Object.keys(jobsOf(IDS.guild))).toHaveLength(5);

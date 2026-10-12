@@ -11,7 +11,7 @@ import { routeInteraction } from "../core/events/routeInteraction.js";
 import { handleMessage } from "../core/events/onMessage.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
 import { DiscordHarness } from "./discord/harness.js";
-import { chatInputInteraction, messageCreate } from "./discord/payloads.js";
+import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
 import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
 import { buildGuild } from "./fakes/builders.js";
 
@@ -21,6 +21,8 @@ import { buildGuild } from "./fakes/builders.js";
 // - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by `http`
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
+// - otherGuild: the service container of a second fully set-up guild, whose channels are all IDS.otherGuildChannel
+// - uncachedGuild: a set-up guild discord.js hasn't cached; returns the interaction fields that place an interaction in it
 // - commands: the bot's real slash command registry
 // - interact: delivers any interaction (button, select, form) and routes it exactly as the running bot does
 // - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
@@ -61,6 +63,17 @@ export const test = base
         const botStats = new BotStatsService(new BotRepository(db));
         await botStats.init();
         return createServiceContainer(db, buildGuild().id, botStats);
+    })
+    .extend("otherGuild", async ({ db, services }) => {
+        const channel = IDS.otherGuildChannel;
+        const channels = { announcements: channel, taskChannel: channel, taskVerification: channel, movieNight: channel };
+        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels }));
+        return createServiceContainer(db, IDS.otherGuild, services.botStats);
+    })
+    .extend("uncachedGuild", async ({ db, discord }) => {
+        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild }));
+        discord.guild(apiGuild({ id: IDS.uncachedGuild }));
+        return { guild_id: IDS.uncachedGuild };
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
     .extend("interact", ({ discord, services, commands }) =>

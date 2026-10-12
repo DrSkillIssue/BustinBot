@@ -3,9 +3,8 @@ import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
-import { buildGuild, buildMovie } from "../../../tests/fakes/builders.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { buildMovie } from "../../../tests/fakes/builders.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
@@ -88,15 +87,13 @@ describe("/addmovie", () => {
         expect(discord.originalEdits(owner)[0]?.embeds).toHaveLength(1);
     });
 
-    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, db, http }) => {
+    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, uncachedGuild, http }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
-        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild }));
-        discord.guild(apiGuild({ id: IDS.uncachedGuild }));
         await storeFullList(services, IDS.user);
         tmdbSearch(http, "The Matrix", [matrix]);
 
         const command = await interact(chatInputInteraction("addmovie", [title("The Matrix")], {
-            guild_id: IDS.uncachedGuild,
+            ...uncachedGuild,
             ...withRoles(IDS.roles.movieAdmin),
         }));
 

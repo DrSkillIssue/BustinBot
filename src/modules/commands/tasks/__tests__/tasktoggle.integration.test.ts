@@ -1,7 +1,6 @@
 import cron from "node-cron";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { afterEach, describe, expect, test } from "../../../../tests/fixtures.js";
-import { createServiceContainer } from "../../../../core/services/ServiceFactory.js";
+import { describe, expect, test } from "../../../../tests/fixtures.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
 import { IDS, withRoles } from "../../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../../tests/fakes/builders.js";
@@ -17,10 +16,6 @@ function jobCount(guildId: string): number {
     return [...cron.getTasks().values()].filter((job) => job.name?.startsWith(`taskScheduler:${guildId}:`)).length;
 }
 
-afterEach(async () => {
-    await cron.shutdown();
-});
-
 describe("/tasktoggle schedule", () => {
     test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, db }) => {
         const interaction = await slash("tasktoggle", subcommand("schedule"), admin);
@@ -32,9 +27,8 @@ describe("/tasktoggle schedule", () => {
         expect((await new GuildRepository(db).getGuild(IDS.guild))?.toggles.taskScheduler).toBe(true);
     });
 
-    test("stops only this guild's task jobs when switched off", async ({ discord, slash, services, db }) => {
-        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
-        await initTaskScheduler(discord.client, createServiceContainer(db, IDS.otherGuild, services.botStats));
+    test("stops only this guild's task jobs when switched off", async ({ discord, slash, otherGuild, db }) => {
+        await initTaskScheduler(discord.client, otherGuild);
         await slash("tasktoggle", subcommand("schedule"), admin);
 
         const interaction = await slash("tasktoggle", subcommand("schedule"), admin);

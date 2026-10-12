@@ -6,9 +6,8 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
-import { buildGuild, buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
+import { buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
 import type { MovieEvent } from "../../../models/MovieEvent.js";
 import { startMovieScheduler, sweepMovieNight } from "../MovieScheduler.js";
 
@@ -242,18 +241,16 @@ describe("the movie night sweep", () => {
         ]);
     });
 
-    test("keeps each guild's movie night to itself", async ({ discord, services, db }) => {
+    test("keeps each guild's movie night to itself", async ({ discord, services, otherGuild }) => {
         await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
-        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { movieNight: IDS.otherGuildChannel } }));
-        const other = createServiceContainer(db, IDS.otherGuild, services.botStats);
         const duePoll = buildMoviePoll({ endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(), votes: { [present]: "movie-2" }, messageId: "", channelId: IDS.otherGuildChannel });
-        await other.repos.movieRepo.createPoll(duePoll);
+        await otherGuild.repos.movieRepo.createPoll(duePoll);
         await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate() }));
         discord.acceptMessages(IDS.otherGuildChannel);
         discord.user(apiUser());
         discord.acceptDirectMessages(IDS.user);
 
-        for (const guild of [services, other]) await sweepMovieNight(discord.client, guild, new Date());
+        for (const guild of [services, otherGuild]) await sweepMovieNight(discord.client, guild, new Date());
 
         expect(discord.messagesSentTo(IDS.otherGuildChannel)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "🏆 Movie poll closed!" })] })]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);

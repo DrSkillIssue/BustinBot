@@ -8,7 +8,6 @@ import { startBot } from "../bot.js";
 import { DiscordError, DiscordHarness } from "../tests/discord/harness.js";
 import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
-import { TaskRepository } from "../core/database/TaskRepo.js";
 import { buildGuild, buildTaskEvent } from "../tests/fakes/builders.js";
 import { getNextPollDate } from "../modules/tasks/TaskScheduler.js";
 
@@ -55,15 +54,14 @@ describe("startBot", () => {
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("reports bot-wide praise counts the same in every guild", async ({ db, http, services, onTestFinished }) => {
-                        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { announcements: IDS.otherGuildChannel } }));
+    test("reports bot-wide praise counts the same in every guild", async ({ db, http, services, otherGuild, onTestFinished }) => {
         const discord = DiscordHarness.create(http);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
         await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
         const inOtherGuild = {
-            guild_id: IDS.otherGuild,
+            guild_id: otherGuild.guildId,
             channel_id: IDS.otherGuildChannel,
             channel: { id: IDS.otherGuildChannel, type: 0 as const, guild_id: IDS.otherGuild, name: "general" },
         };
@@ -103,9 +101,8 @@ describe("startBot", () => {
         expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
-    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services }) => {
-                        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { taskVerification: IDS.otherGuildChannel } }));
-        const otherTasks = new TaskRepository(db, IDS.otherGuild);
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services, otherGuild }) => {
+        const otherTasks = otherGuild.repos.taskRepo;
         const event = buildTaskEvent({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
