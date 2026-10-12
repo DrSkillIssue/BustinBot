@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { type Logger } from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { DateTime } from 'luxon';
 import { Client, TextChannel } from 'discord.js';
@@ -78,8 +78,19 @@ const testIntervalMinutes = 7;
 // Each guild's jobs are kept in node-cron's own registry under names that start with this prefix and the guild id
 const JOB_PREFIX = 'taskScheduler';
 
+// node-cron catches a job's failure and logs it through the job's logger, which here names the job
+function jobLogger(name: string): Logger {
+    return {
+        info: (message) => console.log(`[${name}] ${message}`),
+        warn: (message) => console.warn(`[${name}] ${message}`),
+        error: (message, err) => console.error(`[${name}]`, message, ...(err ? [err] : [])),
+        debug: (message, err) => console.debug(`[${name}]`, message, ...(err ? [err] : [])),
+    };
+}
+
 function jobOptions(guildId: string, job: string) {
-    return { timezone: schedulerTimezone, name: `${JOB_PREFIX}:${guildId}:${job}` };
+    const name = `${JOB_PREFIX}:${guildId}:${job}`;
+    return { timezone: schedulerTimezone, name, logger: jobLogger(name) };
 }
 
 function updateTestModeNextTimes(reference: Date = new Date()) {
@@ -173,11 +184,7 @@ export async function runPrizeDrawJob(client: Client, services: ServiceContainer
     if (!isPrizeDrawWeek(new Date())) return;
 
     console.log('[TaskScheduler] Running prize draw...');
-    try {
-        await drawPrize(client, services);
-    } catch (err) {
-        console.error('[TaskScheduler] Prize draw job failed:', err);
-    }
+    await drawPrize(client, services);
 }
 
 // Schedules the guild's task jobs, replacing any it already has
@@ -202,16 +209,14 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
             updateTestModeNextTimes(now);
 
             if (minute % T === (T - 1)) {
-                console.log('[TaskScheduler] [TEST] Running poll...');
-                await postAllTaskPolls(client, services);
+                await runTaskPollJob(client, services);
                 if (nextPollTime) {
                     SchedulerStatusReporter.onNewTrigger('[TEST] Task Poll', nextPollTime);
                 }
             }
 
             if (minute % T === 0) {
-                console.log('[TaskScheduler] [TEST] Starting task event...');
-                await startAllTaskEvents(client, services);
+                await runTaskStartJob(client, services);
                 if (nextEventTime) {
                     SchedulerStatusReporter.onNewTrigger('[TEST] Task Event', nextEventTime);
                 }
@@ -270,25 +275,13 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         );
         cron.schedule(
             '0 0 * * 2',
-            async () => {
-                try {
-                    await warnPendingLeaderboardFinalization(client, services);
-                } catch (err) {
-                    console.error('[TaskScheduler] Leaderboard warning job failed:', err);
-                }
-            },
+            () => warnPendingLeaderboardFinalization(client, services),
             jobOptions(guildId, 'leaderboardWarning')
         );
 
         cron.schedule(
             '0 0 * * 3',
-            async () => {
-                try {
-                    await postPeriodicLeaderboardUpdate(client, services);
-                } catch (err) {
-                    console.error('[TaskScheduler] Leaderboard update job failed:', err);
-                }
-            },
+            () => postPeriodicLeaderboardUpdate(client, services),
             jobOptions(guildId, 'leaderboardUpdate')
         );
         const pollExpr = `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`;

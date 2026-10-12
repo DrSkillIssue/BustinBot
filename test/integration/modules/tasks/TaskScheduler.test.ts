@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { ChannelType, RESTJSONErrorCodes } from "discord-api-types/v10";
@@ -49,6 +50,19 @@ describe("task scheduler", () => {
 
         expect(scheduledJobs(IDS.guild)).toEqual({});
         expect(Object.keys(scheduledJobs(IDS.otherGuild))).toHaveLength(5);
+    });
+    test("logs a job that fails under the job's name", async ({ discord, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        await initTaskScheduler(discord.client, services);
+        // The emulator can't be made to fail one read, so the guild read fails the way an unreachable Firestore fails it
+        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        vi.spyOn(services.guilds, "get").mockRejectedValueOnce(unavailable);
+        const poll = [...cron.getTasks().values()].find((job) => job.name === `taskScheduler:${IDS.guild}:poll`);
+        assert(poll);
+
+        await expect(poll.execute()).rejects.toBe(unavailable);
+
+        expect(error).toHaveBeenCalledWith(`[taskScheduler:${IDS.guild}:poll]`, unavailable);
     });
 });
 

@@ -41,6 +41,21 @@ async function storePoll(
     });
 }
 
+// This week's closed polls, one per category: PVM002 won PvM over PVM001, SKL003 won Skilling, MIN001 won Minigame/Misc
+async function storeThisWeeksPolls(factories: StoringFactories): Promise<void> {
+    await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
+        [SnowflakeUtil.generate().toString()]: "PVM002",
+        [SnowflakeUtil.generate().toString()]: "PVM002",
+        [SnowflakeUtil.generate().toString()]: "PVM001",
+    });
+    await storePoll(factories, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), {
+        [SnowflakeUtil.generate().toString()]: "SKL003",
+    });
+    await storePoll(factories, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), {
+        [SnowflakeUtil.generate().toString()]: "MIN001",
+    });
+}
+
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({
         discord,
@@ -50,17 +65,7 @@ describe("/taskstart", () => {
         factories,
     }) => {
         await services.repos.keywordRepo.addKeyword("Bustin");
-        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
-            [SnowflakeUtil.generate().toString()]: "PVM002",
-            [SnowflakeUtil.generate().toString()]: "PVM002",
-            [SnowflakeUtil.generate().toString()]: "PVM001",
-        });
-        await storePoll(factories, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), {
-            [SnowflakeUtil.generate().toString()]: "SKL003",
-        });
-        await storePoll(factories, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), {
-            [SnowflakeUtil.generate().toString()]: "MIN001",
-        });
+        await storeThisWeeksPolls(factories);
         discord.acceptMessages(IDS.channel);
 
         const interaction = await interact(chatInputInteraction("taskstart", [], AS.botAdmin));
@@ -88,15 +93,7 @@ describe("/taskstart", () => {
 describe("the scheduled task start job", () => {
     test("starts the week's tasks from the polls", async ({ discord, services, factories }) => {
         await services.repos.keywordRepo.addKeyword("Bustin");
-        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
-            [SnowflakeUtil.generate().toString()]: "PVM002",
-        });
-        await storePoll(factories, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), {
-            [SnowflakeUtil.generate().toString()]: "SKL003",
-        });
-        await storePoll(factories, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), {
-            [SnowflakeUtil.generate().toString()]: "MIN001",
-        });
+        await storeThisWeeksPolls(factories);
         discord.acceptMessages(IDS.channel);
 
         await runTaskStartJob(discord.client, services);
@@ -104,6 +101,14 @@ describe("the scheduled task start job", () => {
         const [announcement, ...eventPosts] = discord.messagesSentTo(IDS.channel);
         expect(announcement?.content).toContain("Include the keyword **Bustin** in your screenshots");
         expect(eventPosts).toHaveLength(3);
+    });
+    test("starts nothing when no task channel is configured", async ({ discord, services, factories }) => {
+        await storeThisWeeksPolls(factories);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
+
+        await runTaskStartJob(discord.client, services);
+
+        expect(await services.repos.taskRepo.getLatestTaskEvent()).toBeNull();
     });
 });
 
