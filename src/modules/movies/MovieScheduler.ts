@@ -29,8 +29,8 @@ export function startMovieScheduler(client: Client, guildServices: () => Service
     }, { name: 'movieScheduler:sweep', noOverlap: true });
 }
 
-// One guild's sweep: close a poll whose time is up, send a reminder that is due, count attendance once the night
-// has started, and end it once its movie has run. A failing step is logged and doesn't stop the others.
+// One guild's sweep: close a poll whose time is up, send a reminder that is due, count attendance once the night's
+// movie is picked, and end it once its movie has run. A failing step is logged and doesn't stop the others.
 export async function sweepMovieNight(client: Client, services: ServiceContainer): Promise<void> {
     // Every step of the sweep works from the same time
     const now = new Date();
@@ -50,7 +50,8 @@ export async function sweepMovieNight(client: Client, services: ServiceContainer
     if (!event) return;
 
     await step('Sending reminders', () => sendDueReminders(client, services, event, now));
-    if (event.startTime > now) return;
+    // Attendance is counted from when the night's movie is picked
+    if (event.movie.id === UNPICKED_MOVIE_ID) return;
 
     await step('Counting attendance', () => trackAttendance(client, services, event, now));
 

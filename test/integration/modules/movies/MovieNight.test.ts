@@ -348,7 +348,7 @@ describe("the movie night sweep", () => {
         ]);
     });
 
-    test("counts attendance from the start time and ends the night once its movie has run", async ({
+    test("counts attendance from when the movie is picked and ends the night once its movie has run", async ({
         discord,
         services,
         voice,
@@ -370,7 +370,7 @@ describe("the movie night sweep", () => {
 
         vi.setSystemTime(start.minus({ minutes: 5 }).toJSDate());
         await sweepMovieNight(discord.client, services);
-        expect(services.movieAttendance.isTracking(night.id)).toBe(false);
+        expect(services.movieAttendance.isTracking(night.id)).toBe(true);
 
         vi.setSystemTime(start.toJSDate());
         await sweepMovieNight(discord.client, services);

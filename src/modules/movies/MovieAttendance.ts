@@ -16,8 +16,9 @@ interface Tracking {
     sessions: Map<string, Session>;
 }
 
-// Who watches a guild's movie night: the time each member spends in its voice channel from the start. Each guild
-// has its own. The scheduler's sweep starts it at the start time with the members already in the channel, keeps it
+// Who watches a guild's movie night: the time each member spends in its voice channel from when its movie is picked.
+// Each guild has its own. The scheduler's sweep starts it once the movie is picked with the members already in the
+// channel, keeps it
 // in line with the channel every minute, and finishes it when the night ends; voice events record joins and leaves
 // in between. A restart starts it again from the members in the channel at that moment.
 export class MovieAttendance {
