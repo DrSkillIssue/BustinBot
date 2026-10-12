@@ -4,7 +4,9 @@ import type { TMDbSearchResult } from "./MovieService.js";
 import { getDisplayNameFromAddedBy } from './MovieMockUtils.js';
 
 export function truncate(text: string, length = 200): string {
-    return text.length > length ? text.slice(0, length - 3) + '...' : text;
+    if (text.length <= length) return text;
+    // Too short a limit for the ellipsis: cut to the limit
+    return length < 3 ? text.slice(0, length) : text.slice(0, length - 3) + '...';
 }
 
 export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {

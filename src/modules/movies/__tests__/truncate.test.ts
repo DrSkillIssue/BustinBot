@@ -18,4 +18,8 @@ describe("truncate", () => {
         const result = truncate(input, 5);
         expect(result).toBe("12345");
     });
+
+    test("never returns more than the limit, even one too short for the ellipsis", () => {
+        expect(truncate("Hello world", 2)).toBe("He");
+    });
 });

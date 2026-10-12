@@ -43,7 +43,7 @@ const reportbug: Command = {
             }
 
             if (!bugReportChannel || !bugReportChannel.isTextBased()) {
-                await interaction.editReply({ content: 'Bug report channel not found.', flags: 1 << 6 });
+                await interaction.editReply({ content: 'Bug report channel not found.' });
                 return;
             }
 
@@ -65,10 +65,10 @@ const reportbug: Command = {
             ].join('\n');
 
             await (bugReportChannel as TextChannel).send({ content: reportContent });
-            await interaction.editReply({ content: 'Bug report sent. Thank you!', flags: 1 << 6 });
+            await interaction.editReply({ content: 'Bug report sent. Thank you!' });
         } catch (error) {
             console.error('Error sending message:', error);
-            await interaction.editReply({ content: 'Failed to send message.', flags: 1 << 6 });
+            await interaction.editReply({ content: 'Failed to send message.' });
         }
     }
 }
