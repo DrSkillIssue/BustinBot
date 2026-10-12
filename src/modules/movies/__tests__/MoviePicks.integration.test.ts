@@ -1,5 +1,6 @@
 import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import type { ButtonInteraction } from "discord.js";
+import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -11,7 +12,6 @@ import { addMovieWithStats } from "../MovieService.js";
 
 const SUBMITTER = nextId();
 const VOICE = nextId();
-const DAY = 24 * 60 * 60 * 1000;
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
 async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
@@ -72,7 +72,7 @@ describe("a movie poll", () => {
 describe("choosing the movie for movie night", () => {
     test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() + DAY), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
+        await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: DateTime.now().plus({ days: 1 }).toJSDate(), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));

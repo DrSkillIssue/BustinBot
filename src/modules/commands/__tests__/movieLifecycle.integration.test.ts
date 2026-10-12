@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -7,12 +8,11 @@ import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fake
 const movieAdmin = withRoles(IDS.roles.movieAdmin);
 const SUBMITTER = nextId();
 const ANNOUNCEMENT = nextId();
-const DAY = 24 * 60 * 60 * 1000;
 
 async function storeTonight(services: ServiceContainer, overrides = {}) {
     const movie = buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, selectedAt: new Date() });
     await services.repos.movieRepo.upsertMovie(movie);
-    await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: new Date(Date.now() - 60 * 60 * 1000), movie, ...overrides }));
+    await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: DateTime.now().minus({ hours: 1 }).toJSDate(), movie, ...overrides }));
 }
 
 describe("/endmovie", () => {
@@ -61,9 +61,9 @@ describe("/closemoviepoll", () => {
 
 describe("/cancelmovie", () => {
     test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({ discord, slash, services }) => {
-        const poll = buildMoviePoll({ endsAt: new Date(Date.now() + DAY) });
+        const poll = buildMoviePoll({ endsAt: DateTime.now().plus({ days: 1 }).toJSDate() });
         await services.repos.movieRepo.createPoll(poll);
-        await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
+        await storeTonight(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
         for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
@@ -86,7 +86,7 @@ describe("/cancelmovie", () => {
     });
 
     test("posts the cancellation in the movie night channel when its announcement is gone", async ({ discord, slash, services }) => {
-        await storeTonight(services, { startTime: new Date(Date.now() + DAY), announcementMessageId: ANNOUNCEMENT });
+        await storeTonight(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 

@@ -1,3 +1,4 @@
+import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -8,13 +9,12 @@ import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { postAllTaskPolls } from "../HandleTaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
-const HOUR = 60 * 60 * 1000;
 const options: Task[] = [buildTask({ id: "PVM001", shortName: "Zulrah" }), buildTask({ id: "PVM002", shortName: "Vorkath" }), buildTask({ id: "PVM003", shortName: "Hydra" })];
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
     const messageId = overrides.messageId ?? "100000000000000500";
-    const poll = buildTaskPoll({ id: messageId, messageId, options, createdAt: new Date(Date.now() - HOUR), endsAt: new Date(Date.now() + HOUR), ...overrides });
+    const poll = buildTaskPoll({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
     await services.repos.taskRepo.createTaskPoll(poll);
     return poll;
 }
@@ -51,7 +51,7 @@ describe("posting the weekly task polls", () => {
             expect(stored?.options).toHaveLength(3);
             // Votes find their poll by the message they were cast on
             expect(stored).toMatchObject({ isActive: true, channelId: IDS.channel, id: stored?.messageId });
-            expect(stored!.endsAt.getTime() - stored!.createdAt.getTime()).toBe(24 * HOUR);
+            expect(stored!.endsAt.getTime() - stored!.createdAt.getTime()).toBe(Duration.fromObject({ hours: 24 }).toMillis());
         }
     });
 });
@@ -96,7 +96,7 @@ describe("voting in a task poll", () => {
 
     test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services }) => {
         const closed = await storeOpenPoll(services, { isActive: false });
-        const expired = await storeOpenPoll(services, { messageId: "100000000000000501", endsAt: new Date(Date.now() - 1000) });
+        const expired = await storeOpenPoll(services, { messageId: "100000000000000501", endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
 
         for (const poll of [closed, expired]) {
             const click = await interact(vote(poll, "PVM001"));

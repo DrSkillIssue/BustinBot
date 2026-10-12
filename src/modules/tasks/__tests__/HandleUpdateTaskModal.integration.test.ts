@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -6,8 +7,6 @@ import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from ".
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
 
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
 const eventMessage = "100000000000000600";
 const pollMessage = "100000000000000601";
 const completer = nextId();
@@ -18,7 +17,7 @@ async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
     const task = buildTask({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
     await services.repos.taskRepo.createTask(task);
     const event = buildTaskEvent({
-        id: "PVM001-week", task, startTime: new Date(Date.now() - DAY), endTime: new Date(Date.now() + 6 * DAY),
+        id: "PVM001-week", task, startTime: DateTime.now().minus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         messageId: eventMessage, channelId: IDS.channel, ...overrides,
     });
     await services.repos.taskRepo.createTaskEvent(event);
@@ -34,7 +33,7 @@ describe("the update task form", () => {
         await tasks.reviewSubmission({ submissionId: "approved", reviewedBy: IDS.user, decision: SubmissionStatus.Bronze });
         await tasks.createTaskPoll(buildTaskPoll({
             id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" })],
-            votes: { [voter]: "PVM001" }, endsAt: new Date(Date.now() + HOUR),
+            votes: { [voter]: "PVM001" }, endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
         }));
         for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
@@ -54,7 +53,7 @@ describe("the update task form", () => {
     });
 
     test("leaves an event that hasn't started yet alone", async ({ discord, interact, services }) => {
-        await storeRunningEvent(services, { startTime: new Date(Date.now() + DAY), endTime: new Date(Date.now() + 8 * DAY) });
+        await storeRunningEvent(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 8 }).toJSDate() });
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
 

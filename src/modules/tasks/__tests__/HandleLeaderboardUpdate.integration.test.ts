@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
@@ -7,7 +8,6 @@ import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from "../HandleLeaderboardUpdate.js";
 
-const DAY = 24 * 60 * 60 * 1000;
 const [winner, runnerUp, third] = [nextId(), nextId(), nextId()];
 
 // Weekly task events, each starting on its own day; `ended` of them are over
@@ -15,9 +15,9 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
     const ids: string[] = [];
     for (let week = 0; week < count; week++) {
         const id = `week-${week + 1}`;
-        const endTime = new Date(Date.now() + (week < ended ? -(ended - week) * DAY : (week + 1) * DAY));
+        const endTime = DateTime.now().plus({ days: week < ended ? -(ended - week) : week + 1 });
         await services.repos.taskRepo.createTaskEvent(buildTaskEvent({
-            id, task: buildTask({ id }), startTime: new Date(endTime.getTime() - 7 * DAY), endTime,
+            id, task: buildTask({ id }), startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(),
         }));
         ids.push(id);
     }

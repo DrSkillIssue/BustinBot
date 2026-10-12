@@ -1,5 +1,6 @@
 import path from "node:path";
 import cron from "node-cron";
+import { DateTime } from "luxon";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
@@ -105,10 +106,10 @@ describe("startBot", () => {
     test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services }) => {
                         await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels: { taskVerification: IDS.otherGuildChannel } }));
         const otherTasks = new TaskRepository(db, IDS.otherGuild);
-        const event = buildTaskEvent({ endTime: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+        const event = buildTaskEvent({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
-        await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: new Date(Date.now() - 60_000) });
+        await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate() });
         await otherTasks.saveSubmissionDraft({ userId: IDS.user, taskEventId: event.id, createdAt: new Date() });
         const discord = DiscordHarness.create(http);
         const screenshot = apiAttachment();

@@ -1,3 +1,4 @@
+import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, withRoles } from "../../../tests/discord/payloads.js";
@@ -6,7 +7,6 @@ import { TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
-const DAY = 24 * 60 * 60 * 1000;
 const admin = withRoles(IDS.roles.admin);
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
@@ -16,7 +16,7 @@ const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
 async function storePoll(services: ServiceContainer, category: TaskCategory, options: Task[], votes: Record<string, string>, overrides: Partial<TaskPoll> = {}): Promise<void> {
     const messageId = `${600000000000000000n + BigInt(Object.values(TaskCategory).indexOf(category))}`;
     await services.repos.taskRepo.seedTasks(options);
-    await services.repos.taskRepo.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: new Date(Date.now() - 1000), ...overrides }));
+    await services.repos.taskRepo.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(), ...overrides }));
 }
 
 describe("/taskstart", () => {
@@ -38,7 +38,7 @@ describe("/taskstart", () => {
         expect(events.map((event) => event.task.id).sort()).toEqual(["MIN001", "PVM002", "SKL003"]);
         for (const event of events) {
             expect(event).toMatchObject({ keyword: "Bustin", channelId: IDS.channel, messageId: expect.any(String) });
-            expect(event.endTime.toMillis() - event.startTime.toMillis()).toBe(7 * DAY);
+            expect(event.endTime.toMillis() - event.startTime.toMillis()).toBe(Duration.fromObject({ days: 7 }).toMillis());
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
             expect(await services.repos.taskRepo.getActiveTaskPollByCategory(category)).toBeNull();

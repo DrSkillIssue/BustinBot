@@ -1,5 +1,6 @@
 import { InteractionResponseType, MessageFlags, type APIAttachment, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
+import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
@@ -10,7 +11,6 @@ import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderbo
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
 import { handleDirectMessage } from "../TaskInteractions.js";
 
-const DAY = 24 * 60 * 60 * 1000;
 const EVENT = "PVM001-20260105-a1b2c3d4";
 const EVENT_POST = nextId();
 const REVIEW_POST = nextId();
@@ -30,8 +30,8 @@ async function storeEvent(services: ServiceContainer) {
     const event = buildTaskEvent({
         id: EVENT,
         task: buildTask({ id: "PVM001", taskName: "Kill Zulrah" }),
-        startTime: new Date(Date.now() - DAY),
-        endTime: new Date(Date.now() + 6 * DAY),
+        startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
+        endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         channelId: IDS.channel,
         messageId: EVENT_POST,
     });

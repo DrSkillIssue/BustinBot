@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -7,14 +8,12 @@ import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { PrizeDraw } from "../../../models/PrizeDraw.js";
 import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../HandlePrizeDraw.js";
 
-const DAY = 24 * 60 * 60 * 1000;
-const daysAgo = (days: number) => new Date(Date.now() - days * DAY);
 const [winner, second, third, fourth] = [nextId(), nextId(), nextId(), nextId()];
 
 // A finished task event and the submissions made for it
-async function storeEvent(services: ServiceContainer, id: string, endTime: Date, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
+async function storeEvent(services: ServiceContainer, id: string, endTime: DateTime, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
     const repo = services.repos.taskRepo;
-    await repo.createTaskEvent(buildTaskEvent({ id, startTime: new Date(endTime.getTime() - 7 * DAY), endTime, createdAt: new Date(endTime.getTime() - 7 * DAY) }));
+    await repo.createTaskEvent(buildTaskEvent({ id, startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(), createdAt: endTime.minus({ days: 7 }).toJSDate() }));
     for (const [index, submission] of submissions.entries()) {
         await repo.createSubmission(buildTaskSubmission({ id: `${id}-${index}`, taskEventId: id, ...submission }));
     }
@@ -28,9 +27,9 @@ async function snapshot(services: ServiceContainer): Promise<PrizeDraw> {
 function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
     return buildPrizeDraw({
         id: "draw-1",
-        start: daysAgo(14).toISOString(),
-        end: daysAgo(1).toISOString(),
-        snapshotTakenAt: daysAgo(1).toISOString(),
+        start: DateTime.now().minus({ days: 14 }).toUTC().toISO(),
+        end: DateTime.now().minus({ days: 1 }).toUTC().toISO(),
+        snapshotTakenAt: DateTime.now().minus({ days: 1 }).toUTC().toISO(),
         participants: { [winner]: 2, [second]: 1 },
         entries: [winner, winner, second],
         totalEntries: 3,
@@ -41,7 +40,7 @@ function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
 
 describe("a prize draw snapshot", () => {
     test("gives one entry per task however many times the member upgraded their submission", async ({ services }) => {
-        await storeEvent(services, "pvm", daysAgo(2), [
+        await storeEvent(services, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Bronze },
             { userId: winner, status: SubmissionStatus.Silver },
             { userId: winner, status: SubmissionStatus.Gold },
@@ -52,14 +51,14 @@ describe("a prize draw snapshot", () => {
 
     test("gives one entry for each task the member completed", async ({ services }) => {
         for (const id of ["pvm", "skilling", "minigame"]) {
-            await storeEvent(services, id, daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
+            await storeEvent(services, id, DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
         }
 
         expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 3 }, totalEntries: 3 });
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services }) => {
-        await storeEvent(services, "pvm", daysAgo(2), [
+        await storeEvent(services, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Pending },
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
@@ -68,32 +67,32 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out a task event that is still running", async ({ services }) => {
-        await storeEvent(services, "finished", daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
-        await storeEvent(services, "running", new Date(Date.now() + 60 * 60 * 1000), [{ userId: second, status: SubmissionStatus.Gold }]);
+        await storeEvent(services, "finished", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
+        await storeEvent(services, "running", DateTime.now().plus({ hours: 1 }), [{ userId: second, status: SubmissionStatus.Gold }]);
 
         expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 1 }, taskEventIds: ["finished"] });
     });
 
     test("carries over approvals the previous draw's snapshot missed", async ({ services }) => {
-        const previousEnd = daysAgo(21);
-        const previousSnapshot = new Date(previousEnd.getTime() + 1 * DAY);
+        const previousEnd = DateTime.now().minus({ days: 21 });
+        const previousSnapshot = previousEnd.plus({ days: 1 });
         await services.repos.prizeRepo.createPrizeDraw(storedDraw({
             id: "previous",
-            start: new Date(previousEnd.getTime() - 14 * DAY).toISOString(),
-            end: previousEnd.toISOString(),
-            snapshotTakenAt: previousSnapshot.toISOString(),
-            rolledAt: new Date(previousSnapshot.getTime() + 1 * DAY).toISOString(),
+            start: previousEnd.minus({ days: 14 }).toUTC().toISO(),
+            end: previousEnd.toUTC().toISO(),
+            snapshotTakenAt: previousSnapshot.toUTC().toISO(),
+            rolledAt: previousSnapshot.plus({ days: 1 }).toUTC().toISO(),
             taskEventIds: ["previous-event"],
         }));
         await storeEvent(services, "previous-event", previousEnd, [
             // Approved after the previous snapshot, before its roll: in neither draw until carried over
-            { userId: second, status: SubmissionStatus.Silver, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousSnapshot.getTime() + 60 * 60 * 1000) },
+            { userId: second, status: SubmissionStatus.Silver, submittedAt: previousEnd.minus({ days: 1 }).toJSDate(), reviewedAt: previousSnapshot.plus({ hours: 1 }).toJSDate() },
             // Approved before the previous snapshot: already counted there
-            { userId: third, status: SubmissionStatus.Gold, submittedAt: new Date(previousEnd.getTime() - DAY), reviewedAt: new Date(previousEnd.getTime() - 60 * 60 * 1000) },
+            { userId: third, status: SubmissionStatus.Gold, submittedAt: previousEnd.minus({ days: 1 }).toJSDate(), reviewedAt: previousEnd.minus({ hours: 1 }).toJSDate() },
             // Made after the previous period ended
-            { userId: fourth, status: SubmissionStatus.Bronze, submittedAt: new Date(previousEnd.getTime() + DAY), reviewedAt: new Date(previousEnd.getTime() + 2 * DAY) },
+            { userId: fourth, status: SubmissionStatus.Bronze, submittedAt: previousEnd.plus({ days: 1 }).toJSDate(), reviewedAt: previousEnd.plus({ days: 2 }).toJSDate() },
         ]);
-        await storeEvent(services, "current-event", daysAgo(2), [{ userId: winner, status: SubmissionStatus.Gold }]);
+        await storeEvent(services, "current-event", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
 
         const draw = await snapshot(services);
 
@@ -103,17 +102,17 @@ describe("a prize draw snapshot", () => {
 
     test("carries over only from the most recent rolled draw", async ({ services }) => {
         for (const [id, endDaysAgo] of [["older", 42], ["latest", 21]] as const) {
-            const end = daysAgo(endDaysAgo);
+            const end = DateTime.now().minus({ days: endDaysAgo });
             await services.repos.prizeRepo.createPrizeDraw(storedDraw({
                 id,
-                start: new Date(end.getTime() - 14 * DAY).toISOString(),
-                end: end.toISOString(),
-                snapshotTakenAt: new Date(end.getTime() + DAY).toISOString(),
-                rolledAt: new Date(end.getTime() + 2 * DAY).toISOString(),
+                start: end.minus({ days: 14 }).toUTC().toISO(),
+                end: end.toUTC().toISO(),
+                snapshotTakenAt: end.plus({ days: 1 }).toUTC().toISO(),
+                rolledAt: end.plus({ days: 2 }).toUTC().toISO(),
                 taskEventIds: [`${id}-event`],
             }));
             await storeEvent(services, `${id}-event`, end, [
-                { userId: `${id}-member`, status: SubmissionStatus.Bronze, submittedAt: new Date(end.getTime() - DAY), reviewedAt: new Date(end.getTime() + 1.5 * DAY) },
+                { userId: `${id}-member`, status: SubmissionStatus.Bronze, submittedAt: end.minus({ days: 1 }).toJSDate(), reviewedAt: end.plus({ hours: 36 }).toJSDate() },
             ]);
         }
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -131,7 +130,7 @@ describe("rolling a prize draw", () => {
     });
 
     test("keeps the winner already rolled", async ({ services }) => {
-        await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: second, rolledAt: daysAgo(1).toISOString() }));
+        await services.repos.prizeRepo.createPrizeDraw(storedDraw({ winnerId: second, rolledAt: DateTime.now().minus({ days: 1 }).toUTC().toISO() }));
 
         expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(second);
     });
