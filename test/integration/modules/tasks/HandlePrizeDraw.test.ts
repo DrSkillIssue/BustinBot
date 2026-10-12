@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { beforeEach, describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS, NAMES, apiUser } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
@@ -9,7 +9,7 @@ import {
     generatePrizeDrawSnapshot,
     rollWinnerForSnapshot,
 } from "../../../../src/modules/tasks/HandlePrizeDraw.js";
-import { runPrizeDrawJob } from "../../../../src/modules/tasks/TaskScheduler.js";
+import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -20,6 +20,10 @@ const [winner, second, third, fourth] = [
 
 // When the draws in these tests run: a Tuesday the prize draw runs on
 const NOW = DateTime.fromISO("2026-10-13T00:00:00Z", { zone: "utc" });
+
+beforeEach(() => {
+    vi.setSystemTime(NOW.toJSDate());
+});
 
 // A finished task event and the submissions made for it
 async function storeEvent(
@@ -60,9 +64,7 @@ describe("a prize draw snapshot", () => {
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
-        expect(
-            await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate()),
-        ).toMatchObject({
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
             participants: { [winner]: 1 },
             totalEntries: 1,
             tierCounts: { bronze: 0, silver: 0, gold: 1 },
@@ -76,9 +78,7 @@ describe("a prize draw snapshot", () => {
             ]);
         }
 
-        expect(
-            await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate()),
-        ).toMatchObject({
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
             participants: { [winner]: 3 },
             totalEntries: 3,
         });
@@ -90,9 +90,7 @@ describe("a prize draw snapshot", () => {
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
 
-        expect(
-            await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate()),
-        ).toMatchObject({
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
             participants: {},
             totalEntries: 0,
         });
@@ -106,9 +104,7 @@ describe("a prize draw snapshot", () => {
             { userId: second, status: SubmissionStatus.Gold },
         ]);
 
-        expect(
-            await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate()),
-        ).toMatchObject({
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
             participants: { [winner]: 1 },
             taskEventIds: ["finished"],
         });
@@ -153,7 +149,7 @@ describe("a prize draw snapshot", () => {
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
-        const draw = await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate());
+        const draw = await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
 
         expect(draw.participants).toEqual({ [winner]: 1, [second]: 1 });
         expect(draw.taskEventIds).toEqual(expect.arrayContaining(["current-event", "previous-event"]));
@@ -187,8 +183,7 @@ describe("a prize draw snapshot", () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(
-            (await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo, NOW.toJSDate()))
-                .participants,
+            (await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants,
         ).toEqual({ [members.latest]: 1 });
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
     });
@@ -198,7 +193,7 @@ describe("rolling a prize draw", () => {
     test("finds no winner without entries", async ({ services, factories }) => {
         await factories.prizeDraw.create({ ...yesterdaysDraw, participants: {}, entries: [], totalEntries: 0 });
 
-        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services, NOW.toJSDate())).toBeNull();
+        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBeNull();
     });
 
     test("keeps the winner already rolled", async ({ services, factories }) => {
@@ -208,14 +203,14 @@ describe("rolling a prize draw", () => {
             rolledAt: NOW.minus({ days: 1 }).toJSDate().toISOString(),
         });
 
-        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services, NOW.toJSDate())).toBe(second);
+        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(second);
     });
 
     test("picks a winner by entries, stores them and counts the win", async ({ services, factories }) => {
         vi.spyOn(Math, "random").mockReturnValue(0);
         await factories.prizeDraw.create(yesterdaysDraw);
 
-        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services, NOW.toJSDate())).toBe(winner);
+        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(winner);
         expect(await services.repos.prizeRepo.getPrizeDrawById("draw-1")).toMatchObject({
             winnerId: winner,
             rolledAt: expect.any(String),
@@ -286,12 +281,19 @@ describe("announcing a prize draw winner", () => {
 });
 
 describe("the scheduled prize draw job", () => {
-    test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
+    test("draws and announces a winner on a prize draw week", async ({
+        discord,
+        services,
+        factories,
+        runScheduledJob,
+    }) => {
         await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
 
-        await runPrizeDrawJob(discord.client, services, NOW.toJSDate());
+        await initTaskScheduler(discord.client, services);
+
+        await runScheduledJob(IDS.guild, "prizeDraw");
 
         const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
         expect(draw).toMatchObject({ winnerId: winner, totalEntries: 1 });
@@ -299,11 +301,14 @@ describe("the scheduled prize draw job", () => {
         expect(discord.messagesSentTo(dm)).toHaveLength(1);
     });
 
-    test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
+    test("does nothing on the weeks between draws", async ({ discord, services, factories, runScheduledJob }) => {
         await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
 
         // The Tuesday after a draw
-        await runPrizeDrawJob(discord.client, services, NOW.plus({ weeks: 1 }).toJSDate());
+        vi.setSystemTime(NOW.plus({ weeks: 1 }).toJSDate());
+        await initTaskScheduler(discord.client, services);
+
+        await runScheduledJob(IDS.guild, "prizeDraw");
 
         expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
     });

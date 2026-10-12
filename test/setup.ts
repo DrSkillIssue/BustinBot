@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { MockAgent, setGlobalDispatcher } from "undici";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import failOnConsole from "vitest-fail-on-console";
 
 // Every HTTP request the bot makes goes through undici: Discord REST through @discordjs/rest's undici client and
@@ -19,3 +19,6 @@ failOnConsole({ shouldPrintMessage: true });
 
 // Scheduled jobs a test started never outlive it
 afterEach(() => cron.shutdown());
+
+// A clock a test set with vi.setSystemTime never outlives it
+afterEach(() => vi.useRealTimers());

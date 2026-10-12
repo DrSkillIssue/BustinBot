@@ -54,18 +54,12 @@ async function storeNight(factories: StoringFactories, overrides: Partial<MovieE
 }
 
 describe("scheduling a movie night", () => {
-    test("/movienight offers the 14 days from when it was run, by the guild's calendar", async ({
-        discord,
-        slash,
-        services,
-    }) => {
+    test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, slash, services }) => {
         await services.guilds.update(IDS.guild, { timezone: "Pacific/Kiritimati" });
+        // Noon UTC on 5 March, when it is already 6 March in Kiribati
+        vi.setSystemTime(new Date("2026-03-05T12:00:00Z"));
 
-        // Run at noon UTC on 5 March, when it is already 6 March in Kiribati
-        const command = await slash("movienight", [], {
-            ...AS.movieAdmin,
-            id: SnowflakeUtil.generate({ timestamp: Date.parse("2026-03-05T12:00:00Z") }).toString(),
-        });
+        const command = await slash("movienight", [], AS.movieAdmin);
 
         expect(discord.callbacks(command)).toEqual([
             {

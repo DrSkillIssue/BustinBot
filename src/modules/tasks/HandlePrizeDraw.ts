@@ -90,8 +90,8 @@ async function getCarryOverSubmissions(
         });
 }
 
-// The draw's entries for the fortnight ending on the day of `now`, the time the draw runs at
-export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository, taskRepo: ITaskRepository, now: Date): Promise<PrizeDraw> {
+export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository, taskRepo: ITaskRepository): Promise<PrizeDraw> {
+    const now = new Date();
     const [start, end] = getPeriodRange(now, DEFAULT_PERIOD_DAYS);
 
     // Only events that have finished: one ending later today is still running
@@ -162,7 +162,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         id: `${start.toISOString().slice(0, 10)}_to_${end.toISOString().slice(0, 10)}`,
         start: start.toISOString(),
         end: end.toISOString(),
-        snapshotTakenAt: now.toISOString(),
+        snapshotTakenAt: new Date().toISOString(),
         taskEventIds: Array.from(new Set([...qualifyingEventIds, ...deduplicatedEventIds])),
         participants,
         entries,
@@ -176,7 +176,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     return snapshot;
 }
 
-export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, snapshotId: string, services: ServiceContainer, now: Date): Promise<string | null> {
+export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, snapshotId: string, services: ServiceContainer): Promise<string | null> {
     const snapshot = await prizeRepo.getPrizeDrawById(snapshotId);
 
     if (!snapshot) throw new Error(`Snapshot ${snapshotId} not found.`);
@@ -196,7 +196,7 @@ export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, sna
 
     const winnerId = tickets[Math.floor(Math.random() * tickets.length)]!;
     snapshot.winnerId = winnerId || '';
-    snapshot.rolledAt = now.toISOString();
+    snapshot.rolledAt = new Date().toISOString();
 
     await prizeRepo.setWinner(snapshot.id, winnerId);
     console.log(`[PrizeDraw] Winner for ${snapshotId}: ${winnerId}`);

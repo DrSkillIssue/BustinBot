@@ -18,9 +18,8 @@ const movienight: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
 
-        // The next 14 days by the guild's calendar from when the command was run; the start time entered next is
-        // read in the guild's timezone too
-        const today = DateTime.fromJSDate(interaction.createdAt).setZone(await resolveGuildTimezone(services, interaction.guildId)).startOf('day');
+        // The next 14 days by the guild's calendar, which the start time entered next is read in
+        const today = DateTime.now().setZone(await resolveGuildTimezone(services, interaction.guildId)).startOf('day');
         const options = Array.from({ length: 14 }, (_, i) => {
             const date = today.plus({ days: i });
             return {
