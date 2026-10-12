@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { beforeEach, describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
 import { IDS, NAMES, apiUser } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
@@ -17,13 +17,6 @@ const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
     SnowflakeUtil.generate().toString(),
 ];
-
-// When the draws in these tests run: a Tuesday the prize draw runs on
-const NOW = DateTime.fromISO("2026-10-13T00:00:00Z", { zone: "utc" });
-
-beforeEach(() => {
-    vi.setSystemTime(NOW.toJSDate());
-});
 
 // A finished task event and the submissions made for it
 async function storeEvent(
@@ -44,9 +37,9 @@ async function storeEvent(
 // A draw whose snapshot was taken yesterday, the winner holding two of its three entries
 const yesterdaysDraw = {
     id: "draw-1",
-    start: NOW.minus({ days: 14 }).toJSDate().toISOString(),
-    end: NOW.minus({ days: 1 }).toJSDate().toISOString(),
-    snapshotTakenAt: NOW.minus({ days: 1 }).toJSDate().toISOString(),
+    start: DateTime.now().minus({ days: 14 }).toJSDate().toISOString(),
+    end: DateTime.now().minus({ days: 1 }).toJSDate().toISOString(),
+    snapshotTakenAt: DateTime.now().minus({ days: 1 }).toJSDate().toISOString(),
     participants: { [winner]: 2, [second]: 1 },
     entries: [winner, winner, second],
     totalEntries: 3,
@@ -58,7 +51,7 @@ describe("a prize draw snapshot", () => {
         services,
         factories,
     }) => {
-        await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Bronze },
             { userId: winner, status: SubmissionStatus.Silver },
             { userId: winner, status: SubmissionStatus.Gold },
@@ -73,7 +66,7 @@ describe("a prize draw snapshot", () => {
 
     test("gives one entry for each task the member completed", async ({ services, factories }) => {
         for (const id of ["pvm", "skilling", "minigame"]) {
-            await storeEvent(factories, id, NOW.minus({ days: 2 }), [
+            await storeEvent(factories, id, DateTime.now().minus({ days: 2 }), [
                 { userId: winner, status: SubmissionStatus.Gold },
             ]);
         }
@@ -85,7 +78,7 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services, factories }) => {
-        await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Pending },
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
@@ -97,10 +90,10 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out a task event that is still running", async ({ services, factories }) => {
-        await storeEvent(factories, "finished", NOW.minus({ days: 2 }), [
+        await storeEvent(factories, "finished", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
-        await storeEvent(factories, "running", NOW.plus({ hours: 1 }), [
+        await storeEvent(factories, "running", DateTime.now().plus({ hours: 1 }), [
             { userId: second, status: SubmissionStatus.Gold },
         ]);
 
@@ -111,7 +104,7 @@ describe("a prize draw snapshot", () => {
     });
 
     test("carries over approvals the previous draw's snapshot missed", async ({ services, factories }) => {
-        const previousEnd = NOW.minus({ days: 21 });
+        const previousEnd = DateTime.now().minus({ days: 21 });
         const previousSnapshot = previousEnd.plus({ days: 1 });
         await factories.prizeDraw.create({
             ...yesterdaysDraw,
@@ -145,7 +138,7 @@ describe("a prize draw snapshot", () => {
                 reviewedAt: previousEnd.plus({ days: 2 }).toJSDate(),
             },
         ]);
-        await storeEvent(factories, "current-event", NOW.minus({ days: 2 }), [
+        await storeEvent(factories, "current-event", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
@@ -161,7 +154,7 @@ describe("a prize draw snapshot", () => {
             ["older", 42],
             ["latest", 21],
         ] as const) {
-            const end = NOW.minus({ days: endDaysAgo });
+            const end = DateTime.now().minus({ days: endDaysAgo });
             await factories.prizeDraw.create({
                 ...yesterdaysDraw,
                 id,
@@ -200,7 +193,7 @@ describe("rolling a prize draw", () => {
         await factories.prizeDraw.create({
             ...yesterdaysDraw,
             winnerId: second,
-            rolledAt: NOW.minus({ days: 1 }).toJSDate().toISOString(),
+            rolledAt: DateTime.now().minus({ days: 1 }).toJSDate().toISOString(),
         });
 
         expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(second);
@@ -281,11 +274,16 @@ describe("announcing a prize draw winner", () => {
 });
 
 describe("the scheduled prize draw job", () => {
+    // A Tuesday the prize draw runs on
+    const drawTuesday = DateTime.fromISO("2026-10-13T00:00:00Z", { zone: "utc" });
+
     test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
-        await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
+        vi.setSystemTime(drawTuesday.toJSDate());
+        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
-
 
         await runPrizeDrawJob(discord.client, services);
 
@@ -296,10 +294,11 @@ describe("the scheduled prize draw job", () => {
     });
 
     test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
-        await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
-
         // The Tuesday after a draw
-        vi.setSystemTime(NOW.plus({ weeks: 1 }).toJSDate());
+        vi.setSystemTime(drawTuesday.plus({ weeks: 1 }).toJSDate());
+        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
 
         await runPrizeDrawJob(discord.client, services);
 

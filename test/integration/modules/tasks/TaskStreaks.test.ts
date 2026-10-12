@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
 import { IDS } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import { calculateTaskStreakSummary } from "../../../../src/modules/tasks/TaskStreaks.js";
@@ -33,11 +33,9 @@ async function submit(
 
 describe("task streaks", () => {
     test("start when the current week's task is completed", async ({ services, factories }) => {
-        const start = DateTime.fromISO("2026-01-05T00:00:00Z");
+        const start = DateTime.now().minus({ days: 2 });
         await storeWeeks(factories, start, ["week-1"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
-
-        vi.setSystemTime(start.plus({ days: 2 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 1,
@@ -47,12 +45,10 @@ describe("task streaks", () => {
     });
 
     test("continue across consecutive weeks", async ({ services, factories }) => {
-        const start = DateTime.fromISO("2026-02-02T00:00:00Z");
+        const start = DateTime.now().minus({ days: 8 });
         await storeWeeks(factories, start, ["week-1", "week-2"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
         await submit(factories, "week-2", start.plus({ days: 8 }).toJSDate());
-
-        vi.setSystemTime(start.plus({ days: 8 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 2,
@@ -62,11 +58,9 @@ describe("task streaks", () => {
     });
 
     test("break when a week with a task is missed", async ({ services, factories }) => {
-        const start = DateTime.fromISO("2026-03-02T00:00:00Z");
+        const start = DateTime.now().minus({ days: 16 });
         await storeWeeks(factories, start, ["week-1", "week-2", "week-3"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
-
-        vi.setSystemTime(start.plus({ days: 16 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 0,
@@ -76,7 +70,7 @@ describe("task streaks", () => {
     });
 
     test("survive a break in which no tasks ran", async ({ services, factories }) => {
-        const start = DateTime.fromISO("2026-04-06T00:00:00Z");
+        const start = DateTime.now().minus({ days: 36 });
         const afterBreak = start.plus({ days: 35 });
         await factories.taskEvent.create({
             id: "before-break",
@@ -87,8 +81,6 @@ describe("task streaks", () => {
             startTime: afterBreak.toJSDate(),
         });
         await submit(factories, "before-break", start.plus({ days: 1 }).toJSDate());
-
-        vi.setSystemTime(afterBreak.plus({ days: 1 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 1,
@@ -101,15 +93,13 @@ describe("task streaks", () => {
         services,
         factories,
     }) => {
-        const start = DateTime.fromISO("2026-05-04T00:00:00Z");
+        const start = DateTime.now().minus({ days: 8 });
         await storeWeeks(factories, start, ["week-1"]);
         const end = start.plus({ days: 7 });
         await submit(factories, "week-1", end.minus({ hours: 2 }).toJSDate(), {
             status: SubmissionStatus.Gold,
             createdAt: end.plus({ hours: 2 }).toJSDate(),
         });
-
-        vi.setSystemTime(end.plus({ days: 1 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 1,
@@ -118,12 +108,10 @@ describe("task streaks", () => {
     });
 
     test("ignore submissions that were rejected or are still pending", async ({ services, factories }) => {
-        const start = DateTime.fromISO("2026-06-01T00:00:00Z");
+        const start = DateTime.now().minus({ days: 9 });
         await storeWeeks(factories, start, ["week-1", "week-2"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate(), { status: SubmissionStatus.Rejected });
         await submit(factories, "week-2", start.plus({ days: 8 }).toJSDate(), { status: SubmissionStatus.Pending });
-
-        vi.setSystemTime(start.plus({ days: 9 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 0,

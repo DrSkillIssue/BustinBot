@@ -109,8 +109,9 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
     nextPrizeTime = prizeTime;
 }
 
-// A Tuesday the prize draw ran on. Draws run every prizeFrequencyWeeks weeks counted from it, which keeps them evenly
-// spaced across new years; calendar week numbers restart each January and put three weeks between two draws.
+// A Tuesday the prize draw runs on, under the calendar-week rule it replaced. Draws run every prizeFrequencyWeeks weeks
+// counted from it, which keeps them evenly spaced across new years; calendar week numbers restart each January and put
+// three weeks between two draws.
 const PRIZE_DRAW_ANCHOR = DateTime.fromISO('2026-10-13T00:00:00Z', { zone: 'utc' });
 
 // Whether the prize draw runs in the week of this date

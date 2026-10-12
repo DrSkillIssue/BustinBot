@@ -18,7 +18,7 @@ describe("prize draw weeks", () => {
         );
     });
 
-    test("keep the Tuesdays the draw already ran on", () => {
+    test("fall on the same Tuesdays as the calendar-week rule they replaced", () => {
         expect(
             ["2026-09-29", "2026-10-06", "2026-10-13", "2026-10-20", "2026-10-27"].map((date) =>
                 isPrizeDrawWeek(new Date(`${date}T00:00:00Z`)),
