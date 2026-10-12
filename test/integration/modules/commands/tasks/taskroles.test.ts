@@ -406,13 +406,13 @@ describe("/taskroles init", () => {
         factories,
     }) => {
         discord.guildRoles();
+        const enthusiast = apiRole({ name: "Task Enthusiast" });
         const milestones = [
             apiRole({ name: "Task Participant" }),
-            apiRole({ name: "Task Enthusiast" }),
+            enthusiast,
             apiRole({ name: "Task Expert" }),
             apiRole({ name: "Task Master" }),
         ];
-        const enthusiast = milestones[1];
         const champions = {
             first: apiRole({ name: "Task Champion (1st)" }),
             second: apiRole({ name: "Task Champion (2nd)" }),
@@ -442,7 +442,7 @@ describe("/taskroles init", () => {
             ["Task Champion (3rd)", 0xcd7f32],
         ]);
         // 30 completions earn the 25-submission milestone
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast?.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast.id}`]);
         const stored = await services.repos.guildRepo.getGuild(IDS.guild);
         expect(stored?.taskSettings?.milestoneRoles?.map((role) => role.roleId)).toEqual(
             milestones.map((role) => role.id),

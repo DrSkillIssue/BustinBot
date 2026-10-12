@@ -2,6 +2,7 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../../fixtures.js";
+import { IDS } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
@@ -11,22 +12,17 @@ describe("/mytask", () => {
         slash,
         factories,
     }) => {
-        const running = {
-            startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-            endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
-        };
-        const pvm = await factories.taskEvent.create({
+        const pvm = await factories.taskEvent.running().create({
             id: "pvm-week",
             task: { id: "PVM001", category: TaskCategory.PvM },
-            ...running,
         });
-        const skilling = await factories.taskEvent.create({
+        const skilling = await factories.taskEvent.running().create({
             id: "skilling-week",
             task: { id: "SKL001", category: TaskCategory.Skilling },
-            ...running,
         });
         await factories.taskSubmission.create({
             id: "older",
+            userId: IDS.user,
             taskEventId: pvm.id,
             taskName: "Kill 50 Zulrah",
             status: SubmissionStatus.Gold,
@@ -34,6 +30,7 @@ describe("/mytask", () => {
         });
         await factories.taskSubmission.create({
             id: "newer",
+            userId: IDS.user,
             taskEventId: skilling.id,
             taskName: "Gain 100k Mining XP",
             status: SubmissionStatus.Pending,
@@ -64,11 +61,9 @@ describe("/mytask", () => {
         slash,
         factories,
     }) => {
-        await factories.taskEvent.create({
+        await factories.taskEvent.running().create({
             id: "pvm-week",
             task: { category: TaskCategory.PvM },
-            startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-            endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         });
 
         const command = await slash("mytask", [
@@ -81,10 +76,7 @@ describe("/mytask", () => {
     });
 
     test("says so when no task event is running", async ({ discord, slash, factories }) => {
-        await factories.taskEvent.create({
-            endTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-            startTime: DateTime.now().minus({ days: 8 }).toJSDate(),
-        });
+        await factories.taskEvent.create({ endTime: DateTime.now().minus({ days: 1 }).toJSDate() });
 
         const command = await slash("mytask");
 

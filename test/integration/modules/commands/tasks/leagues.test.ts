@@ -10,6 +10,7 @@ describe("/leagues", () => {
         services,
         factories,
     }) => {
+        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", false, IDS.user);
         await storePollableTasks(factories, Object.values(TaskCategory));
         discord.acceptMessages(IDS.channel);
 
@@ -25,13 +26,13 @@ describe("/leagues", () => {
     });
 
     test("switches Leagues back off", async ({ discord, slash, services }) => {
-        await slash("leagues", [], AS.taskAdmin);
+        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", true, IDS.user);
 
         const command = await slash("leagues", [], AS.taskAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Leagues tasks have been **disabled**." }),
         ]);
-        expect((await services.guilds.get(IDS.guild))?.toggles.leaguesEnabled).toBe(false);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.leaguesEnabled).toBe(false);
     });
 });

@@ -31,9 +31,16 @@ export const taskFactory = Factory.define<Task>(() => ({
     weight: 50,
 }));
 
-// A week-long task event, as the bot starts them: give its start or its end and the other follows. It was created when
-// it started.
-export const taskEventFactory = Factory.define<TaskEvent>(({ params }) => {
+class TaskEventFactory extends Factory<TaskEvent> {
+    // An event that started yesterday and runs for the rest of its week
+    running() {
+        return this.params({ startTime: DateTime.now().minus({ days: 1 }).toJSDate() });
+    }
+}
+
+// A week-long task event, as the bot starts them: give its startTime or its endTime and the other follows a week away.
+// It was created when it started. Its id stays the default unless the test gives one.
+export const taskEventFactory = TaskEventFactory.define(({ params }) => {
     const task = taskFactory.build(params.task);
     const startTime =
         params.startTime ??

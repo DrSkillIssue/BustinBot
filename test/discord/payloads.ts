@@ -1,11 +1,10 @@
-import { SnowflakeUtil } from "discord.js";
+import { GuildMemberFlagsBitField, RoleFlagsBitField, SnowflakeUtil } from "discord.js";
 import {
     ApplicationCommandType,
     ChannelType,
     ComponentType,
     GuildDefaultMessageNotifications,
     GuildExplicitContentFilter,
-    GuildMemberFlags,
     GuildMFALevel,
     GuildNSFWLevel,
     GuildPremiumTier,
@@ -15,7 +14,6 @@ import {
     InteractionType,
     Locale,
     MessageType,
-    RoleFlags,
     type APIApplicationCommandInteractionDataOption,
     type APIAttachment,
     type APIChatInputApplicationCommandGuildInteraction,
@@ -75,9 +73,9 @@ export const NAMES = {
 } as const;
 
 const EPOCH = "2026-01-01T00:00:00.000Z";
-// Discord flag fields are bitfields; zero means no flags are set
-const NO_ROLE_FLAGS = 0 as RoleFlags;
-const NO_MEMBER_FLAGS = 0 as GuildMemberFlags;
+// Discord flag fields are bitfields; an empty one means no flags are set
+const NO_ROLE_FLAGS = new RoleFlagsBitField().bitfield;
+const NO_MEMBER_FLAGS = new GuildMemberFlagsBitField().bitfield;
 
 export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
     return {

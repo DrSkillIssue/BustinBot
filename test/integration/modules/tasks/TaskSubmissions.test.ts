@@ -8,7 +8,6 @@ import {
     type GatewayMessageCreateDispatchData,
 } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
-import { DateTime } from "luxon";
 import { describe, expect, test, vi, type StoringFactories, type Interact } from "../../../fixtures.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../discord/harness.js";
@@ -25,7 +24,7 @@ import {
     directMessage,
     modalSubmitInteraction,
 } from "../../../discord/payloads.js";
-import { leaderboardPeriodFactory, taskFactory, taskSubmissionFactory } from "../../../factories.js";
+import { leaderboardPeriodFactory, taskSubmissionFactory } from "../../../factories.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../../src/models/TaskSubmission.js";
 import { handleDirectMessage } from "../../../../src/modules/tasks/TaskInteractions.js";
 
@@ -49,11 +48,9 @@ function offeredButtons(discord: DiscordHarness, interaction: Interaction): stri
 
 // This week's task, posted in the task channel
 async function storeEvent(factories: StoringFactories) {
-    return factories.taskEvent.create({
+    return factories.taskEvent.running().create({
         id: EVENT,
-        task: taskFactory.build({ id: "PVM001", taskName: "Kill Zulrah" }),
-        startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-        endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
+        task: { id: "PVM001", taskName: "Kill Zulrah" },
         channelId: IDS.channel,
         messageId: EVENT_POST,
     });
@@ -167,6 +164,7 @@ describe("submitting a task", () => {
         );
 
         const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
+        assert(submission);
         expect(others).toEqual([]);
         expect(submission).toMatchObject({
             taskEventId: EVENT,
@@ -180,8 +178,8 @@ describe("submitting a task", () => {
         const [details, posted] = discord.messagesSentTo(IDS.channel);
         expect(buttonsIn(details?.components).map((button) => button.customId)).toEqual(
             ["bronze", "silver", "gold"]
-                .map((tier) => `approve_${tier}_${submission?.id}`)
-                .concat(`reject_${submission?.id}`),
+                .map((tier) => `approve_${tier}_${submission.id}`)
+                .concat(`reject_${submission.id}`),
         );
         expect(posted).toMatchObject({
             content: `Submission screenshots for <@${IDS.user}> — Kill Zulrah:`,

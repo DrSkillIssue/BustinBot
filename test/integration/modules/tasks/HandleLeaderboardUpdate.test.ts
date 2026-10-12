@@ -6,9 +6,8 @@ import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
 import { AS, IDS, NAMES, apiGuildMember, apiRole, apiUser } from "../../../discord/payloads.js";
-import { leaderboardPeriodFactory, taskFactory } from "../../../factories.js";
+import { taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
-import type { TaskLeaderboard } from "../../../../src/models/TaskLeaderboard.js";
 import {
     postPeriodicLeaderboardUpdate,
     warnPendingLeaderboardFinalization,
@@ -36,7 +35,10 @@ async function storeWeeks(factories: StoringFactories, count: number, ended: num
     return ids;
 }
 
-async function storePeriodic(factories: StoringFactories, overrides: Partial<TaskLeaderboard>): Promise<void> {
+async function storePeriodic(
+    factories: StoringFactories,
+    overrides: Parameters<StoringFactories["periodicLeaderboard"]["create"]>[0],
+): Promise<void> {
     await factories.periodicLeaderboard.create(overrides);
     await factories.lifetimeLeaderboard.create();
 }
@@ -76,7 +78,7 @@ describe("the weekly leaderboard update", () => {
         await storePeriodic(factories, {
             points: { [winner]: 6 },
             tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } },
-            period: leaderboardPeriodFactory.build({ eventIds: events }),
+            period: { length: 4, eventIds: events },
         });
         discord.member(
             IDS.guild,
@@ -99,7 +101,7 @@ describe("the weekly leaderboard update", () => {
         async ({ discord, services, factories }) => {
             const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
             const events = await storeWeeks(factories, 4, 4);
-            const period = leaderboardPeriodFactory.build({ eventIds: events });
+            const period = { index: 3, length: 4, eventIds: events };
             await storePeriodic(factories, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
             const { roles, dms } = await setUpChampions(discord, services);
             discord.acceptMessages(IDS.channel);
@@ -152,7 +154,7 @@ describe("the weekly leaderboard update", () => {
         const events = await storeWeeks(factories, 4, 4);
         await storePeriodic(factories, {
             points: { [winner]: 9 },
-            period: leaderboardPeriodFactory.build({ eventIds: events }),
+            period: { length: 4, eventIds: events },
         });
         await setUpChampions(discord, services);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
@@ -212,7 +214,7 @@ describe("the warning before a period ends", () => {
         factories,
     }) => {
         const events = await storeWeeks(factories, 4, 4);
-        await storePeriodic(factories, { period: leaderboardPeriodFactory.build({ eventIds: events }) });
+        await storePeriodic(factories, { period: { length: 4, eventIds: events } });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
             await factories.taskSubmission.create({
                 id: `pending-${index}`,
@@ -239,7 +241,7 @@ describe("the warning before a period ends", () => {
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(factories, 4, 4);
-        await storePeriodic(factories, { period: leaderboardPeriodFactory.build({ eventIds: events }) });
+        await storePeriodic(factories, { period: { length: 4, eventIds: events } });
         await factories.taskSubmission.create({ taskEventId: "week-4", status: SubmissionStatus.Pending });
         await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);

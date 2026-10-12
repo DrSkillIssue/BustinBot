@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { AS, IDS } from "../../../../discord/payloads.js";
@@ -23,6 +24,7 @@ describe("/testtaskapproval", () => {
         );
 
         const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
+        assert(submission);
         expect(others).toEqual([]);
         expect(submission).toMatchObject({
             taskEventId: event.id,
@@ -38,7 +40,7 @@ describe("/testtaskapproval", () => {
                     "**Task:** Kill {amount} Vorkath",
                     `**User:** <@${IDS.user}>`,
                     "**Tier hint:** silver",
-                    `**Submission ID:** \`${submission?.id}\``,
+                    `**Submission ID:** \`${submission.id}\``,
                 ].join("\n"),
             }),
         ]);

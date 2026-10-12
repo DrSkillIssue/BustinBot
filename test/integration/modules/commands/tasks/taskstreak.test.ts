@@ -9,10 +9,8 @@ describe("/taskstreak", () => {
         slash,
         factories,
     }) => {
-        const event = await factories.taskEvent.create({
+        const event = await factories.taskEvent.running().create({
             id: "week-1",
-            startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-            endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         });
         await factories.taskSubmission.create({
             taskEventId: event.id,
@@ -43,10 +41,8 @@ describe("/taskstreak", () => {
         slash,
         factories,
     }) => {
-        const event = await factories.taskEvent.create({
+        const event = await factories.taskEvent.running().create({
             id: "week-1",
-            startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-            endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         });
 
         const command = await slash("taskstreak");

@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { DateTime } from "luxon";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
@@ -30,10 +31,13 @@ describe("/taskdraw", () => {
     }) => {
         const event = await factories.taskEvent.create({
             id: "pvm",
-            startTime: DateTime.now().minus({ days: 9 }).toJSDate(),
             endTime: DateTime.now().minus({ days: 2 }).toJSDate(),
         });
-        await factories.taskSubmission.create({ taskEventId: event.id, status: SubmissionStatus.Gold });
+        await factories.taskSubmission.create({
+            userId: IDS.user,
+            taskEventId: event.id,
+            status: SubmissionStatus.Gold,
+        });
 
         const interaction = await slash(
             "taskdraw",
@@ -42,9 +46,10 @@ describe("/taskdraw", () => {
         );
 
         const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
+        assert(draw);
         expect(draw).toMatchObject({ participants: { [IDS.user]: 1 }, totalEntries: 1 });
         expect(discord.originalEdits(interaction)).toEqual([
-            expect.objectContaining({ content: `Snapshot created for period **${draw?.id}** with **1** entries.` }),
+            expect.objectContaining({ content: `Snapshot created for period **${draw.id}** with **1** entries.` }),
         ]);
     });
 
@@ -70,7 +75,7 @@ describe("/taskdraw", () => {
     });
 
     test("says so when a snapshot has no entries to roll", async ({ discord, slash, factories }) => {
-        const draw = await factories.prizeDraw.create();
+        const draw = await factories.prizeDraw.create({ participants: {}, entries: [], totalEntries: 0 });
 
         const interaction = await slash(
             "taskdraw",
@@ -89,7 +94,7 @@ describe("/taskdraw", () => {
     test("announces a rolled winner", async ({ discord, slash, factories }) => {
         const draw = await factories.prizeDraw.create({ entries: [IDS.user], totalEntries: 1, winnerId: IDS.user });
         discord.acceptMessages(IDS.channel);
-        discord.acceptDirectMessages(apiUser({ id: IDS.user }));
+        const dm = discord.acceptDirectMessages(apiUser({ id: IDS.user }));
 
         const interaction = await slash(
             "taskdraw",
@@ -104,11 +109,17 @@ describe("/taskdraw", () => {
             expect.objectContaining({ content: `Announcement sent for **${draw.id}**.` }),
         ]);
         expect(discord.messagesSentTo(IDS.channel)).toHaveLength(1);
+        expect(discord.messagesSentTo(dm)).toHaveLength(1);
     });
 
     test("says so when the winner can't be announced", async ({ discord, slash, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const draw = await factories.prizeDraw.create();
+        // Entries were drawn up, but no winner has been rolled yet
+        const draw = await factories.prizeDraw.create({
+            participants: { [IDS.user]: 1 },
+            entries: [IDS.user],
+            totalEntries: 1,
+        });
 
         const interaction = await slash(
             "taskdraw",

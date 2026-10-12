@@ -20,11 +20,9 @@ async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
         category: TaskCategory.PvM,
         taskName: "Kill {amount} Zulrah",
     });
-    return factories.taskEvent.create({
+    return factories.taskEvent.running().create({
         id: "PVM001-week",
         task,
-        startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
-        endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         messageId: eventMessage,
         channelId: IDS.channel,
         ...overrides,

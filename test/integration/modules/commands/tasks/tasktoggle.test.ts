@@ -62,6 +62,8 @@ describe("/tasktoggle schedule", () => {
 
 describe("/tasktoggle leaderboard", () => {
     test("switches periodic leaderboard automation off and back on", async ({ discord, slash, services }) => {
+        await services.guilds.updateToggle(IDS.guild, "toggles.taskLeaderboard", true, IDS.user);
+
         const off = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
