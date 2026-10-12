@@ -45,11 +45,12 @@ const currentmovie: Command = {
             stateMessage = "📭 No movie has been selected yet.";
         }
 
+        const host = await interaction.client.users.fetch(movieEvent.hostedBy);
         const embed = createMovieNightEmbed(
             currentMovie,
             unixTimestamp,
             stateMessage,
-            interaction.user.username
+            host.username
         );
 
         await interaction.editReply({
