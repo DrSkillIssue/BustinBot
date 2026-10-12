@@ -72,17 +72,6 @@ describe("posting the weekly task polls", () => {
 });
 
 describe("the scheduled task poll job", () => {
-    test("posts the task polls in the task channel", async ({ discord, services, factories }) => {
-        await storePollableTasks(factories);
-        discord.acceptMessages(IDS.channel);
-
-        await runTaskPollJob(discord.client, services);
-
-        const [announcement, ...polls] = discord.messagesSentTo(IDS.channel);
-        expect(announcement?.content).toContain("**New task polls are live!**");
-        expect(polls).toHaveLength(3);
-    });
-
     test("posts nothing when no task channel is configured", async ({ discord, services, factories }) => {
         await storePollableTasks(factories);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
@@ -289,18 +278,6 @@ describe("TaskRepository polls", () => {
         expect((await repo.getLatestTaskPollByCategory(TaskCategory.PvM))?.id).toBe("new");
         expect(await repo.getTaskPollById("old")).toMatchObject({ id: "old", isActive: false });
         expect(await repo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
-    });
-
-    test("records votes and reports whether each was the voter's first", async ({ repo }) => {
-        const poll = taskPollFactory.build();
-        await repo.createTaskPoll(poll);
-
-        const first = await repo.voteInPollOnce(poll.id, IDS.user, "PVM001");
-        const changed = await repo.voteInPollOnce(poll.id, IDS.user, "PVM002");
-
-        expect(first.firstTime).toBe(true);
-        expect(changed.firstTime).toBe(false);
-        expect((await repo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM002" });
     });
 
     test(

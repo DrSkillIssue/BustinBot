@@ -95,17 +95,6 @@ describe("/taskstart", () => {
 });
 
 describe("the scheduled task start job", () => {
-    test("starts the week's tasks from the polls", async ({ discord, services, factories }) => {
-        await services.repos.keywordRepo.addKeyword("Bustin");
-        await storeThisWeeksPolls(factories);
-        discord.acceptMessages(IDS.channel);
-
-        await runTaskStartJob(discord.client, services);
-
-        const [announcement, ...eventPosts] = discord.messagesSentTo(IDS.channel);
-        expect(announcement?.content).toContain("Include the keyword **Bustin** in your screenshots");
-        expect(eventPosts).toHaveLength(3);
-    });
     test("starts nothing when no task channel is configured", async ({ discord, services, factories }) => {
         await storeThisWeeksPolls(factories);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });

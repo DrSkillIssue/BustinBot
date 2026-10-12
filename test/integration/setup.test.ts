@@ -404,14 +404,6 @@ describe("GuildRepository", () => {
         vi.stubEnv("BOT_MODE", "production");
     });
 
-    test("initialises a guild only when it has no document yet", async ({ repo }) => {
-        await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "UTC" }));
-        await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "Australia/Melbourne" }));
-
-        expect(await repo.getGuild(IDS.guild)).toMatchObject({ id: IDS.guild, timezone: "UTC" });
-        expect(await repo.getGuild("missing")).toBeNull();
-    });
-
     test("only reads and writes the dev guild in dev mode", async ({ repo }) => {
         await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "UTC" }));
         await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));

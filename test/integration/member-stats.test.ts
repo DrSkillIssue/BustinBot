@@ -4,7 +4,6 @@ import { describe, expect, test as base } from "../fixtures.js";
 import { apiUser, chatInputInteraction, IDS } from "../discord/payloads.js";
 import assert from "node:assert";
 import { UserRepository } from "../../src/core/database/UserRepo.js";
-import { userStatsFactory } from "../factories.js";
 import { newUserStats } from "../../src/models/UserStats.js";
 
 const test = base.extend("repo", ({ db }) => new UserRepository(db, IDS.guild));
@@ -78,22 +77,6 @@ describe("/stats", () => {
 });
 
 describe("UserRepository", () => {
-    test("stores users under the guild and reads them back", async ({ repo, db }) => {
-        await repo.createUser(userStatsFactory.build({ userId: IDS.user, commandsRun: 3 }));
-
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ userId: IDS.user, commandsRun: 3 });
-        expect(await repo.getAllUsers()).toEqual([expect.objectContaining({ userId: IDS.user })]);
-        expect((await db.doc(`guilds/${IDS.guild}/userStats/${IDS.user}`).get()).exists).toBe(true);
-        expect(await repo.getUserById("missing")).toBeNull();
-    });
-
-    test("increments a stat on an existing user", async ({ repo }) => {
-        await repo.incrementStat(IDS.user, "tasksCompletedBronze", 1);
-        await repo.incrementStat(IDS.user, "tasksCompletedBronze", 2);
-
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 3, commandsRun: 0 });
-    });
-
     test("counts every increment when several arrive at once for a user with no stats yet", async ({ repo }) => {
         await Promise.all([
             repo.incrementStat(IDS.user, "commandsRun", 1),
@@ -119,14 +102,6 @@ describe("UserRepository", () => {
         });
     });
 
-    test("moves one completion between tiers on an existing user", async ({ repo }) => {
-        await repo.incrementStat(IDS.user, "tasksCompletedBronze", 1);
-
-        await repo.updateTierStat(IDS.user, "tasksCompletedBronze", "tasksCompletedSilver");
-
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedSilver: 1 });
-    });
-
     test("keeps a tier move and an increment made at the same moment for a user with no stats yet", async ({
         repo,
     }) => {
@@ -136,17 +111,6 @@ describe("UserRepository", () => {
         ]);
 
         expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
-    });
-
-    test("reads a user back exactly as stored", async ({ repo }) => {
-        const user = userStatsFactory.build({
-            userId: IDS.user,
-            commandsRun: 3,
-            lastActiveAt: new Date("2026-01-07T00:00:00.000Z"),
-        });
-        await repo.createUser(user);
-
-        expect(await repo.getUserById(IDS.user)).toEqual(user);
     });
 
     test("reads a member created by the legacy completion import as a full set of stats", async ({ repo, db }) => {

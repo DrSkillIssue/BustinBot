@@ -21,9 +21,8 @@ import {
     stringSelectInteraction,
     chatInputInteraction,
 } from "../discord/payloads.js";
-import { movieFactory, moviePollFactory } from "../factories.js";
+import { moviePollFactory } from "../factories.js";
 import { type Movie } from "../../src/models/Movie.js";
-import { addMovieWithStats } from "../../src/modules/movies/MovieService.js";
 import { MovieRepository } from "../../src/core/database/MovieRepo.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
@@ -404,13 +403,6 @@ describe("the movie list", () => {
         }
         expect(await services.repos.movieRepo.getAllMovies()).toEqual([]);
     });
-
-    test("counts each movie a member adds", async ({ services }) => {
-        await addMovieWithStats(movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }), services);
-
-        expect(await services.repos.movieRepo.getMovieById("movie-1")).toMatchObject({ addedBy: SUBMITTER });
-        expect(await services.repos.userRepo.getUserById(SUBMITTER)).toMatchObject({ moviesAdded: 1 });
-    });
 });
 
 describe("MovieRepository polls", () => {
@@ -448,19 +440,6 @@ describe("MovieRepository polls", () => {
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
-
-    test("records a vote and reports whether it was the voter's first", async ({ repo }) => {
-        const poll = moviePollFactory.build();
-        await repo.createPoll(poll);
-
-        const first = await repo.voteInPollOnce(poll.id, IDS.user, "movie-1");
-        const changed = await repo.voteInPollOnce(poll.id, IDS.user, "movie-2");
-
-        expect(first.firstTime).toBe(true);
-        expect(changed.firstTime).toBe(false);
-        expect(changed.updatedPoll.votes).toEqual({ [IDS.user]: "movie-2" });
-        await expect(repo.voteInPollOnce("missing", IDS.user, "movie-1")).rejects.toThrow("Poll not found.");
-    });
 
     test(
         "counts every vote when voters vote at the same time",

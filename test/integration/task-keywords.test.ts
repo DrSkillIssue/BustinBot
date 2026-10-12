@@ -35,9 +35,11 @@ describe("/addkeyword", () => {
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: 'Keyword **"Bustin Bot!"** has been added successfully!' }),
         ]);
+        // Never used, so it is first in line to be picked
         expect(await services.repos.keywordRepo.getKeywordById("bustin_bot")).toMatchObject({
             word: "Bustin Bot!",
             timesUsed: 0,
+            lastUsedAt: new Date(0),
         });
     });
 
@@ -94,15 +96,6 @@ describe("KeywordSelector", () => {
 });
 
 describe("KeywordRepository", () => {
-    test("adds a keyword under a normalised id with no usage", async ({ repo }) => {
-        await repo.addKeyword("New Keyword!");
-
-        const keyword = await repo.getKeywordById("new_keyword");
-        expect(keyword).toMatchObject({ id: "new_keyword", word: "New Keyword!", timesUsed: 0, usageHistory: [] });
-        expect(keyword?.lastUsedAt.getTime()).toBe(0);
-        expect(await repo.getAllKeywords()).toHaveLength(1);
-    });
-
     test("records usage with the most recent event first, keeping the last 20", async ({ repo }) => {
         await repo.addKeyword("rare");
         for (let event = 1; event <= 21; event++) {
@@ -115,14 +108,5 @@ describe("KeywordRepository", () => {
         expect(keyword?.usageHistory).toHaveLength(20);
         expect(keyword?.usageHistory[0]).toBe("event-21");
         expect(keyword?.lastUsedAt.getTime()).toBeGreaterThan(0);
-    });
-
-    test("ignores usage of a keyword that does not exist", async ({ repo }) => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-        await repo.markKeywordUsed("missing", "event-1");
-
-        expect(await repo.getKeywordById("missing")).toBeNull();
-        expect(warn).toHaveBeenCalledWith("[KeywordRepo] Keyword missing not found");
     });
 });

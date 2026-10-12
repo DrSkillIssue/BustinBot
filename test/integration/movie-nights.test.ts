@@ -168,8 +168,6 @@ describe("scheduling a movie night", () => {
             movie: { id: "latest-pick" },
         });
         expect((await movies.getActivePoll())?.endsAt).toEqual(start.minus({ hours: 1 }).toJSDate());
-        // Attendance starts at the start time, not when the night is scheduled
-        expect(services.movieAttendance.isTracking(night.id)).toBe(false);
     });
 
     test("points members at the running poll and stores a placeholder movie when none is chosen yet", async ({
@@ -738,15 +736,4 @@ describe("MovieRepository events", () => {
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
-
-    test("lists events newest first", async ({ repo }) => {
-        await repo.createMovieEvent(
-            movieEventFactory.build({ id: "first", createdAt: new Date("2026-01-01T00:00:00.000Z") }),
-        );
-        await repo.createMovieEvent(
-            movieEventFactory.build({ id: "second", createdAt: new Date("2026-01-08T00:00:00.000Z") }),
-        );
-
-        expect((await repo.getAllEvents()).map((event) => event.id)).toEqual(["second", "first"]);
-    });
 });

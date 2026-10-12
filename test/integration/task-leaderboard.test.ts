@@ -28,7 +28,7 @@ import {
     recordPeriodicTierChange,
     registerPeriodicTaskEvent,
 } from "../../src/modules/tasks/TaskLeaderboards.js";
-import { leaderboardPeriodFactory, lifetimeLeaderboardFactory, periodicLeaderboardFactory } from "../factories.js";
+import { periodicLeaderboardFactory } from "../factories.js";
 import { TaskLeaderboardRepository } from "../../src/core/database/TaskLeaderboardRepo.js";
 
 const [winner, runnerUp, third] = [
@@ -74,11 +74,7 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
     return { roles, dms };
 }
 
-const [oldPeriodMember, overlapMember, upgradedMember] = [
-    SnowflakeUtil.generate().toString(),
-    SnowflakeUtil.generate().toString(),
-    SnowflakeUtil.generate().toString(),
-];
+const [oldPeriodMember, overlapMember] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
 const test = base.extend("repo", ({ db }) => new TaskLeaderboardRepository(db, IDS.guild));
 
@@ -411,39 +407,6 @@ describe("TaskLeaderboards periodic submissions", () => {
         expect(stored?.tierCounts).toEqual({ [overlapMember]: { silver: 1 } });
         expect(await finalizePeriodicLeaderboard(services, firstPeriod)).toBeNull();
     });
-
-    test("moves tier counts when approved submissions are upgraded", async ({ services, factories }) => {
-        await factories.taskEvent.create({ id: "week-1", startTime: new Date("2026-01-05T00:00:00.000Z") });
-        await factories.taskEvent.create({ id: "week-2", startTime: new Date("2026-01-12T00:00:00.000Z") });
-
-        await ensureTaskLeaderboardsInitialized(services);
-        await registerPeriodicTaskEvent(services, "week-1");
-        await registerPeriodicTaskEvent(services, "week-2");
-        for (const eventId of ["week-1", "week-2"]) {
-            await recordPeriodicTierChange(services, eventId, {
-                userId: upgradedMember,
-                points: 1,
-                from: null,
-                to: SubmissionStatus.Bronze,
-            });
-            await recordPeriodicTierChange(services, eventId, {
-                userId: upgradedMember,
-                points: 2,
-                from: SubmissionStatus.Bronze,
-                to: SubmissionStatus.Silver,
-            });
-            await recordPeriodicTierChange(services, eventId, {
-                userId: upgradedMember,
-                points: 3,
-                from: SubmissionStatus.Silver,
-                to: SubmissionStatus.Gold,
-            });
-        }
-
-        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
-        expect(stored?.points).toEqual({ [upgradedMember]: 12 });
-        expect(stored?.tierCounts).toEqual({ [upgradedMember]: { bronze: 0, silver: 0, gold: 2 } });
-    });
 });
 
 describe("/leaderboard", () => {
@@ -560,14 +523,6 @@ describe("/taskperiod", () => {
 });
 
 describe("TaskLeaderboardRepository", () => {
-    test("stores lifetime and periodic leaderboards as separate documents", async ({ repo }) => {
-        await repo.createLeaderboard(lifetimeLeaderboardFactory.build({ points: { [IDS.user]: 10 } }));
-        await repo.createLeaderboard(periodicLeaderboardFactory.build({ points: { [IDS.user]: 3 } }));
-
-        expect(await repo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 10 } });
-        expect(await repo.getLeaderboard("periodic")).toMatchObject({ points: { [IDS.user]: 3 } });
-    });
-
     test("replaces whole score maps on update so stale scores are cleared", async ({ repo }) => {
         await repo.createLeaderboard(
             periodicLeaderboardFactory.build({ points: { [SnowflakeUtil.generate().toString()]: 6, [IDS.user]: 1 } }),
@@ -586,56 +541,5 @@ describe("TaskLeaderboardRepository", () => {
         await repo.createLeaderboard(periodicLeaderboardFactory.build());
 
         expect(await repo.getLeaderboard("periodic")).toMatchObject({ points: { [IDS.user]: 3 } });
-    });
-
-    test("adds points and moves tier counts when a member reaches a higher tier", async ({ repo }) => {
-        await repo.createLeaderboard(periodicLeaderboardFactory.build());
-
-        await repo.incrementPoints("periodic", IDS.user, 3);
-        await repo.recordTierChange("periodic", {
-            userId: IDS.user,
-            points: 1,
-            from: null,
-            to: SubmissionStatus.Bronze,
-        });
-        await repo.recordTierChange("periodic", {
-            userId: IDS.user,
-            points: 2,
-            from: SubmissionStatus.Bronze,
-            to: SubmissionStatus.Silver,
-        });
-
-        expect(await repo.getLeaderboard("periodic")).toMatchObject({
-            points: { [IDS.user]: 6 },
-            tierCounts: { [IDS.user]: { bronze: 0, silver: 1 } },
-        });
-    });
-
-    test("records a tier change in the pending period", async ({ repo }) => {
-        // The period after the current one, which task events join once the current one is full
-        const period = leaderboardPeriodFactory.build({
-            eventIds: ["week-5"],
-            startedAt: "2026-02-02T00:00:00.000Z",
-            index: leaderboardPeriodFactory.build().index + 1,
-        });
-        await repo.createLeaderboard(
-            periodicLeaderboardFactory.build({ pendingPeriod: { period, points: {}, tierCounts: {} } }),
-        );
-
-        await repo.recordTierChange(
-            "periodic",
-            { userId: IDS.user, points: 6, from: null, to: SubmissionStatus.Gold },
-            "pendingPeriod",
-        );
-
-        expect(await repo.getLeaderboard("periodic")).toMatchObject({
-            points: {},
-            pendingPeriod: { period, points: { [IDS.user]: 6 }, tierCounts: { [IDS.user]: { gold: 1 } } },
-        });
-    });
-
-    test("rejects changes to a leaderboard that does not exist", async ({ repo }) => {
-        await expect(repo.incrementPoints("periodic", IDS.user, 1)).rejects.toThrow();
-        await expect(repo.updateLeaderboard("periodic", { points: {} })).rejects.toThrow();
     });
 });

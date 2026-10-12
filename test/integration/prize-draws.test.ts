@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, vi, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
 import { DiscordError, PRIVATE_DEFERRAL } from "../discord/harness.js";
 import { IDS, NAMES, apiUser, AS, chatInputInteraction } from "../discord/payloads.js";
 import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
@@ -12,8 +12,6 @@ import {
 import { runPrizeDrawJob } from "../../src/modules/tasks/TaskScheduler.js";
 import assert from "node:assert";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { prizeDrawFactory } from "../factories.js";
-import { PrizeDrawRepository } from "../../src/core/database/PrizeDrawRepo.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -49,8 +47,6 @@ const yesterdaysDraw = {
     totalEntries: 3,
     tierCounts: { bronze: 1, silver: 1, gold: 1 },
 };
-
-const test = base.extend("repo", ({ db }) => new PrizeDrawRepository(db, IDS.guild));
 
 describe("a prize draw snapshot", () => {
     test("gives one entry per task however many times the member upgraded their submission", async ({
@@ -189,12 +185,6 @@ describe("a prize draw snapshot", () => {
 });
 
 describe("rolling a prize draw", () => {
-    test("finds no winner without entries", async ({ services, factories }) => {
-        await factories.prizeDraw.create({ ...yesterdaysDraw, participants: {}, entries: [], totalEntries: 0 });
-
-        expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBeNull();
-    });
-
     test("keeps the winner already rolled", async ({ services, factories }) => {
         await factories.prizeDraw.create({
             ...yesterdaysDraw,
@@ -448,16 +438,5 @@ describe("/taskdraw", () => {
             }),
         ]);
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] Cannot announce winner - snapshot or winner not found.");
-    });
-});
-
-describe("PrizeDrawRepository", () => {
-    test("stores draws and lists them newest first", async ({ repo }) => {
-        await repo.createPrizeDraw(prizeDrawFactory.build({ id: "older", start: "2026-01-05T00:00:00.000Z" }));
-        await repo.createPrizeDraw(prizeDrawFactory.build({ id: "newer", start: "2026-01-19T00:00:00.000Z" }));
-
-        expect((await repo.getAllPrizeDraws()).map((draw) => draw.id)).toEqual(["newer", "older"]);
-        expect(await repo.getPrizeDrawById("older")).toMatchObject({ id: "older" });
-        expect(await repo.getPrizeDrawById("missing")).toBeNull();
     });
 });

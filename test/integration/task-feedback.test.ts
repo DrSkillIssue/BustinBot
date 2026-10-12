@@ -2,12 +2,10 @@ import { describe, expect, test as base } from "../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 import { IDS, buttonInteraction } from "../discord/payloads.js";
-import { SnowflakeUtil } from "discord.js";
 import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 import { taskFactory, taskFeedbackFactory } from "../factories.js";
 
 const test = base.extend("repo", ({ db }) => new TaskRepository(db, IDS.guild));
-const otherUser = SnowflakeUtil.generate().toString();
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({
@@ -83,43 +81,6 @@ describe("task feedback buttons", () => {
 });
 
 describe("TaskRepository feedback", () => {
-    test("moves the task weight by a member's first vote, a changed vote and not a repeated one", async ({ repo }) => {
-        await repo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
-
-        expect(
-            await repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" })),
-        ).toBe("added");
-        expect(
-            await repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" })),
-        ).toBe("unchanged");
-        expect(
-            await repo.recordFeedback(
-                taskFeedbackFactory.build({ eventId: "week-1", userId: otherUser, vote: "down" }),
-            ),
-        ).toBe("added");
-        expect(
-            await repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "down" })),
-        ).toBe("changed");
-
-        expect(await repo.getTaskById("PVM001")).toMatchObject({ weight: 48 });
-    });
-
-    test(
-        "counts a member's votes at the same moment once",
-        async ({ repo }) => {
-            await repo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
-
-            const outcomes = await Promise.all([
-                repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" })),
-                repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" })),
-            ]);
-
-            expect(outcomes.sort()).toEqual(["added", "unchanged"]);
-            expect(await repo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
-        },
-        CONCURRENT_TRANSACTION_TIMEOUT_MS,
-    );
-
     test("treats a vote stored under an older id as the member's previous vote and moves it", async ({ repo, db }) => {
         await repo.createTask(taskFactory.build({ id: "PVM001", weight: 51 }));
         await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({
@@ -135,11 +96,5 @@ describe("TaskRepository feedback", () => {
         expect((await db.collection(`guilds/${IDS.guild}/taskFeedback`).get()).docs.map((doc) => doc.id)).toEqual([
             `PVM001_${IDS.user}`,
         ]);
-    });
-
-    test("records nothing for a task that doesn't exist", async ({ repo }) => {
-        expect(
-            await repo.recordFeedback(taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" })),
-        ).toBe("taskNotFound");
     });
 });

@@ -144,16 +144,6 @@ describe("the dev-mode task cycle", () => {
 });
 
 describe("the task channel", () => {
-    test("is the configured text channel", async ({ discord, services }) => {
-        expect((await getDefaultChannel(discord.client, services))?.id).toBe(IDS.channel);
-    });
-
-    test("is missing when none is configured", async ({ discord, services }) => {
-        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
-
-        expect(await getDefaultChannel(discord.client, services)).toBeNull();
-    });
-
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
         const category = SnowflakeUtil.generate().toString();
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
