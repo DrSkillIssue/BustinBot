@@ -3,16 +3,8 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { DiscordError } from "../../../../discord/harness.js";
 import { milestoneRoleFactory } from "../../../../factories.js";
-import {
-    IDS,
-    apiGuildMember,
-    apiRole,
-    apiUser,
-    chatInputInteraction,
-    apiMember,
-} from "../../../../discord/payloads.js";
+import { AS, IDS, apiGuildMember, apiRole, apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 const member = SnowflakeUtil.generate().toString();
 const NEUTRAL = 0x95a5a6;
 
@@ -23,7 +15,7 @@ describe("/taskroles list", () => {
         const interaction = await slash(
             "taskroles",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "list" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -73,7 +65,7 @@ describe("/taskroles add", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -100,7 +92,7 @@ describe("/taskroles add", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -126,7 +118,7 @@ describe("/taskroles add", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -151,7 +143,7 @@ describe("/taskroles add", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -187,7 +179,7 @@ describe("/taskroles edit", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -219,7 +211,7 @@ describe("/taskroles edit", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -260,7 +252,7 @@ describe("/taskroles delete", () => {
                     options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` }],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -287,7 +279,7 @@ describe("/taskroles delete", () => {
                     options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` }],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -319,7 +311,7 @@ describe("/taskroles toggle", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -359,7 +351,7 @@ describe("/taskroles toggle", () => {
                     ],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -394,7 +386,7 @@ describe("/taskroles grant", () => {
                         ],
                     },
                 ],
-                taskAdmin,
+                AS.taskAdmin,
                 { users: { [member]: target }, roles: { [gold.id]: gold } },
             ),
         );
@@ -430,7 +422,7 @@ describe("/taskroles init", () => {
         const interaction = await slash(
             "taskroles",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "init" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -466,7 +458,7 @@ describe("/taskroles with an option it doesn't know", () => {
         const interaction = await slash(
             "taskroles",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "rename" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([

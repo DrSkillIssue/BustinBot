@@ -1,9 +1,8 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
+import { AS } from "../../../../discord/payloads.js";
 import { tmdbMovie, tmdbSearch } from "../../../../tmdb.js";
 
-const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const arrival = { id: 329865, title: "Arrival", release_date: "2016-11-10", overview: "Linguists meet visitors." };
 
 describe("/testmovie", () => {
@@ -14,7 +13,7 @@ describe("/testmovie", () => {
         const command = await slash(
             "testmovie",
             [{ type: ApplicationCommandOptionType.String, name: "title", value: "arrival" }],
-            botAdmin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -43,7 +42,7 @@ describe("/testmovie", () => {
         const command = await slash(
             "testmovie",
             [{ type: ApplicationCommandOptionType.String, name: "title", value: "zzzz" }],
-            botAdmin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([

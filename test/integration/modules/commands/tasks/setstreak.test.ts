@@ -1,9 +1,7 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember, apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
-
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
+import { AS, apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 
 // /setstreak for a member, as Discord delivers it with the user resolved
 function setStreak(user: ReturnType<typeof apiUser>, streak: number) {
@@ -13,7 +11,7 @@ function setStreak(user: ReturnType<typeof apiUser>, streak: number) {
             { type: ApplicationCommandOptionType.User, name: "user", value: user.id },
             { type: ApplicationCommandOptionType.Integer, name: "streak", value: streak },
         ],
-        taskAdmin,
+        AS.taskAdmin,
         { users: { [user.id]: user } },
     );
 }

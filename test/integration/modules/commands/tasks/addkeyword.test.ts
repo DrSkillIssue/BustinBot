@@ -1,15 +1,13 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
-
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
+import { AS } from "../../../../discord/payloads.js";
 
 describe("/addkeyword", () => {
     test("adds the keyword to the pool under its normalised id", async ({ discord, slash, services }) => {
         const command = await slash(
             "addkeyword",
             [{ type: ApplicationCommandOptionType.String, name: "word", value: "Bustin Bot!" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -27,7 +25,7 @@ describe("/addkeyword", () => {
         const command = await slash(
             "addkeyword",
             [{ type: ApplicationCommandOptionType.String, name: "word", value: "bustin" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([

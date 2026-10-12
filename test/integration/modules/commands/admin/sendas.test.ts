@@ -7,15 +7,13 @@ import {
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../../discord/harness.js";
-import { IDS, apiMember, chatInputInteraction } from "../../../../discord/payloads.js";
-
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+import { AS, IDS, apiMember, chatInputInteraction } from "../../../../discord/payloads.js";
 
 // /sendas aimed at a channel, as Discord delivers it with the channel resolved
 function sendas(
     channel: { id: string; type: ChannelType.GuildText | ChannelType.GuildCategory; name: string },
     text: string,
-    overrides = admin,
+    overrides = AS.botAdmin,
 ) {
     return chatInputInteraction(
         "sendas",

@@ -1,8 +1,6 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, storePollableTasks } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
-
-const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+import { AS, IDS } from "../../../../discord/payloads.js";
 
 describe("/suppress", () => {
     test("stops the bot pinging roles for the given minutes", async ({ discord, slash, factories }) => {
@@ -13,9 +11,9 @@ describe("/suppress", () => {
         const command = await slash(
             "suppress",
             [{ type: ApplicationCommandOptionType.Integer, name: "minutes", value: 30 }],
-            botAdmin,
+            AS.botAdmin,
         );
-        await slash("taskpoll", [], botAdmin);
+        await slash("taskpoll", [], AS.botAdmin);
 
         const after = Math.floor(Date.now() / 1000);
         const [reply] = discord.originalEdits(command);

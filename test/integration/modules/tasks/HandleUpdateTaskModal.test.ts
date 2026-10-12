@@ -3,7 +3,7 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../discord/harness.js";
-import { IDS, apiMessage, modalSubmitInteraction, apiMember } from "../../../discord/payloads.js";
+import { AS, IDS, apiMessage, modalSubmitInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../../src/models/Task.js";
@@ -12,7 +12,6 @@ const eventMessage = SnowflakeUtil.generate().toString();
 const pollMessage = SnowflakeUtil.generate().toString();
 const completer = SnowflakeUtil.generate().toString();
 const voter = SnowflakeUtil.generate().toString();
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
 async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
@@ -163,7 +162,7 @@ describe("/updatetask", () => {
         const interaction = await slash(
             "updatetask",
             [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.callbacks(interaction)).toHaveLength(1);
@@ -185,7 +184,7 @@ describe("/updatetask", () => {
         const interaction = await slash(
             "updatetask",
             [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.callbacks(interaction)).toEqual([

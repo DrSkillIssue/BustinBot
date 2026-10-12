@@ -1,8 +1,7 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
-import { IDS, apiAttachment, chatInputInteraction, apiMember } from "../../../../discord/payloads.js";
+import { AS, apiAttachment, chatInputInteraction } from "../../../../discord/payloads.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const CSV = [
     "ID,Task Name,Category,Type,Skill,Bronze Amount,Silver Amount,Gold Amount,Weight,Short Name,Wilderness Required?",
     "PVM001,Kill {amount} Zulrah,PvM,KC,,10,25,50,,Zulrah,TRUE",
@@ -15,7 +14,7 @@ function importWith(filename: string) {
     const interaction = chatInputInteraction(
         "importtasks",
         [{ type: ApplicationCommandOptionType.Attachment, name: "file", value: attachment.id }],
-        admin,
+        AS.botAdmin,
         { attachments: { [attachment.id]: attachment } },
     );
     return { interaction, attachment };

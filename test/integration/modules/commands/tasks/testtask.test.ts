@@ -1,13 +1,11 @@
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
-
-const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
+import { AS, IDS } from "../../../../discord/payloads.js";
 
 describe("/testtask", () => {
     test("posts a week-long test task event in the channel and stores it", async ({ discord, slash, services }) => {
         discord.acceptMessages(IDS.channel);
 
-        const command = await slash("testtask", [], botAdmin);
+        const command = await slash("testtask", [], AS.botAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Test task event posted!" }),

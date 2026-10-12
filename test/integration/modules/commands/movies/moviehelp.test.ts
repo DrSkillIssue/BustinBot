@@ -1,5 +1,5 @@
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, chatInputInteraction, apiMember } from "../../../../discord/payloads.js";
+import { AS, chatInputInteraction } from "../../../../discord/payloads.js";
 
 function listedCommands(description: string | undefined): string[] {
     return [...(description ?? "").matchAll(/\*\*(\/\w+)\*\*/g)].map(([, name]) => name!);
@@ -11,7 +11,7 @@ describe("/moviehelp", () => {
         slash,
     }) => {
         const member = await slash("moviehelp");
-        const admin = await slash("moviehelp", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        const admin = await slash("moviehelp", [], AS.movieAdmin);
 
         const commandsFor = (interaction: typeof member) =>
             listedCommands(discord.originalEdits(interaction)[0]?.embeds?.[0]?.fields?.at(-1)?.value);
@@ -33,12 +33,7 @@ describe("/moviehelp", () => {
     }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
 
-        const command = await interact(
-            chatInputInteraction("moviehelp", [], {
-                ...uncachedGuild,
-                member: apiMember({ roles: [IDS.roles.movieAdmin] }),
-            }),
-        );
+        const command = await interact(chatInputInteraction("moviehelp", [], { ...uncachedGuild, ...AS.movieAdmin }));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields?.at(-1)?.name).toBe(
             "Available Commands (User + Admin)",

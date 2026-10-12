@@ -5,7 +5,7 @@ import { describe, expect, test, vi, type StoringFactories } from "../../../fixt
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
-import { IDS, NAMES, apiGuildMember, apiMember, apiRole, apiUser } from "../../../discord/payloads.js";
+import { AS, IDS, NAMES, apiGuildMember, apiRole, apiUser } from "../../../discord/payloads.js";
 import { leaderboardPeriodFactory, taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../../src/models/TaskLeaderboard.js";
@@ -163,9 +163,11 @@ describe("the weekly leaderboard update", () => {
 
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.channel } });
         discord.acceptMessages(IDS.channel);
-        const command = await slash("taskboard", [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }], {
-            member: apiMember({ roles: [IDS.roles.admin] }),
-        });
+        const command = await slash(
+            "taskboard",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }],
+            AS.botAdmin,
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Final leaderboard posted." }),
@@ -183,9 +185,11 @@ describe("/taskboard", () => {
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
-        const command = await slash("taskboard", [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }], {
-            member: apiMember({ roles: [IDS.roles.admin] }),
-        });
+        const command = await slash(
+            "taskboard",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }],
+            AS.botAdmin,
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({

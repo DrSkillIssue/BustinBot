@@ -3,10 +3,9 @@ import path from "node:path";
 import { ComponentType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../../discord/harness.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
+import { AS, IDS } from "../../../../discord/payloads.js";
 import { packageVersion } from "../../../../../src/utils/version.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const announcements = JSON.parse(
     readFileSync(path.join(import.meta.dirname, "../../../../../data/announcements.json"), "utf8"),
 );
@@ -18,7 +17,7 @@ describe("/announce", () => {
     }) => {
         discord.acceptMessages(IDS.channel);
 
-        const interaction = await slash("announce", [], admin);
+        const interaction = await slash("announce", [], AS.botAdmin);
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
@@ -57,7 +56,7 @@ describe("/announce", () => {
     test("tells the admin when no announcement channel is configured", async ({ discord, services, slash }) => {
         await services.guilds.update(IDS.guild, { channels: { announcements: "" } });
 
-        const interaction = await slash("announce", [], admin);
+        const interaction = await slash("announce", [], AS.botAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Announcement channel not configured. Please run `/setup` first." }),
@@ -68,7 +67,7 @@ describe("/announce", () => {
         await services.guilds.update(IDS.guild, { channels: { announcements: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
-        const interaction = await slash("announce", [], admin);
+        const interaction = await slash("announce", [], AS.botAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({

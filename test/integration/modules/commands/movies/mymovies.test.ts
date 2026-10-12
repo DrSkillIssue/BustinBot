@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
+import { AS } from "../../../../discord/payloads.js";
 
 describe("/mymovies", () => {
     test("lists the member's movies still in the list, counted against the cap", async ({
@@ -39,7 +39,7 @@ describe("/mymovies", () => {
     }) => {
         for (const id of ["movie-1", "movie-2", "movie-3", "movie-4"]) await factories.movie.create({ id });
 
-        const command = await slash("mymovies", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        const command = await slash("mymovies", [], AS.movieAdmin);
 
         const [reply] = discord.originalEdits(command);
         expect(reply?.content).toBe("You have added **4** movies.");

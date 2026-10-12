@@ -9,6 +9,7 @@ import { describe, expect, test } from "../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../discord/harness.js";
 import { routeInteraction } from "../../../../src/core/events/routeInteraction.js";
 import {
+    AS,
     IDS,
     NAMES,
     buttonInteraction,
@@ -16,7 +17,6 @@ import {
     modalSubmitInteraction,
     roleSelectInteraction,
     stringSelectInteraction,
-    apiMember,
 } from "../../../discord/payloads.js";
 import { guildFactory } from "../../../factories.js";
 
@@ -25,7 +25,6 @@ const CHANNELS = {
     log: SnowflakeUtil.generate().toString(),
     archive: SnowflakeUtil.generate().toString(),
 };
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const MOVIE_ADMIN_ROLE = SnowflakeUtil.generate().toString();
 const MOVIE_USER_ROLE = SnowflakeUtil.generate().toString();
 const MOVIE_CHANNEL = SnowflakeUtil.generate().toString();
@@ -52,7 +51,7 @@ describe("the setup commands", () => {
         discord,
         slash,
     }) => {
-        const interaction = await slash("setup", [], admin);
+        const interaction = await slash("setup", [], AS.botAdmin);
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
@@ -66,7 +65,7 @@ describe("the setup commands", () => {
         discord,
         slash,
     }) => {
-        const interaction = await slash("moviesetup", [], admin);
+        const interaction = await slash("moviesetup", [], AS.botAdmin);
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
@@ -81,7 +80,7 @@ describe("the setup commands", () => {
         discord,
         slash,
     }) => {
-        const interaction = await slash("tasksetup", [], admin);
+        const interaction = await slash("tasksetup", [], AS.botAdmin);
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({

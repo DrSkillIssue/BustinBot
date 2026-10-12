@@ -2,6 +2,7 @@ import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, type StoringFactories } from "../../../../fixtures.js";
 import {
+    AS,
     IDS,
     apiMember,
     apiMessage,
@@ -105,7 +106,7 @@ describe("/addmovie", () => {
         const admin = await slash(
             "addmovie",
             [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
-            { member: apiMember({ roles: [IDS.roles.movieAdmin] }) },
+            AS.movieAdmin,
         );
         const owner = await slash(
             "addmovie",
@@ -138,10 +139,7 @@ describe("/addmovie", () => {
             chatInputInteraction(
                 "addmovie",
                 [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
-                {
-                    ...uncachedGuild,
-                    member: apiMember({ roles: [IDS.roles.movieAdmin] }),
-                },
+                { ...uncachedGuild, ...AS.movieAdmin },
             ),
         );
 

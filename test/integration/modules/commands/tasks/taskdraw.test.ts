@@ -2,10 +2,9 @@ import { DateTime } from "luxon";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../../discord/harness.js";
-import { IDS, apiMember, apiUser } from "../../../../discord/payloads.js";
+import { AS, IDS, apiUser } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const roll = { type: ApplicationCommandOptionType.String, name: "action", value: "roll" } as const;
 const snapshotId = { type: ApplicationCommandOptionType.String, name: "snapshot_id" } as const;
 
@@ -17,7 +16,7 @@ describe("/taskdraw", () => {
         const interaction = await slash(
             "taskdraw",
             [{ type: ApplicationCommandOptionType.String, name: "action", value: "roll" }],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
@@ -42,7 +41,7 @@ describe("/taskdraw", () => {
         const interaction = await slash(
             "taskdraw",
             [{ type: ApplicationCommandOptionType.String, name: "action", value: "snapshot" }],
-            admin,
+            AS.botAdmin,
         );
 
         const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
@@ -59,7 +58,7 @@ describe("/taskdraw", () => {
             totalEntries: 1,
         });
 
-        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], admin);
+        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], AS.botAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `Winner rolled for **${draw.id}**: <@${IDS.user}>` }),
@@ -69,7 +68,7 @@ describe("/taskdraw", () => {
     test("says so when a snapshot has no entries to roll", async ({ discord, slash, factories }) => {
         const draw = await factories.prizeDraw.create();
 
-        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], admin);
+        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], AS.botAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `No eligible entries found for **${draw.id}**.` }),
@@ -87,7 +86,7 @@ describe("/taskdraw", () => {
                 { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
                 { ...snapshotId, value: draw.id },
             ],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -106,7 +105,7 @@ describe("/taskdraw", () => {
                 { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
                 { ...snapshotId, value: draw.id },
             ],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([

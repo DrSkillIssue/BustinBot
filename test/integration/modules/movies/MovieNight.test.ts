@@ -8,6 +8,7 @@ import type { ServiceContainer } from "../../../../src/core/services/ServiceCont
 import type { DiscordHarness } from "../../../discord/harness.js";
 import { createServiceContainer } from "../../../../src/core/services/ServiceFactory.js";
 import {
+    AS,
     IDS,
     apiGuild,
     apiMessage,
@@ -18,7 +19,6 @@ import {
     apiVoiceState,
     modalSubmitInteraction,
     stringSelectInteraction,
-    apiMember,
 } from "../../../discord/payloads.js";
 import { movieFactory, moviePollFactory } from "../../../factories.js";
 import type { MovieEvent } from "../../../../src/models/MovieEvent.js";
@@ -59,7 +59,7 @@ describe("scheduling a movie night", () => {
         await services.guilds.update(IDS.guild, { timezone });
         const todayBefore = DateTime.now().setZone(timezone).startOf("day");
 
-        const command = await slash("movienight", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        const command = await slash("movienight", [], AS.movieAdmin);
 
         const todayAfter = DateTime.now().setZone(timezone).startOf("day");
         const menuFrom = (today: DateTime) =>
@@ -379,7 +379,7 @@ describe("the movie night sweep", () => {
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+        await slash("cancelmovie", [], AS.movieAdmin);
         await sweepMovieNight(discord.client, services, start.minus({ minutes: 30 }).toJSDate());
         await sweepMovieNight(discord.client, services, start.toJSDate());
 

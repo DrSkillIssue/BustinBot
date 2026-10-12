@@ -1,8 +1,6 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
-
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
+import { AS, IDS } from "../../../../discord/payloads.js";
 
 describe("/taskperiod", () => {
     test("set saves the number of task events per period", async ({ discord, slash, services }) => {
@@ -15,7 +13,7 @@ describe("/taskperiod", () => {
                     options: [{ type: ApplicationCommandOptionType.Integer, name: "events", value: 8 }],
                 },
             ],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -42,7 +40,7 @@ describe("/taskperiod", () => {
         const command = await slash(
             "taskperiod",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "start" }],
-            taskAdmin,
+            AS.taskAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([

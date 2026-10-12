@@ -2,10 +2,9 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../../fixtures.js";
 import { DiscordError } from "../../../../discord/harness.js";
-import { IDS, apiMessage, apiUser, apiMember } from "../../../../discord/payloads.js";
+import { AS, IDS, apiMessage, apiUser } from "../../../../discord/payloads.js";
 import { movieFactory } from "../../../../factories.js";
 
-const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const ANNOUNCEMENT = SnowflakeUtil.generate().toString();
 
@@ -34,7 +33,7 @@ describe("/endmovie", () => {
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
-        const command = await slash("endmovie", [], movieAdmin);
+        const command = await slash("endmovie", [], AS.movieAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "The movie night for **Arrival** has ended and been archived." }),
@@ -46,7 +45,7 @@ describe("/endmovie", () => {
     });
 
     test("says so when no movie night is on", async ({ discord, slash }) => {
-        const command = await slash("endmovie", [], movieAdmin);
+        const command = await slash("endmovie", [], AS.movieAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No active movie event found to end." }),
@@ -75,7 +74,7 @@ describe("/closemoviepoll", () => {
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
-        const command = await slash("closemoviepoll", [], movieAdmin);
+        const command = await slash("closemoviepoll", [], AS.movieAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -88,7 +87,7 @@ describe("/closemoviepoll", () => {
     });
 
     test("says so when no poll is open", async ({ discord, slash }) => {
-        const command = await slash("closemoviepoll", [], movieAdmin);
+        const command = await slash("closemoviepoll", [], AS.movieAdmin);
 
         expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "No active poll found." })]);
     });
@@ -109,7 +108,7 @@ describe("/cancelmovie", () => {
         for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
-        const command = await slash("cancelmovie", [], movieAdmin);
+        const command = await slash("cancelmovie", [], AS.movieAdmin);
 
         expect(discord.originalEdits(command)[0]?.content).toBe(
             "Movie night cancelled successfully.\n\nActions taken:\n" +
@@ -144,7 +143,7 @@ describe("/cancelmovie", () => {
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], movieAdmin);
+        await slash("cancelmovie", [], AS.movieAdmin);
 
         expect(
             discord

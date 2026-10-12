@@ -269,6 +269,13 @@ function interactionChannel() {
 }
 
 // `resolved` carries the users, members and roles that user and role options refer to
+// Interaction fields that make the harness user a member holding one of the bot's admin roles
+export const AS = {
+    botAdmin: { member: apiMember({ roles: [IDS.roles.admin] }) },
+    taskAdmin: { member: apiMember({ roles: [IDS.roles.taskAdmin] }) },
+    movieAdmin: { member: apiMember({ roles: [IDS.roles.movieAdmin] }) },
+};
+
 export function chatInputInteraction(
     name: string,
     options: APIApplicationCommandInteractionDataOption[] = [],

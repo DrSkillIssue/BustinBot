@@ -1,14 +1,12 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
-import { IDS, apiMember } from "../../../discord/payloads.js";
+import { AS, IDS } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { TaskCategory, type Task } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
 import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
-
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) =>
@@ -65,7 +63,7 @@ describe("/taskstart", () => {
         });
         discord.acceptMessages(IDS.channel);
 
-        const interaction = await slash("taskstart", [], admin);
+        const interaction = await slash("taskstart", [], AS.botAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Task event started successfully." }),

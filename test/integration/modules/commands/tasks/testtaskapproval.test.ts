@@ -1,9 +1,7 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
+import { AS, IDS } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
-
-const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 describe("/testtaskapproval", () => {
     test("posts a test submission for the latest task event for review, with the chosen tier as a hint", async ({
@@ -18,7 +16,7 @@ describe("/testtaskapproval", () => {
         const command = await slash(
             "testtaskapproval",
             [{ type: ApplicationCommandOptionType.String, name: "tier", value: SubmissionStatus.Silver }],
-            botAdmin,
+            AS.botAdmin,
         );
 
         const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
@@ -47,7 +45,7 @@ describe("/testtaskapproval", () => {
         const command = await slash(
             "testtaskapproval",
             [{ type: ApplicationCommandOptionType.String, name: "taskid", value: "PVM001" }],
-            botAdmin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -59,7 +57,7 @@ describe("/testtaskapproval", () => {
     });
 
     test("says so when there are no task events", async ({ discord, slash }) => {
-        const command = await slash("testtaskapproval", [], botAdmin);
+        const command = await slash("testtaskapproval", [], AS.botAdmin);
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "❌ No task events found. Run `/testtask` first to create one." }),

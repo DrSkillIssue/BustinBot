@@ -10,6 +10,7 @@ import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
 import { buttonsIn } from "../../../discord/harness.js";
 import {
+    AS,
     IDS,
     apiMember,
     apiMessage,
@@ -24,7 +25,6 @@ import { addMovieWithStats } from "../../../../src/modules/movies/MovieService.j
 
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const VOICE = SnowflakeUtil.generate().toString();
-const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
@@ -57,11 +57,11 @@ describe("a movie poll", () => {
                 "movie_poll_manual_select",
                 ["movie-1", "movie-2", "movie-3"],
                 pickMessage,
-                movieAdmin,
+                AS.movieAdmin,
             ),
         );
 
-        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
+        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, AS.movieAdmin));
 
         expect(discord.originalEdits(click)).toEqual([
             expect.objectContaining({ content: "Poll confirmed and posted!" }),
@@ -82,10 +82,10 @@ describe("a movie poll", () => {
     test("needs at least two unwatched movies", async ({ discord, interact, services, factories }) => {
         await storeMovies(factories, [{ title: "Inception" }, { title: "Heat", watched: true }]);
         await interact(
-            stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, movieAdmin),
+            stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, AS.movieAdmin),
         );
 
-        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
+        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, AS.movieAdmin));
 
         expect(discord.callbacks(click)).toEqual([
             {
@@ -217,12 +217,12 @@ describe("/pickmovie", () => {
         factories,
     }) => {
         await storeMovies(factories, [{ title: "Inception" }]);
-        const command = await slash("pickmovie", [], movieAdmin);
+        const command = await slash("pickmovie", [], AS.movieAdmin);
         const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
 
-        const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, movieAdmin));
-        const random = await interact(buttonInteraction("movie_pick_random", pickMessage, movieAdmin));
-        const pollRandom = await interact(buttonInteraction("movie_poll_random", pickMessage, movieAdmin));
+        const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, AS.movieAdmin));
+        const random = await interact(buttonInteraction("movie_pick_random", pickMessage, AS.movieAdmin));
+        const pollRandom = await interact(buttonInteraction("movie_poll_random", pickMessage, AS.movieAdmin));
 
         expect(offered).toEqual(["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"]);
         expect(discord.modal(choose)?.custom_id).toBe("movie_pick_choose_modal");
@@ -244,11 +244,11 @@ describe("/pickmovie", () => {
         await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
         discord.acceptMessages(IDS.channel);
 
-        const open = await interact(buttonInteraction("movie_poll_manual", pickMessage, movieAdmin));
+        const open = await interact(buttonInteraction("movie_poll_manual", pickMessage, AS.movieAdmin));
         const choose = await interact(
-            stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, movieAdmin),
+            stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, AS.movieAdmin),
         );
-        const confirm = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
+        const confirm = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, AS.movieAdmin));
 
         const menu = JSON.stringify(discord.originalEdits(open)[0]?.components);
         expect(menu).toContain('"label":"1. Inception"');
@@ -280,7 +280,7 @@ describe("/pickmovie", () => {
                 "movie_poll_manual_select",
                 ["movie-1"],
                 apiMessage({ flags: MessageFlags.Ephemeral }),
-                movieAdmin,
+                AS.movieAdmin,
             ),
         );
 

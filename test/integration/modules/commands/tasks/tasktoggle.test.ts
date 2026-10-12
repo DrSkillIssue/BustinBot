@@ -1,17 +1,15 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiMember } from "../../../../discord/payloads.js";
+import { AS, IDS } from "../../../../discord/payloads.js";
 import { guildFactory } from "../../../../factories.js";
 import { initTaskScheduler } from "../../../../../src/modules/tasks/TaskScheduler.js";
-
-const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 describe("/tasktoggle schedule", () => {
     test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, services, scheduledJobs }) => {
         const interaction = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -29,12 +27,12 @@ describe("/tasktoggle schedule", () => {
         scheduledJobs,
     }) => {
         await initTaskScheduler(discord.client, otherGuild);
-        await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
+        await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], AS.botAdmin);
 
         const interaction = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -52,7 +50,7 @@ describe("/tasktoggle schedule", () => {
         const interaction = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-            admin,
+            AS.botAdmin,
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -67,7 +65,7 @@ describe("/tasktoggle leaderboard", () => {
         const off = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
-            admin,
+            AS.botAdmin,
         );
         expect(discord.originalEdits(off)).toEqual([
             expect.objectContaining({ content: "🧊 Periodic leaderboard automation **disabled** (read-only mode)." }),
@@ -77,7 +75,7 @@ describe("/tasktoggle leaderboard", () => {
         const on = await slash(
             "tasktoggle",
             [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
-            admin,
+            AS.botAdmin,
         );
         expect(discord.originalEdits(on)).toEqual([
             expect.objectContaining({ content: "🏆 Periodic leaderboard automation **enabled**." }),
