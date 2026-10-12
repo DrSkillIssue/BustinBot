@@ -9,6 +9,7 @@ import {
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
 import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonPage } from "./TaskList.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -18,6 +19,13 @@ export async function handleTaskInteraction(
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
             await handleTaskPollVoteInteraction(interaction, services);
+            return;
+        }
+
+        if (interaction.customId.startsWith(TASK_LIST_BUTTON)) {
+            const { category, page } = taskListButtonPage(interaction.customId);
+            await interaction.deferUpdate();
+            await interaction.editReply(await buildTaskListPage(services, category, page));
             return;
         }
 
