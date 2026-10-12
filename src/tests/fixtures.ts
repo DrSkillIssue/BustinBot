@@ -47,6 +47,9 @@ function storingFactories(db: Firestore, services: ServiceContainer) {
 
 export type StoringFactories = ReturnType<typeof storingFactories>;
 
+// Delivers an interaction and routes it as the running bot does (the `interact` fixture)
+export type Interact = (payload: APIInteraction) => Promise<Interaction>;
+
 // The one test API for the suite. Fixtures are created only when a test asks for them:
 // - http: the test's own undici MockAgent, answering only the requests the test declares; one the test expected but
 //   the bot never made fails the test
@@ -110,8 +113,8 @@ export const test = base
         return { guild_id: IDS.uncachedGuild };
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
-    .extend("interact", ({ discord, services, commands }) =>
-        async (payload: APIInteraction): Promise<Interaction> => {
+    .extend("interact", ({ discord, services, commands }): Interact =>
+        async (payload) => {
             const interaction = await discord.dispatch(payload);
             await routeInteraction(interaction, discord.client, commands, services);
             return interaction;

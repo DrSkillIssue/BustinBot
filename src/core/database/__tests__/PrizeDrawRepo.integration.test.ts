@@ -18,37 +18,40 @@ describe('PrizeDrawRepository', () => {
     });
 
     test('records participants and recomputes the entry total', async ({ repo }) => {
-        await repo.createPrizeDraw(prizeDrawFactory.build());
+        const draw = prizeDrawFactory.build();
+        await repo.createPrizeDraw(draw);
 
-        await repo.updateParticipants('2026-01-05_to_2026-01-18', { [IDS.user]: 2, [otherUser]: 1 });
+        await repo.updateParticipants(draw.id, { [IDS.user]: 2, [otherUser]: 1 });
 
-        expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).toMatchObject({
+        expect(await repo.getPrizeDrawById(draw.id)).toMatchObject({
             participants: { [IDS.user]: 2, [otherUser]: 1 },
             totalEntries: 3,
         });
     });
 
     test('adds each user as an entry at most once', async ({ repo }) => {
-        await repo.createPrizeDraw(prizeDrawFactory.build());
+        const draw = prizeDrawFactory.build();
+        await repo.createPrizeDraw(draw);
 
-        await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
-        await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
-        await repo.addEntry('2026-01-05_to_2026-01-18', otherUser);
+        await repo.addEntry(draw.id, IDS.user);
+        await repo.addEntry(draw.id, IDS.user);
+        await repo.addEntry(draw.id, otherUser);
 
-        expect(await repo.getPrizeDrawById('2026-01-05_to_2026-01-18')).toMatchObject({
+        expect(await repo.getPrizeDrawById(draw.id)).toMatchObject({
             entries: [IDS.user, otherUser],
             totalEntries: 2,
         });
     });
 
     test('records the winner and when they were rolled', async ({ repo }) => {
-        await repo.createPrizeDraw(prizeDrawFactory.build());
+        const draw = prizeDrawFactory.build();
+        await repo.createPrizeDraw(draw);
 
-        await repo.setWinner('2026-01-05_to_2026-01-18', IDS.user);
+        await repo.setWinner(draw.id, IDS.user);
 
-        const draw = await repo.getPrizeDrawById('2026-01-05_to_2026-01-18');
-        expect(draw).toMatchObject({ winnerId: IDS.user });
-        expect(draw?.rolledAt).toEqual(expect.any(String));
+        const stored = await repo.getPrizeDrawById(draw.id);
+        expect(stored).toMatchObject({ winnerId: IDS.user });
+        expect(stored?.rolledAt).toEqual(expect.any(String));
     });
 
     test('deletes one draw or all draws', async ({ repo }) => {

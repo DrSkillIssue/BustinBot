@@ -46,34 +46,37 @@ describe('TaskRepository polls', () => {
     });
 
     test('closes polls and clears them all', async ({ repo }) => {
-        await repo.createTaskPoll(taskPollFactory.build());
+        const poll = taskPollFactory.build();
+        await repo.createTaskPoll(poll);
 
-        await repo.closeTaskPoll('poll-1');
+        await repo.closeTaskPoll(poll.id);
         expect(await repo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
 
         await repo.clearTaskPolls();
-        expect(await repo.getTaskPollById('poll-1')).toBeNull();
+        expect(await repo.getTaskPollById(poll.id)).toBeNull();
     });
 
     test('records votes and reports whether each was the voter\'s first', async ({ repo }) => {
-        await repo.createTaskPoll(taskPollFactory.build());
+        const poll = taskPollFactory.build();
+        await repo.createTaskPoll(poll);
 
-        const first = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM001');
-        const changed = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM002');
+        const first = await repo.voteInPollOnce(poll.id, IDS.user, 'PVM001');
+        const changed = await repo.voteInPollOnce(poll.id, IDS.user, 'PVM002');
 
         expect(first.firstTime).toBe(true);
         expect(changed.firstTime).toBe(false);
-        expect((await repo.getTaskPollById('poll-1'))?.votes).toEqual({ [IDS.user]: 'PVM002' });
+        expect((await repo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: 'PVM002' });
     });
 
     test('counts every vote when voters vote at the same time', async ({ repo }) => {
-        await repo.createTaskPoll(taskPollFactory.build());
+        const poll = taskPollFactory.build();
+        await repo.createTaskPoll(poll);
 
         await Promise.all(
-            Array.from({ length: 5 }, () => repo.voteInPollOnce('poll-1', SnowflakeUtil.generate().toString(), 'PVM001'))
+            Array.from({ length: 5 }, () => repo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), 'PVM001'))
         );
 
-        expect(Object.keys((await repo.getTaskPollById('poll-1'))?.votes ?? {})).toHaveLength(5);
+        expect(Object.keys((await repo.getTaskPollById(poll.id))?.votes ?? {})).toHaveLength(5);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 });
 
@@ -112,12 +115,13 @@ describe('TaskRepository submissions', () => {
     });
 
     test('finds the highest tier a member holds for a task', async ({ repo }) => {
-        await repo.createSubmission(taskSubmissionFactory.build({ id: 'silver', status: SubmissionStatus.Silver }));
-        await repo.createSubmission(taskSubmissionFactory.build({ id: 'bronze', status: SubmissionStatus.Bronze }));
-        await repo.createSubmission(taskSubmissionFactory.build({ id: 'rejected', status: SubmissionStatus.Rejected }));
+        const eventId = 'week-1';
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'silver', taskEventId: eventId, status: SubmissionStatus.Silver }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'bronze', taskEventId: eventId, status: SubmissionStatus.Bronze }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'rejected', taskEventId: eventId, status: SubmissionStatus.Rejected }));
 
-        expect(await repo.getHeldTier(IDS.user, 'PVM001-20260105')).toBe(SubmissionStatus.Silver);
-        expect(await repo.getHeldTier(otherUser, 'PVM001-20260105')).toBeNull();
+        expect(await repo.getHeldTier(IDS.user, eventId)).toBe(SubmissionStatus.Silver);
+        expect(await repo.getHeldTier(otherUser, eventId)).toBeNull();
     });
 });
 
@@ -131,19 +135,21 @@ describe('TaskRepository submission drafts', () => {
     });
 
     test('turns a draft into a submission once', async ({ repo }) => {
-        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'PVM001-20260105' }));
+        const eventId = 'week-1';
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: eventId }));
 
-        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'first' }))).toBe(true);
-        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'second' }))).toBe(false);
+        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'first', taskEventId: eventId }))).toBe(true);
+        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'second', taskEventId: eventId }))).toBe(false);
 
         expect(await repo.getSubmissionDraft(IDS.user)).toBeNull();
         expect((await repo.getSubmissionsByUser(IDS.user)).map((s) => s.id)).toEqual(['first']);
     });
 
     test('turns a draft into one submission when two arrive at the same moment', async ({ repo }) => {
-        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'PVM001-20260105' }));
+        const eventId = 'week-1';
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: eventId }));
 
-        const outcomes = await Promise.all([repo.submitDraft(taskSubmissionFactory.build({ id: 'a' })), repo.submitDraft(taskSubmissionFactory.build({ id: 'b' }))]);
+        const outcomes = await Promise.all([repo.submitDraft(taskSubmissionFactory.build({ id: 'a', taskEventId: eventId })), repo.submitDraft(taskSubmissionFactory.build({ id: 'b', taskEventId: eventId }))]);
 
         expect(outcomes.sort()).toEqual([false, true]);
         expect(await repo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
@@ -161,7 +167,8 @@ describe('TaskRepository reviews', () => {
     const approve = (submissionId: string, decision: SubmissionTier) => ({ submissionId, reviewedBy: reviewer, decision });
 
     test('approves a pending submission, moving the task\'s completion counts to the member\'s new tier', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build());
+        const event = taskEventFactory.build();
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'first' }));
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'upgrade' }));
 
@@ -169,62 +176,67 @@ describe('TaskRepository reviews', () => {
         expect(await repo.reviewSubmission(approve('upgrade', SubmissionStatus.Gold))).toMatchObject({ result: 'reviewed', heldTier: SubmissionStatus.Bronze });
 
         expect(await repo.getSubmissionById('upgrade')).toMatchObject({ status: 'gold', reviewedBy: reviewer, reviewedAt: expect.any(Date), prizeRolls: 1 });
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({
             completionCounts: { bronze: 0, silver: 0, gold: 1 },
             completedUserIds: [IDS.user],
         });
     });
 
     test('resolves an approval at or below the member\'s tier without counting it', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] }));
+        const event = taskEventFactory.build({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] });
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'held', status: SubmissionStatus.Silver }));
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'lower' }));
 
         expect(await repo.reviewSubmission(approve('lower', SubmissionStatus.Bronze))).toMatchObject({ result: 'reviewed', heldTier: SubmissionStatus.Silver });
 
         expect(await repo.getSubmissionById('lower')).toMatchObject({ status: 'bronze' });
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
     });
 
     test('rejects a submission with its reason, leaving the tier the member holds', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] }));
+        const event = taskEventFactory.build({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'held', status: SubmissionStatus.Bronze }));
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'retry' }));
 
         await repo.reviewSubmission({ submissionId: 'retry', reviewedBy: reviewer, decision: SubmissionStatus.Rejected, rejectionReason: 'No keyword' });
 
         expect(await repo.getSubmissionById('retry')).toMatchObject({ status: 'rejected', rejectionReason: 'No keyword', reviewedBy: reviewer });
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
     });
 
     test('reviews a submission once', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build());
+        const event = taskEventFactory.build();
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
         await repo.reviewSubmission(approve('a', SubmissionStatus.Bronze));
 
         expect(await repo.reviewSubmission(approve('a', SubmissionStatus.Gold))).toMatchObject({ result: 'alreadyReviewed', submission: { status: 'bronze' } });
         expect(await repo.reviewSubmission(approve('missing', SubmissionStatus.Gold))).toEqual({ result: 'notFound' });
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 } });
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 } });
     });
 
     test('counts one review when two admins confirm at the same moment', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build());
+        const event = taskEventFactory.build();
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
 
         const outcomes = await Promise.all([repo.reviewSubmission(approve('a', SubmissionStatus.Silver)), repo.reviewSubmission(approve('a', SubmissionStatus.Silver))]);
 
         expect(outcomes.map((outcome) => outcome.result).sort()).toEqual(['alreadyReviewed', 'reviewed']);
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('counts one tier for a member when two of their submissions are approved at the same moment', async ({ repo }) => {
-        await repo.createTaskEvent(taskEventFactory.build());
+        const event = taskEventFactory.build();
+        await repo.createTaskEvent(event);
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
         await repo.createSubmission(taskSubmissionFactory.build({ id: 'b' }));
 
         await Promise.all([repo.reviewSubmission(approve('a', SubmissionStatus.Bronze)), repo.reviewSubmission(approve('b', SubmissionStatus.Silver))]);
 
-        expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
+        expect(await repo.getTaskEventById(event.id)).toMatchObject({ completionCounts: { bronze: 0, silver: 1, gold: 0 } });
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 });
 

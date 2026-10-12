@@ -39,26 +39,29 @@ describe('MovieRepository polls', () => {
     });
 
     test('closes a poll once, returning it with its votes as it closed', async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build({ votes: { [IDS.user]: 'movie-2' } }));
+        const poll = moviePollFactory.build({ votes: { [IDS.user]: 'movie-2' } });
+        await repo.createPoll(poll);
 
-        expect(await repo.closePoll('poll-1')).toMatchObject({ id: 'poll-1', votes: { [IDS.user]: 'movie-2' } });
-        expect(await repo.closePoll('poll-1')).toBeNull();
+        expect(await repo.closePoll(poll.id)).toMatchObject({ id: poll.id, votes: { [IDS.user]: 'movie-2' } });
+        expect(await repo.closePoll(poll.id)).toBeNull();
         expect(await repo.getActivePoll()).toBeNull();
     });
 
     test('closes a poll closed twice at the same moment once', async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build());
+        const poll = moviePollFactory.build();
+        await repo.createPoll(poll);
 
-        const closed = await Promise.all([repo.closePoll('poll-1'), repo.closePoll('poll-1')]);
+        const closed = await Promise.all([repo.closePoll(poll.id), repo.closePoll(poll.id)]);
 
         expect(closed.filter(Boolean)).toHaveLength(1);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('records a vote and reports whether it was the voter\'s first', async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build());
+        const poll = moviePollFactory.build();
+        await repo.createPoll(poll);
 
-        const first = await repo.voteInPollOnce('poll-1', IDS.user, 'movie-1');
-        const changed = await repo.voteInPollOnce('poll-1', IDS.user, 'movie-2');
+        const first = await repo.voteInPollOnce(poll.id, IDS.user, 'movie-1');
+        const changed = await repo.voteInPollOnce(poll.id, IDS.user, 'movie-2');
 
         expect(first.firstTime).toBe(true);
         expect(changed.firstTime).toBe(false);
@@ -67,10 +70,11 @@ describe('MovieRepository polls', () => {
     });
 
     test('counts every vote when voters vote at the same time', async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build());
+        const poll = moviePollFactory.build();
+        await repo.createPoll(poll);
 
         await Promise.all(
-            Array.from({ length: 5 }, () => repo.voteInPollOnce('poll-1', SnowflakeUtil.generate().toString(), 'movie-1'))
+            Array.from({ length: 5 }, () => repo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), 'movie-1'))
         );
 
         expect(Object.keys((await repo.getActivePoll())?.votes ?? {})).toHaveLength(5);
@@ -97,39 +101,43 @@ describe('MovieRepository events', () => {
     });
 
     test('completes an event once, with the changes given', async ({ repo }) => {
-        await repo.createMovieEvent(movieEventFactory.build());
+        const event = movieEventFactory.build();
+        await repo.createMovieEvent(event);
         const completedAt = new Date('2026-01-03T12:00:00.000Z');
 
-        expect(await repo.completeEvent('event-1', { completedAt, movie: movieFactory.build({ watched: true }) })).toMatchObject({
+        expect(await repo.completeEvent(event.id, { completedAt, movie: movieFactory.build({ watched: true }) })).toMatchObject({
             completed: true, completedAt, movie: { watched: true },
         });
-        expect(await repo.completeEvent('event-1')).toBeNull();
+        expect(await repo.completeEvent(event.id)).toBeNull();
         expect(await repo.completeEvent('missing')).toBeNull();
         expect(await repo.getActiveEvent()).toBeNull();
     });
 
     test('completes an event completed twice at the same moment once', async ({ repo }) => {
-        await repo.createMovieEvent(movieEventFactory.build());
+        const event = movieEventFactory.build();
+        await repo.createMovieEvent(event);
 
-        const completed = await Promise.all([repo.completeEvent('event-1'), repo.completeEvent('event-1')]);
+        const completed = await Promise.all([repo.completeEvent(event.id), repo.completeEvent(event.id)]);
 
         expect(completed.filter(Boolean)).toHaveLength(1);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('claims each reminder once, and none for an event that has ended', async ({ repo }) => {
-        await repo.createMovieEvent(movieEventFactory.build());
+        const event = movieEventFactory.build();
+        await repo.createMovieEvent(event);
         await repo.createMovieEvent(movieEventFactory.build({ id: 'ended', completed: true }));
 
-        expect(await repo.claimReminders('event-1', ['2 hours before'])).toEqual(['2 hours before']);
-        expect(await repo.claimReminders('event-1', ['2 hours before', '30 mins before'])).toEqual(['30 mins before']);
+        expect(await repo.claimReminders(event.id, ['2 hours before'])).toEqual(['2 hours before']);
+        expect(await repo.claimReminders(event.id, ['2 hours before', '30 mins before'])).toEqual(['30 mins before']);
         expect(await repo.claimReminders('ended', ['start time'])).toEqual([]);
         expect((await repo.getActiveEvent())?.remindersSent).toEqual(['2 hours before', '30 mins before']);
     });
 
     test('claims a reminder claimed twice at the same moment once', async ({ repo }) => {
-        await repo.createMovieEvent(movieEventFactory.build());
+        const event = movieEventFactory.build();
+        await repo.createMovieEvent(event);
 
-        const claims = await Promise.all([repo.claimReminders('event-1', ['start time']), repo.claimReminders('event-1', ['start time'])]);
+        const claims = await Promise.all([repo.claimReminders(event.id, ['start time']), repo.claimReminders(event.id, ['start time'])]);
 
         expect(claims.flat()).toEqual(['start time']);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
