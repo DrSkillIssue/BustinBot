@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Client, TextChannel } from 'discord.js';
+import { DateTime } from 'luxon';
 import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
@@ -165,13 +166,15 @@ export async function startTaskEventForCategory(
 
     const taskEventId = generateTaskEventId(task.id);
 
+    // The event runs for a week from now, both ends taken from one reading of the clock
+    const now = DateTime.utc();
     const event: TaskEvent = {
         id: taskEventId,
         task,
         category,
         keyword: sharedKeyword,
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
+        startTime: now.toJSDate(),
+        endTime: now.plus({ weeks: 1 }).toJSDate(),
         amounts: {
             bronze: task.amtBronze,
             silver: task.amtSilver,
@@ -183,7 +186,7 @@ export async function startTaskEventForCategory(
             gold: 0
         },
         completedUserIds: [],
-        createdAt: new Date(),
+        createdAt: now.toJSDate(),
     };
 
     const { embeds, components, files } = buildTaskEventEmbed(event);

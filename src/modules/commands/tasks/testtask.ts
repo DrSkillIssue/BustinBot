@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { buildTaskEventEmbed } from "../../tasks/TaskEmbeds.js";
@@ -40,7 +41,9 @@ const testtask: Command = {
 
 
         // Fake task event data
-        const taskEventId = `test-${randomTask.id}-${Date.now()}`;
+        // The event runs for a week from now, both ends taken from one reading of the clock
+        const now = DateTime.utc();
+        const taskEventId = `test-${randomTask.id}-${now.toMillis()}`;
 
         const baseEvent = {
             id: taskEventId,
@@ -52,9 +55,9 @@ const testtask: Command = {
                 silver: randomTask.amtSilver ?? 0,
                 gold: randomTask.amtGold ?? 0,
             },
-            startTime: new Date(),
-            endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            createdAt: new Date(),
+            startTime: now.toJSDate(),
+            endTime: now.plus({ weeks: 1 }).toJSDate(),
+            createdAt: now.toJSDate(),
         }
 
         const event: TaskEvent = selectedAmount !== undefined
