@@ -2,6 +2,7 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
 import { IDS, apiGuildMember, apiMember, apiRole, apiUser } from "../../../discord/payloads.js";
@@ -89,54 +90,54 @@ describe("the weekly leaderboard update", () => {
         expect(embed?.footer?.text).toBe("Task events elapsed: 1/4");
     });
 
-    test("ends the period once however many runs see it finished: champions, final standings and congratulations", async ({
-        discord,
-        services,
-        factories,
-    }) => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const events = await storeWeeks(factories, 4, 4);
-        const period = leaderboardPeriodFactory.build({ eventIds: events });
-        await storePeriodic(factories, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
-        const { roles, dms } = await setUpChampions(discord, services);
-        discord.acceptMessages(IDS.channel);
+    test(
+        "ends the period once however many runs see it finished: champions, final standings and congratulations",
+        async ({ discord, services, factories }) => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            const events = await storeWeeks(factories, 4, 4);
+            const period = leaderboardPeriodFactory.build({ eventIds: events });
+            await storePeriodic(factories, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
+            const { roles, dms } = await setUpChampions(discord, services);
+            discord.acceptMessages(IDS.channel);
 
-        await Promise.all([
-            postPeriodicLeaderboardUpdate(discord.client, services),
-            postPeriodicLeaderboardUpdate(discord.client, services),
-        ]);
+            await Promise.all([
+                postPeriodicLeaderboardUpdate(discord.client, services),
+                postPeriodicLeaderboardUpdate(discord.client, services),
+            ]);
 
-        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
-        expect(stored).toMatchObject({
-            points: {},
-            period: { index: period.index + 1, eventIds: [] },
-            completedPeriod: {
-                index: period.index,
-                topThree: [
-                    { userId: winner, points: 9 },
-                    { userId: runnerUp, points: 6 },
-                    { userId: third, points: 1 },
-                ],
-            },
-            champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: period.index },
-        });
-        expect(discord.memberRoleChanges("PUT").sort()).toEqual(
-            [`${winner}:${roles.first.id}`, `${runnerUp}:${roles.second.id}`, `${third}:${roles.third.id}`].sort(),
-        );
-        expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
-        const finals = discord
-            .messagesSentTo(IDS.channel)
-            .filter((message) => message.embeds?.[0]?.title === "🏆 Final Leaderboard Standings");
-        expect(finals).toHaveLength(1);
-        expect(finals[0]?.embeds?.[0]?.fields?.[0]?.value).toBe("🥇 member1\n🥈 member2\n🥉 member3");
-        expect(discord.messagesSentTo(dms[winner]!)).toEqual([
-            expect.objectContaining({
-                content:
-                    "🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **Test Guild**.\nYou have been awarded the **Task Champion (1st)** role to flex.",
-            }),
-        ]);
-        expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Period ${period.index} had already ended.`);
-    });
+            const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+            expect(stored).toMatchObject({
+                points: {},
+                period: { index: period.index + 1, eventIds: [] },
+                completedPeriod: {
+                    index: period.index,
+                    topThree: [
+                        { userId: winner, points: 9 },
+                        { userId: runnerUp, points: 6 },
+                        { userId: third, points: 1 },
+                    ],
+                },
+                champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: period.index },
+            });
+            expect(discord.memberRoleChanges("PUT").sort()).toEqual(
+                [`${winner}:${roles.first.id}`, `${runnerUp}:${roles.second.id}`, `${third}:${roles.third.id}`].sort(),
+            );
+            expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
+            const finals = discord
+                .messagesSentTo(IDS.channel)
+                .filter((message) => message.embeds?.[0]?.title === "🏆 Final Leaderboard Standings");
+            expect(finals).toHaveLength(1);
+            expect(finals[0]?.embeds?.[0]?.fields?.[0]?.value).toBe("🥇 member1\n🥈 member2\n🥉 member3");
+            expect(discord.messagesSentTo(dms[winner]!)).toEqual([
+                expect.objectContaining({
+                    content:
+                        "🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **Test Guild**.\nYou have been awarded the **Task Champion (1st)** role to flex.",
+                }),
+            ]);
+            expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Period ${period.index} had already ended.`);
+        },
+        CONCURRENT_TRANSACTION_TIMEOUT_MS,
+    );
 
     test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({
         discord,
