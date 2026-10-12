@@ -4,7 +4,7 @@ import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
 import type { Movie } from "../../../models/Movie.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { MAX_ACTIVE_MOVIES_PER_USER } from "../../movies/MovieSelector.js";
+import { MAX_ACTIVE_MOVIES_PER_USER, isMovieNightAdmin } from "../../movies/MovieSelector.js";
 
 const mymovies: Command = {
     name: 'mymovies',
@@ -49,10 +49,11 @@ const mymovies: Command = {
             // Build embeds for user's movies
             const embeds = userMovies.map((m) => createMovieEmbed(m));
 
-            await interaction.editReply({
-                content: `You have added **${userMovies.length}/${MAX_ACTIVE_MOVIES_PER_USER}** movies. You can still add **${remaining}** more using /addmovie.`,
-                embeds,
-            });
+            // Movie night admins may add any number of movies, so they have no cap to count against
+            const content = (await isMovieNightAdmin(services, interaction))
+                ? `You have added **${userMovies.length}** movies.`
+                : `You have added **${userMovies.length}/${MAX_ACTIVE_MOVIES_PER_USER}** movies. You can still add **${remaining}** more using /addmovie.`;
+            await interaction.editReply({ content, embeds });
 
             console.log(
                 `[MyMovies] Displayed ${userMovies.length} movies for ${interaction.user.username}.`
