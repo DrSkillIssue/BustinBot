@@ -25,7 +25,7 @@ const movienight: Command = {
             const date = today.plus({ days: i });
             return {
                 label: date.toLocaleString({ weekday: 'short', month: 'short', day: 'numeric' }, { locale: 'en-AU' }),
-                value: date.toISODate()!,
+                value: date.toFormat('yyyy-MM-dd'),
             };
         });
 

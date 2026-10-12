@@ -1,11 +1,17 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import type { Task, TaskCategory } from '../../models/Task.js';
+import { TaskCategory, type Task } from '../../models/Task.js';
 
 const TASKS_PER_PAGE = 8;
 export const CATEGORY_ALL = 'all';
 
 export type CategoryFilter = TaskCategory | typeof CATEGORY_ALL;
+const CATEGORY_FILTERS: CategoryFilter[] = [CATEGORY_ALL, ...Object.values(TaskCategory)];
+
+// The category filter a member chose, or all categories for anything that isn't one
+export function toCategoryFilter(value: string | null | undefined): CategoryFilter {
+    return CATEGORY_FILTERS.find((filter) => filter === value) ?? CATEGORY_ALL;
+}
 
 // Page buttons carry the category and the page they lead to, so they work for as long as the list is shown, across restarts
 export const TASK_LIST_BUTTON = 'listtasks|';
@@ -86,5 +92,5 @@ export async function buildTaskListPage(services: ServiceContainer, category: Ca
 // The category and page a list button leads to
 export function taskListButtonPage(customId: string): { category: CategoryFilter; page: number } {
     const [, category, , page] = customId.split('|');
-    return { category: (category ?? CATEGORY_ALL) as CategoryFilter, page: Number.parseInt(page ?? '0', 10) || 0 };
+    return { category: toCategoryFilter(category), page: Number.parseInt(page ?? '0', 10) || 0 };
 }
