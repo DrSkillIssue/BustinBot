@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { FIRESTORE_SETTINGS } from "../src/core/database/firestore.js";
@@ -28,24 +29,14 @@ function emulatorTarget(): { host: string; projectId: string } {
     return { host, projectId };
 }
 
-export function getEmulatorFirestore(): Firestore {
+// A database of its own in the emulator, so a test sees only the data it stores. The emulator creates a named
+// database "in response to any SDK or REST API calls to the emulator that reference a specific database"
+// (https://firebase.google.com/docs/emulator-suite/connect_firestore), and drops them all when the run ends.
+export function newEmulatorDatabase(): Firestore {
     const { projectId } = emulatorTarget();
-    const existing = getApps().find((app) => app.name === APP_NAME);
-    if (existing) return getFirestore(existing);
-
+    const app = getApps().find((existing) => existing.name === APP_NAME) ?? initializeApp({ projectId }, APP_NAME);
+    const db = getFirestore(app, `test-${SnowflakeUtil.generate()}`);
     // Same settings as production so tests see the same write behaviour
-    const db = getFirestore(initializeApp({ projectId }, APP_NAME));
     db.settings(FIRESTORE_SETTINGS);
     return db;
-}
-
-// Deletes every document in the emulator database (documented emulator REST endpoint)
-export async function clearEmulatorFirestore(): Promise<void> {
-    const { host, projectId } = emulatorTarget();
-    const response = await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {
-        method: "DELETE",
-    });
-    if (!response.ok) {
-        throw new Error(`Failed to clear the Firestore emulator: HTTP ${response.status}`);
-    }
 }

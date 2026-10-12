@@ -21,7 +21,7 @@ import type { ServiceContainer } from "../src/core/services/ServiceContainer.js"
 import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
 import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
-import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
+import { newEmulatorDatabase } from "./firestoreEmulator.js";
 import {
     guildFactory,
     keywordFactory,
@@ -85,8 +85,8 @@ export type Interact = (payload: APIInteraction) => Promise<Interaction>;
 // - http: the test's own undici MockAgent, answering only the requests the test declares; one the test expected but
 //   the bot never made fails the test
 // - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by `http`
-// - db: the Firestore emulator, emptied before the test (integration tests only)
-// - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
+// - db: a Firestore emulator database of the test's own, so no test sees another's data (integration tests only)
+// - services: the bot's real service container on the test's database, with a fully set-up guild
 // - factories: the fishery factories whose create() stores what they build in the test guild, through its repositories
 // - otherGuild: the service container of a second fully set-up guild, whose channels are all IDS.otherGuildChannel
 // - uncachedGuild: a set-up guild discord.js hasn't cached; returns the interaction fields that place an interaction in it
@@ -123,10 +123,19 @@ export const test = base
         onCleanup(() => discord.destroy());
         return discord;
     })
-    .extend("firestore", { scope: "file" }, () => getEmulatorFirestore())
-    .extend("db", async ({ firestore }) => {
-        await clearEmulatorFirestore();
-        return firestore;
+    // Each test's database stays open until its file has finished, so work the bot finishes after a test (a shutdown
+    // registered with onTestFinished) can still reach it
+    .extend("openDatabases", { scope: "file" }, ({}, { onCleanup }) => {
+        const databases: Firestore[] = [];
+        onCleanup(async () => {
+            await Promise.all(databases.map((db) => db.terminate()));
+        });
+        return databases;
+    })
+    .extend("db", ({ openDatabases }) => {
+        const db = newEmulatorDatabase();
+        openDatabases.push(db);
+        return db;
     })
     .extend("services", async ({ db }) => {
         await new GuildRepository(db).initGuild(guildFactory.build().id, guildFactory.build());
