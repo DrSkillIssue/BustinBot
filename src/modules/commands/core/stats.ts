@@ -42,8 +42,10 @@ const stats: Command = {
             return;
         }
 
-        const joinedDate = stats.joinedAt ? new Date(stats.joinedAt).toLocaleDateString() : "Unknown";
-        const lastActive = stats.lastActiveAt ? new Date(stats.lastActiveAt).toLocaleDateString() : "Unknown";
+        // Discord shows timestamps as dates in each viewer's own locale and timezone
+        const asDate = (date: Date) => `<t:${Math.floor(date.getTime() / 1000)}:D>`;
+        const joinedDate = asDate(stats.joinedAt);
+        const lastActive = asDate(stats.lastActiveAt);
 
         const embed = new EmbedBuilder()
             .setColor(0x00ae86)
