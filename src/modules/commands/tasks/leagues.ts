@@ -17,8 +17,6 @@ const leagues: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const repo = services.repos.guildRepo;
-
         const guildId = interaction.guildId;
         if (!guildId) {
             await interaction.editReply({
@@ -29,11 +27,11 @@ const leagues: Command = {
 
         const userId = interaction.user.id;
 
-        const guildConfig = await repo.getGuild(guildId);
+        const guildConfig = await services.guilds.get(guildId);
         const current = guildConfig?.toggles?.leaguesEnabled ?? false;
 
         const newState = !current;
-        await repo.updateToggle(guildId, "toggles.leaguesEnabled", newState, userId);
+        await services.guilds.updateToggle(guildId, "toggles.leaguesEnabled", newState, userId);
 
         const status = newState ? '**enabled**' : '**disabled**';
 
