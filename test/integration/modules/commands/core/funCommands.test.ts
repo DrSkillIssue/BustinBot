@@ -1,4 +1,4 @@
-import { InteractionResponseType } from "discord-api-types/v10";
+import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { BotRepository } from "../../../../../src/core/database/BotRepo.js";
 
@@ -39,5 +39,22 @@ describe("fun commands", () => {
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
         ]);
         expect((await new BotRepository(db).getBotStats())?.funStats.bustinCount).toBe(1);
+    });
+
+    test("/bustincount says privately how many times /bustin was used", async ({ discord, slash }) => {
+        await slash("bustin");
+        await slash("bustin");
+
+        const interaction = await slash("bustincount");
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "The `/bustin` command has been used 2 times.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
     });
 });

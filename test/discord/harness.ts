@@ -494,6 +494,14 @@ export class DiscordHarness {
             .persist();
     }
 
+    // The channels Discord lists for a guild
+    guildChannels(guildId: string, channels: APIChannel[]): void {
+        this.api
+            .intercept({ path: `${API}/guilds/${guildId}/channels`, method: "GET" })
+            .reply(this.answered(() => ({ statusCode: 200, data: channels, responseOptions: JSON_RESPONSE })))
+            .persist();
+    }
+
     // A user Discord knows about, who doesn't accept DMs: Discord opens the DM channel, then refuses messages in it
     refuseDirectMessages(user: APIUser): void {
         this.user(user);
