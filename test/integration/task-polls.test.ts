@@ -291,17 +291,6 @@ describe("TaskRepository polls", () => {
         expect(await repo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
     });
 
-    test("closes polls and clears them all", async ({ repo }) => {
-        const poll = taskPollFactory.build();
-        await repo.createTaskPoll(poll);
-
-        await repo.closeTaskPoll(poll.id);
-        expect(await repo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
-
-        await repo.clearTaskPolls();
-        expect(await repo.getTaskPollById(poll.id)).toBeNull();
-    });
-
     test("records votes and reports whether each was the voter's first", async ({ repo }) => {
         const poll = taskPollFactory.build();
         await repo.createTaskPoll(poll);

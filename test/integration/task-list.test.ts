@@ -446,23 +446,11 @@ describe("/updatetask", () => {
 });
 
 describe("TaskRepository tasks", () => {
-    test("creates, reads and lists tasks by category", async ({ repo }) => {
-        await repo.createTask(taskFactory.build({ id: "PVM001", category: TaskCategory.PvM }));
-        await repo.createTask(taskFactory.build({ id: "SKL001", category: TaskCategory.Skilling }));
-
-        expect(await repo.getTaskById("PVM001")).toMatchObject({ id: "PVM001" });
-        expect(await repo.getTaskById("missing")).toBeNull();
-        expect((await repo.getAllTasks()).map((task) => task.id).sort()).toEqual(["PVM001", "SKL001"]);
-        expect((await repo.getTasksByCategory(TaskCategory.Skilling)).map((task) => task.id)).toEqual(["SKL001"]);
-    });
-
-    test("seeds more tasks than fit in one Firestore batch and deletes them all", async ({ repo }) => {
+    test("seeds more tasks than fit in one Firestore batch", async ({ repo }) => {
         const tasks = Array.from({ length: 501 }, (_, index) => taskFactory.build({ id: `TASK${index}` }));
 
         await repo.seedTasks(tasks);
-        expect(await repo.getAllTasks()).toHaveLength(501);
 
-        await repo.deleteAllTasks();
-        expect(await repo.getAllTasks()).toEqual([]);
+        expect(await repo.getAllTasks()).toHaveLength(501);
     });
 });

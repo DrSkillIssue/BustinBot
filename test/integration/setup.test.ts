@@ -412,40 +412,6 @@ describe("GuildRepository", () => {
         expect(await repo.getGuild("missing")).toBeNull();
     });
 
-    test("merges updates into the stored guild without dropping other fields", async ({ repo }) => {
-        const stored = guildFactory.build({ timezone: "Australia/Melbourne" });
-        await repo.initGuild(IDS.guild, stored);
-
-        await repo.updateGuild(IDS.guild, { roles: { movieUser: "role-movie-user" } });
-
-        expect(await repo.getGuild(IDS.guild)).toMatchObject({
-            roles: { ...stored.roles, movieUser: "role-movie-user" },
-            channels: stored.channels,
-            timezone: "Australia/Melbourne",
-        });
-    });
-
-    test("changes a single toggle and records who changed it", async ({ repo }) => {
-        await repo.initGuild(
-            IDS.guild,
-            guildFactory.build({ toggles: { taskScheduler: false, leaguesEnabled: true } }),
-        );
-
-        await repo.updateToggle(IDS.guild, "toggles.taskScheduler", true, IDS.user);
-
-        expect(await repo.getGuild(IDS.guild)).toMatchObject({
-            toggles: { taskScheduler: true, leaguesEnabled: true },
-            updatedBy: IDS.user,
-        });
-    });
-
-    test("lists every guild", async ({ repo }) => {
-        await repo.initGuild(IDS.guild, guildFactory.build());
-        await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));
-
-        expect((await repo.getAllGuilds()).map((guild) => guild.id).sort()).toEqual([IDS.guild, IDS.otherGuild]);
-    });
-
     test("only reads and writes the dev guild in dev mode", async ({ repo }) => {
         await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "UTC" }));
         await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));

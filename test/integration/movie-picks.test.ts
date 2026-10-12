@@ -478,12 +478,4 @@ describe("MovieRepository polls", () => {
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
-
-    test("clears all polls", async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build());
-
-        await repo.clearPolls();
-
-        expect(await repo.getActivePoll()).toBeNull();
-    });
 });

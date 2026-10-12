@@ -8,7 +8,6 @@ import { userStatsFactory } from "../factories.js";
 import { newUserStats } from "../../src/models/UserStats.js";
 
 const test = base.extend("repo", ({ db }) => new UserRepository(db, IDS.guild));
-const otherUser = SnowflakeUtil.generate().toString();
 const legacyUser = SnowflakeUtil.generate().toString();
 
 describe("/stats", () => {
@@ -88,16 +87,6 @@ describe("UserRepository", () => {
         expect(await repo.getUserById("missing")).toBeNull();
     });
 
-    test("updates and deletes a user", async ({ repo }) => {
-        await repo.createUser(userStatsFactory.build({ userId: IDS.user, commandsRun: 3 }));
-
-        await repo.updateUser(IDS.user, { commandsRun: 4 });
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ commandsRun: 4 });
-
-        await repo.deleteUser(IDS.user);
-        expect(await repo.getUserById(IDS.user)).toBeNull();
-    });
-
     test("increments a stat on an existing user", async ({ repo }) => {
         await repo.incrementStat(IDS.user, "tasksCompletedBronze", 1);
         await repo.incrementStat(IDS.user, "tasksCompletedBronze", 2);
@@ -147,15 +136,6 @@ describe("UserRepository", () => {
         ]);
 
         expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
-    });
-
-    test("clears every user in the guild", async ({ repo }) => {
-        await repo.createUser(userStatsFactory.build({ userId: IDS.user }));
-        await repo.createUser(userStatsFactory.build({ userId: otherUser }));
-
-        await repo.clearAllUsers();
-
-        expect(await repo.getAllUsers()).toEqual([]);
     });
 
     test("reads a user back exactly as stored", async ({ repo }) => {

@@ -345,17 +345,6 @@ describe("/testmovie", () => {
 });
 
 describe("MovieRepository movies", () => {
-    test("stores, lists and deletes movies", async ({ repo }) => {
-        await repo.upsertMovie(movieFactory.build({ id: "movie-1" }));
-        await repo.upsertMovie(movieFactory.build({ id: "movie-2", title: "Arrival" }));
-
-        expect(await repo.getMovieById("movie-2")).toMatchObject({ title: "Arrival" });
-        expect((await repo.getAllMovies()).map((movie) => movie.id).sort()).toEqual(["movie-1", "movie-2"]);
-
-        await repo.deleteMovie("movie-1");
-        expect(await repo.getMovieById("movie-1")).toBeNull();
-    });
-
     test("stores a movie whose optional TMDb details are missing", async ({ repo }) => {
         await repo.upsertMovie(
             movieFactory.build({

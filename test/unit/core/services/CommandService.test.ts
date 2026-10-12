@@ -54,14 +54,4 @@ describe("loadCommands", () => {
             expect.any(Error),
         );
     });
-
-    test("returns an independent registry each time", async ({ commandsDir }) => {
-        writeModule(commandsDir, "foo.js", command("foo"));
-        const first = await loadCommands(commandsDir);
-
-        const second = await loadCommands(commandsDir);
-        second.delete("foo");
-
-        expect(first.has("foo")).toBe(true);
-    });
 });

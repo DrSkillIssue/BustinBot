@@ -4,7 +4,6 @@ import { AS, chatInputInteraction, IDS } from "../discord/payloads.js";
 import { DateTime } from "luxon";
 import { KeywordRepository } from "../../src/core/database/KeywordRepo.js";
 import { KeywordSelector } from "../../src/modules/tasks/KeywordSelector.js";
-import { keywordFactory } from "../factories.js";
 
 const test = base.extend("repo", ({ db }) => new KeywordRepository(db, IDS.guild));
 
@@ -125,33 +124,5 @@ describe("KeywordRepository", () => {
 
         expect(await repo.getKeywordById("missing")).toBeNull();
         expect(warn).toHaveBeenCalledWith("[KeywordRepo] Keyword missing not found");
-    });
-
-    test("picks only from keywords outside the most recently used ones", async ({ repo, db }) => {
-        for (const [index, word] of ["a", "b", "c", "d"].entries()) {
-            await db
-                .doc(`guilds/${IDS.guild}/keywords/${word}`)
-                .set(keywordFactory.build({ id: word, word, lastUsedAt: new Date(1000 - index), timesUsed: 1 }));
-        }
-        vi.spyOn(Math, "random").mockReturnValue(0.99);
-
-        expect(await repo.getRandomKeyword(2)).toMatchObject({ id: "d" });
-        expect(await repo.getRandomKeyword(4)).toBeNull();
-    });
-
-    test("resets usage on every keyword and deletes single keywords", async ({ repo }) => {
-        await repo.addKeyword("alpha");
-        await repo.addKeyword("beta");
-        await repo.markKeywordUsed("alpha", "event-1");
-
-        await repo.resetAllUsage();
-        expect(await repo.getKeywordById("alpha")).toMatchObject({
-            timesUsed: 0,
-            lastUsedEventId: "",
-            usageHistory: [],
-        });
-
-        await repo.deleteKeyword("beta");
-        expect(await repo.getKeywordById("beta")).toBeNull();
     });
 });

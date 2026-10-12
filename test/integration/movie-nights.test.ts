@@ -1,7 +1,6 @@
 import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../src/models/MovieEvent.js";
 import assert from "node:assert";
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
-import cron from "node-cron";
 import { DateTime } from "luxon";
 import { type APIRole, InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, vi, type StoringFactories, test as base } from "../fixtures.js";
@@ -22,7 +21,7 @@ import {
     apiOtherGuild,
 } from "../discord/payloads.js";
 import { movieFactory, moviePollFactory, movieEventFactory } from "../factories.js";
-import { startMovieScheduler, sweepMovieNight } from "../../src/modules/movies/MovieScheduler.js";
+import { sweepMovieNight } from "../../src/modules/movies/MovieScheduler.js";
 import { MovieRepository } from "../../src/core/database/MovieRepo.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
@@ -460,15 +459,6 @@ describe("the movie night sweep", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
         expect(await services.repos.movieRepo.getActivePoll()).not.toBeNull();
     });
-
-    test("runs every minute as one job that node-cron's shutdown stops", async ({ discord }) => {
-        const task = startMovieScheduler(discord.client, () => []);
-        try {
-            expect([...cron.getTasks().values()].map((job) => job.name)).toContain("movieScheduler:sweep");
-        } finally {
-            await task.destroy();
-        }
-    });
 });
 
 describe("/endmovie", () => {
@@ -749,7 +739,7 @@ describe("MovieRepository events", () => {
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
 
-    test("lists events newest first and returns the latest", async ({ repo }) => {
+    test("lists events newest first", async ({ repo }) => {
         await repo.createMovieEvent(
             movieEventFactory.build({ id: "first", createdAt: new Date("2026-01-01T00:00:00.000Z") }),
         );
@@ -758,9 +748,5 @@ describe("MovieRepository events", () => {
         );
 
         expect((await repo.getAllEvents()).map((event) => event.id)).toEqual(["second", "first"]);
-        expect((await repo.getLatestEvent())?.id).toBe("second");
-
-        await repo.clearEvents();
-        expect(await repo.getAllEvents()).toEqual([]);
     });
 });

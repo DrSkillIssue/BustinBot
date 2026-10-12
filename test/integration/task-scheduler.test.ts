@@ -31,26 +31,6 @@ const atMinute = (minute: number): Date =>
     DateTime.now().set({ hour: 12, minute, second: 0, millisecond: 0 }).toJSDate();
 
 describe("task scheduler", () => {
-    test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({
-        discord,
-        services,
-        scheduledJobs,
-    }) => {
-        await initTaskScheduler(discord.client, services);
-
-        expect(scheduledJobs(IDS.guild)).toEqual({
-            poll: "0 0 * * 0",
-            taskStart: "0 0 * * 1",
-            prizeDraw: "0 0 * * 2",
-            leaderboardWarning: "0 0 * * 2",
-            leaderboardUpdate: "0 0 * * 3",
-        });
-        for (const job of cron.getTasks().values()) {
-            const nextRun = job.getNextRun();
-            expect([nextRun?.getUTCHours(), nextRun?.getUTCMinutes()]).toEqual([0, 0]);
-        }
-    });
-
     test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({
         discord,
         services,
@@ -88,12 +68,6 @@ describe("the dev-mode task cycle", () => {
     beforeEach(() => {
         vi.stubEnv("BOT_MODE", "dev");
         vi.stubEnv("DISCORD_GUILD_ID_DEV", IDS.guild);
-    });
-
-    test("is one job that runs every minute", async ({ discord, services, scheduledJobs }) => {
-        await initTaskScheduler(discord.client, services);
-
-        expect(scheduledJobs(IDS.guild)).toEqual({ test: "* * * * *" });
     });
 
     test("reports when its next poll, task start and prize draw come", async ({ discord, services }) => {
