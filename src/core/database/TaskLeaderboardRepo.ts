@@ -1,5 +1,5 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
-import { GuildScopedRepository, isAlreadyExists } from "./CoreRepo.js";
+import { GuildScopedRepository } from "./CoreRepo.js";
 import type { TaskLeaderboard, TaskLeaderboardId, TaskTierChange } from "../../models/TaskLeaderboard.js";
 import type { ITaskLeaderboardRepository } from "./interfaces/ITaskLeaderboardRepo.js";
 import { taskLeaderboardConverter } from "./converters.js";
@@ -14,13 +14,13 @@ export class TaskLeaderboardRepository extends GuildScopedRepository<TaskLeaderb
     }
 
     // Creates a leaderboard unless it already exists, so two members starting it at once don't overwrite each
-    // other's points. create() fails atomically when the document is there, so no transaction is needed.
+    // other's points
     async createLeaderboard(data: TaskLeaderboard): Promise<void> {
-        try {
-            await this.collection.doc(data.id).create(data);
-        } catch (err) {
-            if (!isAlreadyExists(err)) throw err;
-        }
+        const ref = this.collection.doc(data.id);
+        await this.db.runTransaction(async (transaction) => {
+            if ((await transaction.get(ref)).exists) return;
+            transaction.create(ref, data);
+        });
     }
 
     async updateLeaderboard(id: TaskLeaderboardId, data: Partial<TaskLeaderboard>): Promise<void> {

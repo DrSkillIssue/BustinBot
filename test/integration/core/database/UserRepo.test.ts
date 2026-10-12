@@ -4,6 +4,7 @@ import { IDS } from "../../../discord/payloads.js";
 import { UserRepository } from "../../../../src/core/database/UserRepo.js";
 import { userStatsFactory } from "../../../factories.js";
 import { newUserStats } from "../../../../src/models/UserStats.js";
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 
 const test = base.extend("repo", ({ db }) => new UserRepository(db, IDS.guild));
 const otherUser = SnowflakeUtil.generate().toString();
@@ -36,15 +37,19 @@ describe("UserRepository", () => {
         expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 3, commandsRun: 0 });
     });
 
-    test("counts every increment when several arrive at once for a user with no stats yet", async ({ repo }) => {
-        await Promise.all([
-            repo.incrementStat(IDS.user, "commandsRun", 1),
-            repo.incrementStat(IDS.user, "commandsRun", 1),
-            repo.incrementStat(IDS.user, "commandsRun", 1),
-        ]);
+    test(
+        "counts every increment when several arrive at once for a user with no stats yet",
+        async ({ repo }) => {
+            await Promise.all([
+                repo.incrementStat(IDS.user, "commandsRun", 1),
+                repo.incrementStat(IDS.user, "commandsRun", 1),
+                repo.incrementStat(IDS.user, "commandsRun", 1),
+            ]);
 
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ commandsRun: 3 });
-    });
+            expect(await repo.getUserById(IDS.user)).toMatchObject({ commandsRun: 3 });
+        },
+        CONCURRENT_TRANSACTION_TIMEOUT_MS,
+    );
 
     test("moves one completion between tiers on an existing user", async ({ repo }) => {
         await repo.incrementStat(IDS.user, "tasksCompletedBronze", 1);
@@ -54,16 +59,18 @@ describe("UserRepository", () => {
         expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedBronze: 0, tasksCompletedSilver: 1 });
     });
 
-    test("keeps a tier move and an increment made at the same moment for a user with no stats yet", async ({
-        repo,
-    }) => {
-        await Promise.all([
-            repo.updateTierStat(IDS.user, "tasksCompletedBronze", "tasksCompletedSilver"),
-            repo.incrementStat(IDS.user, "tasksCompletedGold", 1),
-        ]);
+    test(
+        "keeps a tier move and an increment made at the same moment for a user with no stats yet",
+        async ({ repo }) => {
+            await Promise.all([
+                repo.updateTierStat(IDS.user, "tasksCompletedBronze", "tasksCompletedSilver"),
+                repo.incrementStat(IDS.user, "tasksCompletedGold", 1),
+            ]);
 
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
-    });
+            expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
+        },
+        CONCURRENT_TRANSACTION_TIMEOUT_MS,
+    );
 
     test("clears every user in the guild", async ({ repo }) => {
         await repo.createUser(userStatsFactory.build({ userId: IDS.user }));
