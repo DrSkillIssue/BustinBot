@@ -38,35 +38,15 @@ interface TMDbCreditsResponse {
     crew: { job: string; name: string }[];
 }
 
+// The details of TMDb's top result for a title, as /addmovie stores them
 export async function fetchMovieDetails(movieName: string): Promise<Partial<Movie> | null> {
     const searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${tmdbApiKey()}&query=${encodeURIComponent(movieName)}`;
 
     const searchResponse = await fetch(searchUrl);
     const searchData = await searchResponse.json() as TMDbSearchResponse;
 
-    if (!searchData?.results?.length) return null;
-
-    const topResult = searchData.results[0]!;
-
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${topResult.id}?api_key=${tmdbApiKey()}`;
-    const detailsResponse = await fetch(detailsUrl);
-    const detailsData = (await detailsResponse.json()) as TMDbDetailsResponse;
-
-    return {
-        tmdbId: detailsData.id,
-        title: detailsData.title,
-        overview: detailsData.overview,
-        releaseDate: detailsData.release_date
-            ? Number(detailsData.release_date.slice(0, 4))
-            : undefined,
-        posterUrl: detailsData.poster_path
-            ? `${TMDB_IMAGE_BASE}${detailsData.poster_path}`
-            : undefined,
-        infoUrl: `https://www.themoviedb.org/movie/${detailsData.id}`,
-        runtime: detailsData.runtime ?? undefined,
-        rating: detailsData.vote_average ?? undefined,
-        genres: detailsData.genres?.map((g) => g.name) ?? undefined,
-    } satisfies Partial<Movie>;
+    const topResult = searchData?.results?.[0];
+    return topResult ? fetchMovieDetailsById(topResult.id) : null;
 }
 
 export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> | null> {
