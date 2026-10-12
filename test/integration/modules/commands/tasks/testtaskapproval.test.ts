@@ -10,7 +10,10 @@ describe("/testtaskapproval", () => {
         services,
         factories,
     }) => {
-        const event = await factories.taskEvent.create({ id: "test-PVM001-1" });
+        const event = await factories.taskEvent.create({
+            id: "test-PVM001-1",
+            task: { taskName: "Kill {amount} Vorkath" },
+        });
         discord.acceptMessages(IDS.channel);
 
         const command = await slash(
@@ -32,7 +35,7 @@ describe("/testtaskapproval", () => {
             expect.objectContaining({
                 content: [
                     `✅ Test submission posted to <#${IDS.channel}>.`,
-                    "**Task:** Kill {amount} Zulrah",
+                    "**Task:** Kill {amount} Vorkath",
                     `**User:** <@${IDS.user}>`,
                     "**Tier hint:** silver",
                     `**Submission ID:** \`${submission!.id}\``,

@@ -37,12 +37,14 @@ describe("/mymovies", () => {
         slash,
         factories,
     }) => {
-        for (const id of ["movie-1", "movie-2", "movie-3", "movie-4"]) await factories.movie.create({ id });
+        for (const [index, title] of ["Inception", "Arrival", "Heat", "Alien"].entries()) {
+            await factories.movie.create({ id: `movie-${index + 1}`, title });
+        }
 
         const command = await slash("mymovies", [], AS.movieAdmin);
 
         const [reply] = discord.originalEdits(command);
         expect(reply?.content).toBe("You have added **4** movies.");
-        expect(reply?.embeds).toHaveLength(4);
+        expect(reply?.embeds?.map((embed) => embed.title)).toEqual(["Inception", "Arrival", "Heat", "Alien"]);
     });
 });

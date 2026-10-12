@@ -11,7 +11,7 @@ beforeEach(() => {
 
 describe("GuildRepository", () => {
     test("initialises a guild only when it has no document yet", async ({ repo }) => {
-        await repo.initGuild(IDS.guild, guildFactory.build());
+        await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "UTC" }));
         await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "Australia/Melbourne" }));
 
         expect(await repo.getGuild(IDS.guild)).toMatchObject({ id: IDS.guild, timezone: "UTC" });
@@ -19,14 +19,15 @@ describe("GuildRepository", () => {
     });
 
     test("merges updates into the stored guild without dropping other fields", async ({ repo }) => {
-        await repo.initGuild(IDS.guild, guildFactory.build());
+        const stored = guildFactory.build({ timezone: "Australia/Melbourne" });
+        await repo.initGuild(IDS.guild, stored);
 
         await repo.updateGuild(IDS.guild, { roles: { movieUser: "role-movie-user" } });
 
         expect(await repo.getGuild(IDS.guild)).toMatchObject({
-            roles: { ...IDS.roles, movieUser: "role-movie-user" },
-            channels: guildFactory.build().channels,
-            timezone: "UTC",
+            roles: { ...stored.roles, movieUser: "role-movie-user" },
+            channels: stored.channels,
+            timezone: "Australia/Melbourne",
         });
     });
 
@@ -52,7 +53,7 @@ describe("GuildRepository", () => {
     });
 
     test("only reads and writes the dev guild in dev mode", async ({ repo }) => {
-        await repo.initGuild(IDS.guild, guildFactory.build());
+        await repo.initGuild(IDS.guild, guildFactory.build({ timezone: "UTC" }));
         await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));
         vi.stubEnv("BOT_MODE", "dev");
         vi.stubEnv("DISCORD_GUILD_ID_DEV", IDS.otherGuild);

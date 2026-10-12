@@ -1,6 +1,7 @@
+import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, buttonInteraction } from "../../../../discord/payloads.js";
+import { apiMember, apiMessage, apiUser, buttonInteraction } from "../../../../discord/payloads.js";
 
 describe("/leaderboard", () => {
     test("shows the all-time leaderboard with the member's rank, and switches to the period's", async ({
@@ -9,16 +10,19 @@ describe("/leaderboard", () => {
         slash,
         factories,
     }) => {
+        const ann = {
+            member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString(), global_name: "Ann" }) }),
+        };
         await factories.userStats.create({
-            userId: IDS.user,
+            userId: ann.member.user.id,
             tasksCompletedBronze: 2,
             tasksCompletedGold: 1,
             taskStreak: 3,
             longestTaskStreak: 3,
         });
 
-        const command = await slash("leaderboard");
-        const periodic = await interact(buttonInteraction("task-leaderboard|periodic"));
+        const command = await slash("leaderboard", [], ann);
+        const periodic = await interact(buttonInteraction("task-leaderboard|periodic", apiMessage(), ann));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -28,9 +32,7 @@ describe("/leaderboard", () => {
                         fields: [
                             {
                                 name: "Top 10",
-                                value: ["```", "Rank Name   Pts B S G Str", "🥇   Tester   8 2 0 1  3*", "```"].join(
-                                    "\n",
-                                ),
+                                value: ["```", "Rank Name Pts B S G Str", "🥇   Ann    8 2 0 1  3*", "```"].join("\n"),
                             },
                             { name: "Your Rank", value: "#1 - 8 pts" },
                         ],

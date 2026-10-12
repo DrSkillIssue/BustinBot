@@ -20,9 +20,17 @@ describe("MovieRepository movies", () => {
     });
 
     test("stores a movie whose optional TMDb details are missing", async ({ repo }) => {
-        await repo.upsertMovie(movieFactory.build({ director: undefined, runtime: undefined, posterUrl: undefined }));
+        await repo.upsertMovie(
+            movieFactory.build({
+                id: "arrival",
+                title: "Arrival",
+                director: undefined,
+                runtime: undefined,
+                posterUrl: undefined,
+            }),
+        );
 
-        expect(await repo.getMovieById("movie-1")).toMatchObject({ title: "Inception" });
+        expect(await repo.getMovieById("arrival")).toMatchObject({ title: "Arrival" });
     });
 });
 
