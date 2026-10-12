@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { EventEmitter, once } from "node:events";
 import { Collection } from "@discordjs/collection";
 import { Client, Events, type Interaction, type Message, type VoiceState, SnowflakeUtil } from "discord.js";
@@ -412,7 +413,8 @@ export class DiscordHarness {
             .intercept({ path: startingWith(`${API}/channels/${channelId}/messages/`), method: "PATCH" })
             .reply(
                 this.answered(({ path, body }) => {
-                    const messageId = path.split("?")[0]!.split("/").at(-1)!;
+                    const [, messageId] = /\/messages\/(\d+)/.exec(path) ?? [];
+                    assert(messageId);
                     return {
                         statusCode: 200,
                         data: this.messageFrom(body, { id: messageId, channel_id: channelId }),

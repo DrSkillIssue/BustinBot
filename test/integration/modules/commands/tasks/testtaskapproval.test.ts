@@ -38,7 +38,7 @@ describe("/testtaskapproval", () => {
                     "**Task:** Kill {amount} Vorkath",
                     `**User:** <@${IDS.user}>`,
                     "**Tier hint:** silver",
-                    `**Submission ID:** \`${submission!.id}\``,
+                    `**Submission ID:** \`${submission?.id}\``,
                 ].join("\n"),
             }),
         ]);

@@ -406,15 +406,19 @@ describe("/taskroles init", () => {
         factories,
     }) => {
         discord.guildRoles();
-        const created = [
+        const milestones = [
             apiRole({ name: "Task Participant" }),
             apiRole({ name: "Task Enthusiast" }),
             apiRole({ name: "Task Expert" }),
             apiRole({ name: "Task Master" }),
-            apiRole({ name: "Task Champion (1st)" }),
-            apiRole({ name: "Task Champion (2nd)" }),
-            apiRole({ name: "Task Champion (3rd)" }),
         ];
+        const enthusiast = milestones[1];
+        const champions = {
+            first: apiRole({ name: "Task Champion (1st)" }),
+            second: apiRole({ name: "Task Champion (2nd)" }),
+            third: apiRole({ name: "Task Champion (3rd)" }),
+        };
+        const created = [...milestones, champions.first, champions.second, champions.third];
         for (const role of created) discord.roleCreated(IDS.guild, role);
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
@@ -438,15 +442,15 @@ describe("/taskroles init", () => {
             ["Task Champion (3rd)", 0xcd7f32],
         ]);
         // 30 completions earn the 25-submission milestone
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${created[1]!.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast?.id}`]);
         const stored = await services.repos.guildRepo.getGuild(IDS.guild);
         expect(stored?.taskSettings?.milestoneRoles?.map((role) => role.roleId)).toEqual(
-            created.slice(0, 4).map((role) => role.id),
+            milestones.map((role) => role.id),
         );
         expect(stored?.roles).toMatchObject({
-            taskChampionFirst: created[4]!.id,
-            taskChampionSecond: created[5]!.id,
-            taskChampionThird: created[6]!.id,
+            taskChampionFirst: champions.first.id,
+            taskChampionSecond: champions.second.id,
+            taskChampionThird: champions.third.id,
         });
     });
 });

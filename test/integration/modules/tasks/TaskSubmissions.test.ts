@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import {
     InteractionResponseType,
@@ -87,8 +88,10 @@ async function storeApproval(
         status: tier,
         reviewedAt: new Date(),
     });
+    const event = await services.repos.taskRepo.getTaskEventById(EVENT);
+    assert(event);
     await factories.taskEvent.create({
-        ...(await services.repos.taskRepo.getTaskEventById(EVENT))!,
+        ...event,
         completionCounts: {
             bronze: tier === SubmissionStatus.Bronze ? 1 : 0,
             silver: tier === SubmissionStatus.Silver ? 1 : 0,
@@ -177,8 +180,8 @@ describe("submitting a task", () => {
         const [details, posted] = discord.messagesSentTo(IDS.channel);
         expect(buttonsIn(details?.components).map((button) => button.customId)).toEqual(
             ["bronze", "silver", "gold"]
-                .map((tier) => `approve_${tier}_${submission!.id}`)
-                .concat(`reject_${submission!.id}`),
+                .map((tier) => `approve_${tier}_${submission?.id}`)
+                .concat(`reject_${submission?.id}`),
         );
         expect(posted).toMatchObject({
             content: `Submission screenshots for <@${IDS.user}> — Kill Zulrah:`,
@@ -274,11 +277,12 @@ describe("submitting a task", () => {
                 "✅ Submission for **Kill Zulrah** received with 1 screenshot and sent for review!",
             ]);
             const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
+            assert(submission);
             expect(others).toEqual([]);
             expect(discord.messagesSentTo(IDS.channel)).toHaveLength(4);
             expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
-            expect(discord.messageDeletions(IDS.channel)).not.toContain(submission!.message);
-            expect(discord.messageDeletions(IDS.channel)).not.toContain(submission!.screenshotMessage);
+            expect(discord.messageDeletions(IDS.channel)).not.toContain(submission.message);
+            expect(discord.messageDeletions(IDS.channel)).not.toContain(submission.screenshotMessage);
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
@@ -376,7 +380,8 @@ describe("approving a submission", () => {
             buttonInteraction(`approve_${tier}_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
         );
         const [confirm] = offeredButtons(discord, prompt);
-        return interact(buttonInteraction(confirm!, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
+        assert(confirm);
+        return interact(buttonInteraction(confirm, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
     }
 
     test("asks the admin to confirm, then records the tier and everything that follows from it", async ({
@@ -407,8 +412,10 @@ describe("approving a submission", () => {
         });
 
         const [confirmButton] = offeredButtons(discord, prompt);
+
+        assert(confirmButton);
         const confirm = await interact(
-            buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
+            buttonInteraction(confirmButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
         );
 
         expect(discord.callbacks(confirm)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
@@ -522,10 +529,11 @@ describe("approving a submission", () => {
                 buttonInteraction(`approve_bronze_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
             );
             const [confirmButton] = offeredButtons(discord, prompt);
+            assert(confirmButton);
 
             const confirms = await Promise.all([
-                interact(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
-                interact(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
+                interact(buttonInteraction(confirmButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
+                interact(buttonInteraction(confirmButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
             ]);
 
             expect(confirms.map((confirm) => discord.originalEdits(confirm).at(-1)?.content).sort()).toEqual([
@@ -674,15 +682,18 @@ describe("approving a submission", () => {
     });
 
     test.for([
-        ["review-confirm||", "Invalid confirmation payload. Please try again."],
-        [`review-confirm|approve|platinum|${taskSubmissionFactory.build().id}`, "Invalid tier selected for approval."],
+        { customId: "review-confirm||", reply: "Invalid confirmation payload. Please try again." },
+        {
+            customId: `review-confirm|approve|platinum|${taskSubmissionFactory.build().id}`,
+            reply: "Invalid tier selected for approval.",
+        },
     ])(
         "answers a confirmation button it can't read (%s) without reviewing",
-        async ([customId, reply], { discord, interact, services, factories }) => {
+        async ({ customId, reply }, { discord, interact, services, factories }) => {
             const submission = await storePendingSubmission(factories);
 
             const confirm = await interact(
-                buttonInteraction(customId!, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
+                buttonInteraction(customId, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
             );
 
             expect(discord.callbacks(confirm)).toEqual([
@@ -703,9 +714,10 @@ describe("approving a submission", () => {
             buttonInteraction(`approve_gold_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
         );
         const [, cancelButton] = offeredButtons(discord, prompt);
+        assert(cancelButton);
 
         const cancel = await interact(
-            buttonInteraction(cancelButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
+            buttonInteraction(cancelButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
         );
 
         expect(discord.callbacks(cancel)).toEqual([
@@ -742,10 +754,13 @@ describe("rejecting a submission", () => {
             },
         ]);
         const [confirmButton] = offeredButtons(discord, prompt);
+        assert(confirmButton);
         const confirm = await interact(
-            buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
+            buttonInteraction(confirmButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin),
         );
-        return discord.modal(confirm)!.custom_id;
+        const modal = discord.modal(confirm);
+        assert(modal);
+        return modal.custom_id;
     }
 
     test("asks for a reason, then records it, tells the member and archives the submission", async ({

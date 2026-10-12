@@ -56,12 +56,17 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
             taskChampionThird: roles.third.id,
         },
     });
-    const dms: Record<string, string> = {};
-    for (const [index, userId] of [winner, runnerUp, third].entries()) {
-        const user = apiUser({ id: userId, username: `member${index + 1}`, global_name: `member${index + 1}` });
+    // A member Discord knows, who accepts DMs; returns their DM channel's id
+    const placed = (userId: string, name: string) => {
+        const user = apiUser({ id: userId, username: name, global_name: name });
         discord.member(IDS.guild, apiGuildMember({ user }));
-        dms[userId] = discord.acceptDirectMessages(user);
-    }
+        return discord.acceptDirectMessages(user);
+    };
+    const dms = {
+        winner: placed(winner, "member1"),
+        runnerUp: placed(runnerUp, "member2"),
+        third: placed(third, "member3"),
+    };
     return { roles, dms };
 }
 
@@ -127,7 +132,7 @@ describe("the weekly leaderboard update", () => {
                 .filter((message) => message.embeds?.[0]?.title === "🏆 Final Leaderboard Standings");
             expect(finals).toHaveLength(1);
             expect(finals[0]?.embeds?.[0]?.fields?.[0]?.value).toBe("🥇 member1\n🥈 member2\n🥉 member3");
-            expect(discord.messagesSentTo(dms[winner]!)).toEqual([
+            expect(discord.messagesSentTo(dms.winner)).toEqual([
                 expect.objectContaining({
                     content: `🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **${NAMES.guild}**.\nYou have been awarded the **Task Champion (1st)** role to flex.`,
                 }),

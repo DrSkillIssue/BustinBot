@@ -208,9 +208,9 @@ export const test = base
     .extend("scheduledJobs", () => (guildId: string): Record<string, string> => {
         const prefix = `taskScheduler:${guildId}:`;
         return Object.fromEntries(
-            [...cron.getTasks().values()]
-                .filter((job) => job.name?.startsWith(prefix))
-                .map((job) => [job.name!.slice(prefix.length), job.getPattern()]),
+            [...cron.getTasks().values()].flatMap((job) =>
+                job.name?.startsWith(prefix) ? [[job.name.slice(prefix.length), job.getPattern()]] : [],
+            ),
         );
     })
     .extend("runScheduledJob", () => async (guildId: string, job: string): Promise<void> => {

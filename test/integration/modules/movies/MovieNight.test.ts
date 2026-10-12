@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { DateTime } from "luxon";
@@ -116,7 +117,7 @@ describe("scheduling a movie night", () => {
         factories,
     }) => {
         const movieUsers = await setUpMovieNight(discord, services);
-        const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
+        const date = DateTime.utc().plus({ days: 2 }).toISODate();
         const start = DateTime.fromISO(`${date}T20:30:00.000Z`);
         const movies = services.repos.movieRepo;
         await factories.movie.create({
@@ -150,6 +151,7 @@ describe("scheduling a movie night", () => {
         const events = await movies.getAllEvents();
         expect(events.find((event) => event.id === "previous")).toMatchObject({ completed: true });
         const night = await movies.getActiveEvent();
+        assert(night);
         expect(night).toMatchObject({
             startTime: start.toJSDate(),
             voiceChannelId: VOICE,
@@ -159,7 +161,7 @@ describe("scheduling a movie night", () => {
         });
         expect((await movies.getActivePoll())?.endsAt).toEqual(start.minus({ hours: 1 }).toJSDate());
         // Attendance starts at the start time, not when the night is scheduled
-        expect(services.movieAttendance.isTracking(night!.id)).toBe(false);
+        expect(services.movieAttendance.isTracking(night.id)).toBe(false);
     });
 
     test("points members at the running poll and stores a placeholder movie when none is chosen yet", async ({
@@ -169,7 +171,7 @@ describe("scheduling a movie night", () => {
         factories,
     }) => {
         await setUpMovieNight(discord, services);
-        const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
+        const date = DateTime.utc().plus({ days: 2 }).toISODate();
         const pollChannel = SnowflakeUtil.generate().toString();
         await factories.moviePoll.create({
             endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),

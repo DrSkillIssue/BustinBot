@@ -147,8 +147,9 @@ describe("slash command routing", () => {
                     "probe",
                     commandFactory.build({
                         execute: async ({ interaction }) => {
-                            await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
-                            statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
+                            if (!interaction) return;
+                            await interaction.reply({ content: "pong", flags: MessageFlags.Ephemeral });
+                            statsWhenAcknowledged = await users.getUserById(interaction.user.id);
                         },
                     }),
                 ],

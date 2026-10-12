@@ -10,10 +10,12 @@ function tuesdays(from: string, years: number): DateTime[] {
 
 describe("prize draw weeks", () => {
     test("keep the draws a fortnight apart across new years", () => {
-        const draws = tuesdays("2026-01-06", 15).filter((tuesday) => isPrizeDrawWeek(tuesday.toJSDate()));
+        // 2026-01-06 is a draw Tuesday
+        const everyTuesday = tuesdays("2026-01-06", 15);
 
-        const gaps = new Set(draws.slice(1).map((draw, i) => draw.diff(draws[i]!, "days").days));
-        expect([...gaps]).toEqual([14]);
+        expect(everyTuesday.filter((tuesday) => isPrizeDrawWeek(tuesday.toJSDate()))).toEqual(
+            everyTuesday.filter((_, week) => week % 2 === 0),
+        );
     });
 
     test("keep the Tuesdays the draw already ran on", () => {

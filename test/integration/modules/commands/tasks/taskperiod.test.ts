@@ -31,7 +31,7 @@ describe("/taskperiod", () => {
         services,
         factories,
     }) => {
-        const leaderboard = await factories.periodicLeaderboard.create({
+        await factories.periodicLeaderboard.create({
             points: { [IDS.user]: 6 },
             tierCounts: { [IDS.user]: { gold: 1 } },
             period: { eventIds: ["week-1", "week-2"], index: 3 },
@@ -52,7 +52,7 @@ describe("/taskperiod", () => {
         expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
             points: {},
             tierCounts: {},
-            period: { eventIds: [], index: leaderboard.period!.index },
+            period: { eventIds: [], index: 3 },
         });
     });
 });

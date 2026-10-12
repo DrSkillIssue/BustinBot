@@ -2,7 +2,7 @@ import { describe, expect, test } from "../../../../fixtures.js";
 import { AS, chatInputInteraction } from "../../../../discord/payloads.js";
 
 function listedCommands(description: string | undefined): string[] {
-    return [...(description ?? "").matchAll(/\*\*(\/\w+)\*\*/g)].map(([, name]) => name!);
+    return [...(description ?? "").matchAll(/\*\*(\/\w+)\*\*/g)].flatMap(([, name]) => (name ? [name] : []));
 }
 
 describe("/moviehelp", () => {
