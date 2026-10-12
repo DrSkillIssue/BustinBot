@@ -5,7 +5,7 @@ import { describe, expect, test, vi, type StoringFactories } from "../../../fixt
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
-import { IDS, apiGuildMember, apiMember, apiRole, apiUser } from "../../../discord/payloads.js";
+import { IDS, NAMES, apiGuildMember, apiMember, apiRole, apiUser } from "../../../discord/payloads.js";
 import { leaderboardPeriodFactory, taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../../src/models/TaskLeaderboard.js";
@@ -130,8 +130,7 @@ describe("the weekly leaderboard update", () => {
             expect(finals[0]?.embeds?.[0]?.fields?.[0]?.value).toBe("🥇 member1\n🥈 member2\n🥉 member3");
             expect(discord.messagesSentTo(dms[winner]!)).toEqual([
                 expect.objectContaining({
-                    content:
-                        "🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **Test Guild**.\nYou have been awarded the **Task Champion (1st)** role to flex.",
+                    content: `🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **${NAMES.guild}**.\nYou have been awarded the **Task Champion (1st)** role to flex.`,
                 }),
             ]);
             expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Period ${period.index} had already ended.`);

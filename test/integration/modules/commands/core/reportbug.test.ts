@@ -1,7 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS, apiGuild, apiTextChannel } from "../../../../discord/payloads.js";
+import { IDS, NAMES, apiGuild, apiTextChannel } from "../../../../discord/payloads.js";
 
 // BustinBot's development server, where bug reports go
 const DEV_SERVER = "1289517693313220699";
@@ -34,9 +34,9 @@ describe("/reportbug", () => {
                     "^🐞 \\*\\*New Bug Report\\*\\* 🐞",
                     "\\*\\*Bug ID:\\*\\* `BUG-[0-9A-Z]+-[0-9A-Z]{4}`",
                     "\\*\\*Timestamp:\\*\\* \\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z",
-                    `\\*\\*Reporter:\\*\\* tester \\(\\*${IDS.user}\\*\\)`,
-                    `\\*\\*Server:\\*\\* Test Guild \\(\\*${IDS.guild}\\*\\)`,
-                    `\\*\\*Channel:\\*\\* #general \\(\\*${IDS.channel}\\*\\)`,
+                    `\\*\\*Reporter:\\*\\* ${NAMES.username} \\(\\*${IDS.user}\\*\\)`,
+                    `\\*\\*Server:\\*\\* ${NAMES.guild} \\(\\*${IDS.guild}\\*\\)`,
+                    `\\*\\*Channel:\\*\\* #${NAMES.channel} \\(\\*${IDS.channel}\\*\\)`,
                     "\\*\\*Message:\\*\\* /bustin didn't reply$",
                 ].join("\\n"),
             ),

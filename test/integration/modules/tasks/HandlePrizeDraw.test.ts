@@ -2,7 +2,7 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
 import { DiscordError } from "../../../discord/harness.js";
-import { IDS, apiRole, apiUser } from "../../../discord/payloads.js";
+import { IDS, NAMES, apiUser } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import {
     announcePrizeDrawWinner,
@@ -220,9 +220,6 @@ describe("announcing a prize draw winner", () => {
         services,
         factories,
     }) => {
-        const taskUser = apiRole({ name: "Task User" });
-        await discord.addRole(IDS.guild, taskUser);
-        await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
@@ -231,7 +228,7 @@ describe("announcing a prize draw winner", () => {
 
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
             expect.objectContaining({
-                content: `<@&${taskUser.id}>`,
+                content: `<@&${IDS.roles.taskUser}>`,
                 embeds: [expect.objectContaining({ thumbnail: { url: "attachment://task_prize.png" } })],
                 files: ["task_prize.png"],
             }),
@@ -239,7 +236,7 @@ describe("announcing a prize draw winner", () => {
         expect(discord.messagesSentTo(dm)).toEqual([
             expect.objectContaining({
                 content: expect.stringContaining(
-                    "You've won the latest OSRS community tasks prize draw in **Test Guild**",
+                    `You've won the latest OSRS community tasks prize draw in **${NAMES.guild}**`,
                 ),
             }),
         ]);
@@ -247,6 +244,7 @@ describe("announcing a prize draw winner", () => {
 
     test("still posts the winner's embed when no task role is configured", async ({ discord, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await services.guilds.update(IDS.guild, { roles: { taskUser: "" } });
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
@@ -282,9 +280,6 @@ describe("the scheduled prize draw job", () => {
         await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
-        const taskUser = apiRole({ name: "Task User" });
-        await discord.addRole(IDS.guild, taskUser);
-        await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
 

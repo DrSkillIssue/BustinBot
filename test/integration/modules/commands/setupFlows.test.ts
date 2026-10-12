@@ -10,6 +10,7 @@ import { PRIVATE_DEFERRAL } from "../../../discord/harness.js";
 import { routeInteraction } from "../../../../src/core/events/routeInteraction.js";
 import {
     IDS,
+    NAMES,
     buttonInteraction,
     channelSelectInteraction,
     modalSubmitInteraction,
@@ -55,7 +56,7 @@ describe("the setup commands", () => {
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            setup_announce: "Channel for bot announcements (Current: #general)",
+            setup_announce: `Channel for bot announcements (Current: #${NAMES.channel})`,
             setup_log: "Channel for errors and logs (Current: None)",
             setup_archive: "Channel for archived posts (Current: None)",
         });
@@ -69,9 +70,9 @@ describe("the setup commands", () => {
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            moviesetup_admin_role: "Role for movie admin commands (Current: @Movie Admin)",
+            moviesetup_admin_role: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
             moviesetup_user_role: "Role notified for movie nights (Current: None)",
-            moviesetup_channel: "Channel for movie night announcements (Current: #general)",
+            moviesetup_channel: `Channel for movie night announcements (Current: #${NAMES.channel})`,
             moviesetup_voice_channel: "Voice channel for movie nights (Current: None)",
         });
     });
@@ -84,10 +85,10 @@ describe("the setup commands", () => {
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            tasksetup_admin_role: "Role for approving submissions (Current: @Task Admin)",
-            tasksetup_user_role: "Role notified about tasks (Current: None)",
-            tasksetup_channel: "Channel for task posts (Current: #general)",
-            tasksetup_verification_channel: "Channel for managing submissions (Current: #general)",
+            tasksetup_admin_role: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
+            tasksetup_user_role: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
+            tasksetup_channel: `Channel for task posts (Current: #${NAMES.channel})`,
+            tasksetup_verification_channel: `Channel for managing submissions (Current: #${NAMES.channel})`,
         });
     });
 });

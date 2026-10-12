@@ -60,7 +60,18 @@ export const IDS = {
         admin: "100000000000000041",
         taskAdmin: "100000000000000042",
         movieAdmin: "100000000000000043",
+        // The role pinged for task polls, events and prize draws
+        taskUser: "100000000000000044",
     },
+} as const;
+
+// The names Discord knows the harness world by; tests that show a name assert it through these
+export const NAMES = {
+    guild: "Test Guild",
+    channel: "general",
+    username: "tester",
+    displayName: "Tester",
+    roles: { admin: "BustinBot Admin", taskAdmin: "Task Admin", movieAdmin: "Movie Admin", taskUser: "Task User" },
 } as const;
 
 const EPOCH = "2026-01-01T00:00:00.000Z";
@@ -71,9 +82,9 @@ const NO_MEMBER_FLAGS = 0 as GuildMemberFlags;
 export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
     return {
         id: IDS.user,
-        username: "tester",
+        username: NAMES.username,
         discriminator: "0",
-        global_name: "Tester",
+        global_name: NAMES.displayName,
         avatar: null,
         ...overrides,
     };
@@ -105,7 +116,7 @@ export function apiTextChannel(
         id: IDS.channel,
         type: ChannelType.GuildText,
         guild_id: IDS.guild,
-        name: "general",
+        name: NAMES.channel,
         position: 0,
         parent_id: null,
         nsfw: false,
@@ -167,7 +178,7 @@ export function apiGuild(overrides: Partial<GatewayGuildCreateDispatchData> = {}
     const id = overrides.id ?? IDS.guild;
     return {
         id,
-        name: "Test Guild",
+        name: NAMES.guild,
         icon: null,
         splash: null,
         discovery_splash: null,
@@ -179,9 +190,10 @@ export function apiGuild(overrides: Partial<GatewayGuildCreateDispatchData> = {}
         explicit_content_filter: GuildExplicitContentFilter.Disabled,
         roles: [
             apiRole({ id, name: "@everyone", position: 0 }),
-            apiRole({ id: IDS.roles.admin, name: "BustinBot Admin" }),
-            apiRole({ id: IDS.roles.taskAdmin, name: "Task Admin" }),
-            apiRole({ id: IDS.roles.movieAdmin, name: "Movie Admin" }),
+            apiRole({ id: IDS.roles.admin, name: NAMES.roles.admin }),
+            apiRole({ id: IDS.roles.taskAdmin, name: NAMES.roles.taskAdmin }),
+            apiRole({ id: IDS.roles.movieAdmin, name: NAMES.roles.movieAdmin }),
+            apiRole({ id: IDS.roles.taskUser, name: NAMES.roles.taskUser }),
         ],
         emojis: [],
         features: [],
@@ -253,7 +265,7 @@ const interactionBase = {
 };
 
 function interactionChannel() {
-    return { id: IDS.channel, type: ChannelType.GuildText as const, guild_id: IDS.guild, name: "general" };
+    return { id: IDS.channel, type: ChannelType.GuildText as const, guild_id: IDS.guild, name: NAMES.channel };
 }
 
 // `resolved` carries the users, members and roles that user and role options refer to

@@ -1,16 +1,13 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
-import { IDS, apiMember, apiRole } from "../../../../discord/payloads.js";
+import { IDS, apiMember } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 
 const botAdmin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 describe("/suppress", () => {
-    test("stops the bot pinging roles for the given minutes", async ({ discord, slash, services, factories }) => {
+    test("stops the bot pinging roles for the given minutes", async ({ discord, slash, factories }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
-        const taskUsers = apiRole({ name: "Task Users" });
-        await discord.addRole(IDS.guild, taskUsers);
-        await services.guilds.update(IDS.guild, { roles: { taskUser: taskUsers.id } });
         for (const id of ["PVM001", "PVM002", "PVM003"])
             await factories.task.create({ id, category: TaskCategory.PvM });
         discord.acceptMessages(IDS.channel);

@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../../discord/harness.js";
-import { IDS, apiMember, apiRole, apiUser } from "../../../../discord/payloads.js";
+import { IDS, apiMember, apiUser } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -76,10 +76,7 @@ describe("/taskdraw", () => {
         ]);
     });
 
-    test("announces a rolled winner", async ({ discord, slash, services, factories }) => {
-        const taskUser = apiRole({ name: "Task User" });
-        await discord.addRole(IDS.guild, taskUser);
-        await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
+    test("announces a rolled winner", async ({ discord, slash, factories }) => {
         const draw = await factories.prizeDraw.create({ entries: [IDS.user], totalEntries: 1, winnerId: IDS.user });
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: IDS.user }));
