@@ -1,7 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { beforeEach, describe, expect, test, vi, type StoringFactories } from "../../../../fixtures.js";
-import type { MockAgent } from "undici";
+import { describe, expect, test, type StoringFactories } from "../../../../fixtures.js";
 import {
     IDS,
     apiMember,
@@ -10,43 +9,17 @@ import {
     buttonInteraction,
     chatInputInteraction,
 } from "../../../../discord/payloads.js";
+import { tmdbMovie, tmdbSearch } from "../../../../tmdb.js";
 
-const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
 const reloaded = { id: 604, title: "The Matrix Reloaded", release_date: "2003-05-15", overview: "Neo returns." };
 const resultsMessage = apiMessage({ flags: MessageFlags.Ephemeral });
-
-// TMDb answering a search
-function tmdbSearch(http: MockAgent, query: string, results: object[]): void {
-    http.get("https://api.themoviedb.org")
-        .intercept({ path: `/3/search/movie?api_key=test-key&query=${encodeURIComponent(query)}`, method: "GET" })
-        .reply(200, { results }, JSON_RESPONSE);
-}
-
-// TMDb answering for one movie's details and credits
-function tmdbMovie(http: MockAgent, movie: typeof matrix, runtime: number, director: string): void {
-    const tmdb = http.get("https://api.themoviedb.org");
-    tmdb.intercept({ path: `/3/movie/${movie.id}?api_key=test-key&language=en-US`, method: "GET" }).reply(
-        200,
-        { ...movie, runtime, vote_average: 8.2, genres: [{ id: 1, name: "Action" }] },
-        JSON_RESPONSE,
-    );
-    tmdb.intercept({ path: `/3/movie/${movie.id}/credits?api_key=test-key&language=en-US`, method: "GET" }).reply(
-        200,
-        { cast: [{ name: "Keanu Reeves", order: 0 }], crew: [{ job: "Director", name: director }] },
-        JSON_RESPONSE,
-    );
-}
 
 // The most movies a member may have in the list, added by them
 async function storeFullList(factories: StoringFactories, userId: string): Promise<void> {
     for (let i = 0; i < 3; i++)
         await factories.movie.create({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId });
 }
-
-beforeEach(() => {
-    vi.stubEnv("TMDB_API_KEY", "test-key");
-});
 
 describe("/addmovie", () => {
     test("shows TMDb's results and adds the one the member picks", async ({

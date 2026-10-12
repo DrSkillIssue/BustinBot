@@ -31,6 +31,8 @@ export default defineConfig({
                         // Tests never run on Google Cloud; skip the metadata-server probe Google's auth library
                         // otherwise makes before the first Firestore call
                         METADATA_SERVER_DETECTION: "none",
+                        // The key in the TMDb requests tests answer (test/tmdb.ts)
+                        TMDB_API_KEY: "test-key",
                     },
                 },
             },
