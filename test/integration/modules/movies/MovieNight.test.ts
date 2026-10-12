@@ -11,16 +11,15 @@ import { createServiceContainer } from "../../../../src/core/services/ServiceFac
 import {
     AS,
     IDS,
-    apiGuild,
     apiMessage,
     apiRole,
-    apiTextChannel,
     apiUser,
     apiVoiceChannel,
     apiVoiceState,
     modalSubmitInteraction,
     stringSelectInteraction,
     chatInputInteraction,
+    apiOtherGuild,
 } from "../../../discord/payloads.js";
 import { movieFactory, moviePollFactory } from "../../../factories.js";
 import type { MovieEvent } from "../../../../src/models/MovieEvent.js";
@@ -426,12 +425,7 @@ describe("the movie night sweep", () => {
     test("keeps each guild's movie night to itself", async ({ discord, services, otherGuild, factories }) => {
         const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
         vi.setSystemTime(now.toJSDate());
-        await discord.addGuild(
-            apiGuild({
-                id: IDS.otherGuild,
-                channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
-            }),
-        );
+        await discord.addGuild(apiOtherGuild());
         const duePoll = moviePollFactory.build({
             endsAt: now.minus({ minutes: 1 }).toJSDate(),
             votes: { [present]: "movie-2" },

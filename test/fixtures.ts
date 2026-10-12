@@ -6,6 +6,7 @@ import type {
     GatewayMessageCreateDispatchData,
     GatewayVoiceStateUpdateDispatchData,
 } from "discord-api-types/v10";
+import type { DateTime } from "luxon";
 import { test as base } from "vitest";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { createServiceContainer } from "../src/core/services/ServiceFactory.js";
@@ -84,6 +85,14 @@ const TASK_ID_PREFIXES: Record<TaskCategory, string> = {
     [TaskCategory.Leagues]: "LEA",
 };
 const POLL_SKILLS = [Skill.Mining, Skill.Fishing, Skill.Cooking];
+
+// Back-to-back week-long task events, the first starting at firstStart, one per id; returns the ids
+export async function storeWeeks(factories: StoringFactories, firstStart: DateTime, ids: string[]): Promise<string[]> {
+    for (const [week, id] of ids.entries()) {
+        await factories.taskEvent.create({ id, startTime: firstStart.plus({ weeks: week }).toJSDate() });
+    }
+    return ids;
+}
 
 // Enough tasks for a poll in each of the given categories: three in each (PVM001 to PVM003 and so on), the skilling
 // ones each in its own skill

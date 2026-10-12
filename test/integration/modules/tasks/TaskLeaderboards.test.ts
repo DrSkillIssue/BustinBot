@@ -1,12 +1,12 @@
+import { DateTime } from "luxon";
 import { SnowflakeUtil } from "discord.js";
-import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, vi, storeWeeks } from "../../../fixtures.js";
 import {
     ensureTaskLeaderboardsInitialized,
     finalizePeriodicLeaderboard,
     recordPeriodicTierChange,
     registerPeriodicTaskEvent,
 } from "../../../../src/modules/tasks/TaskLeaderboards.js";
-import { taskFactory } from "../../../factories.js";
 import { IDS, buttonInteraction } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 
@@ -15,17 +15,6 @@ const [oldPeriodMember, overlapMember, upgradedMember] = [
     SnowflakeUtil.generate().toString(),
     SnowflakeUtil.generate().toString(),
 ];
-
-async function storeEvent(factories: StoringFactories, id: string, start: string, end: string): Promise<string> {
-    await factories.taskEvent.create({
-        id,
-        task: taskFactory.build({ id }),
-        keyword: id,
-        startTime: new Date(start),
-        endTime: new Date(end),
-    });
-    return id;
-}
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services, factories }) => {
@@ -72,27 +61,28 @@ describe("TaskLeaderboards periodic submissions", () => {
         for (const week of [1, 2, 3]) {
             for (const category of ["pvm", "skilling", "minigame"]) {
                 eventIds.push(
-                    await storeEvent(
-                        factories,
-                        `week-${week}-${category}`,
-                        `2026-01-${String(week * 7 - 2).padStart(2, "0")}T00:00:00.000Z`,
-                        `2026-01-${String(week * 7 + 5).padStart(2, "0")}T00:00:00.000Z`,
-                    ),
+                    (
+                        await factories.taskEvent.create({
+                            id: `week-${week}-${category}`,
+                            startTime: new Date(`2026-01-${String(week * 7 - 2).padStart(2, "0")}T00:00:00.000Z`),
+                        })
+                    ).id,
                 );
             }
         }
         for (const category of ["pvm", "skilling", "minigame"]) {
             eventIds.push(
-                await storeEvent(
-                    factories,
-                    `week-4-${category}`,
-                    "2026-01-26T00:00:00.000Z",
-                    "2026-02-02T00:00:00.000Z",
-                ),
+                (
+                    await factories.taskEvent.create({
+                        id: `week-4-${category}`,
+                        startTime: new Date("2026-01-26T00:00:00.000Z"),
+                    })
+                ).id,
             );
         }
         eventIds.push(
-            await storeEvent(factories, "week-5-pvm", "2026-02-02T00:00:00.000Z", "2026-02-09T00:00:00.000Z"),
+            (await factories.taskEvent.create({ id: "week-5-pvm", startTime: new Date("2026-02-02T00:00:00.000Z") }))
+                .id,
         );
 
         await ensureTaskLeaderboardsInitialized(services);
@@ -106,19 +96,16 @@ describe("TaskLeaderboards periodic submissions", () => {
     });
 
     test("carries approved submissions from the overlap into the following period", async ({ services, factories }) => {
-        const weeks = [
-            ["week-1", "2026-01-05", "2026-01-12"],
-            ["week-2", "2026-01-12", "2026-01-19"],
-            ["week-3", "2026-01-19", "2026-01-26"],
-            ["week-4", "2026-01-26", "2026-02-02"],
-            ["week-5", "2026-02-02", "2026-02-09"],
-        ] as const;
-        for (const [id, start, end] of weeks) {
-            await storeEvent(factories, id, `${start}T00:00:00.000Z`, `${end}T00:00:00.000Z`);
-        }
+        const weeks = await storeWeeks(factories, DateTime.fromISO("2026-01-05T00:00:00Z"), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+            "week-5",
+        ]);
 
         await ensureTaskLeaderboardsInitialized(services);
-        for (const [id] of weeks.slice(0, 4)) {
+        for (const id of weeks.slice(0, 4)) {
             await registerPeriodicTaskEvent(services, id);
         }
         await recordPeriodicTierChange(services, "week-4", {
@@ -154,8 +141,8 @@ describe("TaskLeaderboards periodic submissions", () => {
     });
 
     test("moves tier counts when approved submissions are upgraded", async ({ services, factories }) => {
-        await storeEvent(factories, "week-1", "2026-01-05T00:00:00.000Z", "2026-01-12T00:00:00.000Z");
-        await storeEvent(factories, "week-2", "2026-01-12T00:00:00.000Z", "2026-01-19T00:00:00.000Z");
+        await factories.taskEvent.create({ id: "week-1", startTime: new Date("2026-01-05T00:00:00.000Z") });
+        await factories.taskEvent.create({ id: "week-2", startTime: new Date("2026-01-12T00:00:00.000Z") });
 
         await ensureTaskLeaderboardsInitialized(services);
         await registerPeriodicTaskEvent(services, "week-1");

@@ -10,10 +10,10 @@ import { DiscordError, DiscordHarness } from "../discord/harness.js";
 import {
     IDS,
     apiAttachment,
-    apiGuild,
     apiTextChannel,
     chatInputInteraction,
     directMessage,
+    apiOtherGuild,
 } from "../discord/payloads.js";
 import { submissionDraftFactory, taskEventFactory } from "../factories.js";
 import { getNextPollDate } from "../../src/modules/tasks/TaskScheduler.js";
@@ -104,16 +104,11 @@ describe("startBot", () => {
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
-        await discord.addGuild(
-            apiGuild({
-                id: IDS.otherGuild,
-                channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
-            }),
-        );
+        await discord.addGuild(apiOtherGuild());
         const inOtherGuild = {
             guild_id: otherGuild.guildId,
             channel_id: IDS.otherGuildChannel,
-            channel: { id: IDS.otherGuildChannel, type: 0 as const, guild_id: IDS.otherGuild, name: "general" },
+            channel: apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild }),
         };
         // The other guild is already in use before anyone praises the bot
         await discord.originalEdit(await discord.dispatch(chatInputInteraction("bustin", [], inOtherGuild)));
@@ -181,12 +176,7 @@ describe("startBot", () => {
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
         await discord.connect();
-        await discord.addGuild(
-            apiGuild({
-                id: IDS.otherGuild,
-                channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
-            }),
-        );
+        await discord.addGuild(apiOtherGuild());
         await discord.sendMessage(directMessage("", { attachments: [screenshot] }));
         // Shutting down lets the DM being handled finish
         await shutdown();

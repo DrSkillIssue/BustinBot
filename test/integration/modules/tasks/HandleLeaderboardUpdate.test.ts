@@ -1,12 +1,11 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, vi, type StoringFactories, storeWeeks } from "../../../fixtures.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
 import { AS, IDS, NAMES, apiGuildMember, apiRole, apiUser, chatInputInteraction } from "../../../discord/payloads.js";
-import { taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import {
     postPeriodicLeaderboardUpdate,
@@ -18,22 +17,6 @@ const [winner, runnerUp, third] = [
     SnowflakeUtil.generate().toString(),
     SnowflakeUtil.generate().toString(),
 ];
-
-// Weekly task events, each starting on its own day; `ended` of them are over
-async function storeWeeks(factories: StoringFactories, count: number, ended: number): Promise<string[]> {
-    const ids: string[] = [];
-    for (let week = 0; week < count; week++) {
-        const id = `week-${week + 1}`;
-        const endTime = DateTime.now().plus({ days: week < ended ? -(ended - week) : week + 1 });
-        await factories.taskEvent.create({
-            id,
-            task: taskFactory.build({ id }),
-            endTime: endTime.toJSDate(),
-        });
-        ids.push(id);
-    }
-    return ids;
-}
 
 async function storePeriodic(
     factories: StoringFactories,
@@ -74,7 +57,7 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
 
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services, factories }) => {
-        const events = await storeWeeks(factories, 2, 1);
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 1, days: 1 }), ["week-1", "week-2"]);
         await storePeriodic(factories, {
             points: { [winner]: 6 },
             tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } },
@@ -100,7 +83,12 @@ describe("the weekly leaderboard update", () => {
         "ends the period once however many runs see it finished: champions, final standings and congratulations",
         async ({ discord, services, factories }) => {
             const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-            const events = await storeWeeks(factories, 4, 4);
+            const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+                "week-1",
+                "week-2",
+                "week-3",
+                "week-4",
+            ]);
             const period = { index: 3, length: 4, eventIds: events };
             await storePeriodic(factories, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
             const { roles, dms } = await setUpChampions(discord, services);
@@ -151,7 +139,12 @@ describe("the weekly leaderboard update", () => {
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const events = await storeWeeks(factories, 4, 4);
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
         await storePeriodic(factories, {
             points: { [winner]: 9 },
             period: { length: 4, eventIds: events },
@@ -217,7 +210,12 @@ describe("the warning before a period ends", () => {
         services,
         factories,
     }) => {
-        const events = await storeWeeks(factories, 4, 4);
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
         await storePeriodic(factories, { period: { length: 4, eventIds: events } });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
             await factories.taskSubmission.create({
@@ -244,7 +242,12 @@ describe("the warning before a period ends", () => {
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const events = await storeWeeks(factories, 4, 4);
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
         await storePeriodic(factories, { period: { length: 4, eventIds: events } });
         await factories.taskSubmission.create({ taskEventId: "week-4", status: SubmissionStatus.Pending });
         await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });

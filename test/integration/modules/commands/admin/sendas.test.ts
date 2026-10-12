@@ -7,9 +7,7 @@ import {
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../../discord/harness.js";
-import { AS, IDS, NAMES, apiMember, chatInputInteraction } from "../../../../discord/payloads.js";
-
-const general = { id: IDS.channel, type: ChannelType.GuildText as const, name: NAMES.channel };
+import { AS, IDS, apiMember, apiResolvedChannel, chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/sendas", () => {
     test("posts the message as the bot and confirms privately", async ({ discord, interact }) => {
@@ -19,11 +17,11 @@ describe("/sendas", () => {
             chatInputInteraction(
                 "sendas",
                 [
-                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: general.id },
+                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: IDS.channel },
                     { type: ApplicationCommandOptionType.String, name: "message", value: "Hello, this is BustinBot!" },
                 ],
                 AS.botAdmin,
-                { channels: { [general.id]: { ...general, permissions: "0" } } },
+                { channels: { [IDS.channel]: apiResolvedChannel() } },
             ),
         );
 
@@ -41,11 +39,11 @@ describe("/sendas", () => {
             chatInputInteraction(
                 "sendas",
                 [
-                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: general.id },
+                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: IDS.channel },
                     { type: ApplicationCommandOptionType.String, name: "message", value: "Hello" },
                 ],
                 { member: apiMember() },
-                { channels: { [general.id]: { ...general, permissions: "0" } } },
+                { channels: { [IDS.channel]: apiResolvedChannel() } },
             ),
         );
 
@@ -69,11 +67,11 @@ describe("/sendas", () => {
             chatInputInteraction(
                 "sendas",
                 [
-                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: general.id },
+                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: IDS.channel },
                     { type: ApplicationCommandOptionType.String, name: "message", value: "Hello" },
                 ],
                 AS.botAdmin,
-                { channels: { [general.id]: { ...general, permissions: "0" } } },
+                { channels: { [IDS.channel]: apiResolvedChannel() } },
             ),
         );
 
@@ -84,11 +82,11 @@ describe("/sendas", () => {
     });
 
     test("refuses a channel that can't hold messages", async ({ discord, interact }) => {
-        const category = {
+        const category = apiResolvedChannel({
             id: SnowflakeUtil.generate().toString(),
-            type: ChannelType.GuildCategory as const,
+            type: ChannelType.GuildCategory,
             name: "Tasks",
-        };
+        });
 
         const interaction = await interact(
             chatInputInteraction(
@@ -98,7 +96,7 @@ describe("/sendas", () => {
                     { type: ApplicationCommandOptionType.String, name: "message", value: "Hello" },
                 ],
                 AS.botAdmin,
-                { channels: { [category.id]: { ...category, permissions: "0" } } },
+                { channels: { [category.id]: category } },
             ),
         );
 

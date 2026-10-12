@@ -1,18 +1,8 @@
 import { DateTime } from "luxon";
-import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, storeWeeks, test, type StoringFactories } from "../../../fixtures.js";
 import { IDS } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import { calculateTaskStreakSummary } from "../../../../src/modules/tasks/TaskStreaks.js";
-
-// Weekly task events stored back to back from `start`, one per id
-async function storeWeeks(factories: StoringFactories, start: DateTime, ids: string[]): Promise<void> {
-    for (const [week, id] of ids.entries()) {
-        await factories.taskEvent.create({
-            id,
-            startTime: start.plus({ weeks: week }).toJSDate(),
-        });
-    }
-}
 
 async function submit(
     factories: StoringFactories,

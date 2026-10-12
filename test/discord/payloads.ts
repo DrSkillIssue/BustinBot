@@ -22,6 +22,7 @@ import {
     type APIGuildVoiceChannel,
     type APIVoiceState,
     type APIInteractionDataResolved,
+    type APIInteractionDataResolvedChannel,
     type APIInteractionGuildMember,
     type APIMessage,
     type APIMessageButtonInteractionData,
@@ -229,6 +230,14 @@ export function apiGuild(overrides: Partial<GatewayGuildCreateDispatchData> = {}
     };
 }
 
+// The second guild the bot is in, with its one channel, as Discord sends it
+export function apiOtherGuild(): GatewayGuildCreateDispatchData {
+    return apiGuild({
+        id: IDS.otherGuild,
+        channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
+    });
+}
+
 // A guild member as the REST API returns one
 export function apiGuildMember(overrides: Partial<APIGuildMember> = {}): APIGuildMember {
     return {
@@ -338,15 +347,20 @@ function selectInteraction(
     };
 }
 
+// A channel as an interaction's resolved data carries it, with the member's permissions in it
+export function apiResolvedChannel(
+    overrides: Partial<APIInteractionDataResolvedChannel> = {},
+): APIInteractionDataResolvedChannel {
+    return { id: IDS.channel, name: NAMES.channel, type: ChannelType.GuildText, permissions: "0", ...overrides };
+}
+
 export function channelSelectInteraction(
     customId: string,
     channelIds: string[],
     message: APIMessage = apiMessage(),
     overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
 ): APIMessageComponentSelectMenuInteraction {
-    const channels = Object.fromEntries(
-        channelIds.map((id) => [id, { id, name: "channel", type: ChannelType.GuildText, permissions: "0" }]),
-    );
+    const channels = Object.fromEntries(channelIds.map((id) => [id, apiResolvedChannel({ id, name: "channel" })]));
     return selectInteraction(
         {
             custom_id: customId,
