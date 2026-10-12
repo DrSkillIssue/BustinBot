@@ -1,4 +1,4 @@
-import { StringSelectMenuInteraction, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client } from "discord.js";
+import { StringSelectMenuInteraction, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client, time, TimestampStyles } from "discord.js";
 import cron, { type ScheduledTask } from 'node-cron';
 import { DateTime } from 'luxon';
 import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
@@ -136,18 +136,18 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const parts = interaction.customId.split('-');
     const selectedDate = `${parts[2]}-${parts[3]}-${parts[4]}`;
-    const time = interaction.fields.getTextInputValue('start-time');
+    const enteredTime = interaction.fields.getTextInputValue('start-time');
     const timezone = await resolveGuildTimezone(services, interaction.guildId);
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (!timeRegex.test(time)) {
+    if (!timeRegex.test(enteredTime)) {
         await interaction.editReply({
             content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30)."
         });
         return;
     }
 
-    const localDateTime = DateTime.fromISO(`${selectedDate}T${time}`, { zone: timezone });
+    const localDateTime = DateTime.fromISO(`${selectedDate}T${enteredTime}`, { zone: timezone });
     const utcDateTime = localDateTime.toUTC();
 
     const activePoll = await movieRepo.getActivePoll();
@@ -186,7 +186,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const pendingReminders = getPendingReminders(utcDateTime);
     const visibleReminders = pendingReminders.filter(r => r.label !== 'start time');
     const reminderLine = visibleReminders.length
-        ? `_Reminders will be sent at ${visibleReminders.map(r => `<t:${Math.floor(r.sendAt.toSeconds())}:t>`).join(' and ')} that day._`
+        ? `_Reminders will be sent at ${visibleReminders.map(r => time(r.sendAt.toJSDate(), TimestampStyles.ShortTime)).join(' and ')} that day._`
         : '';
 
     let stateMessage = '';
@@ -265,6 +265,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     // Edit deferred reply with success message
     await interaction.editReply({
-        content: `Movie night scheduled for **${readableDate}** at **${time}**.`
+        content: `Movie night scheduled for **${readableDate}** at **${enteredTime}**.`
     });
 }

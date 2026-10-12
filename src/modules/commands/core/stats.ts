@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -43,9 +43,8 @@ const stats: Command = {
         }
 
         // Discord shows timestamps as dates in each viewer's own locale and timezone
-        const asDate = (date: Date) => `<t:${Math.floor(date.getTime() / 1000)}:D>`;
-        const joinedDate = asDate(stats.joinedAt);
-        const lastActive = asDate(stats.lastActiveAt);
+        const joinedDate = time(stats.joinedAt, TimestampStyles.LongDate);
+        const lastActive = time(stats.lastActiveAt, TimestampStyles.LongDate);
 
         const embed = new EmbedBuilder()
             .setColor(0x00ae86)

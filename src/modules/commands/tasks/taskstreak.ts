@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { calculateTaskStreakSummary, formatDuration } from "../../tasks/TaskStreaks.js";
@@ -47,7 +47,7 @@ const taskstreak: Command = {
         let deadlineLine = "No active task period right now.";
         if (summary.currentPeriod) {
             const remainingMs = Math.max(summary.currentPeriod.end.getTime() - now.getTime(), 0);
-            const absoluteEnd = `<t:${Math.floor(summary.currentPeriod.end.getTime() / 1000)}:F>`;
+            const absoluteEnd = time(summary.currentPeriod.end, TimestampStyles.LongDateTime);
             if (summary.hasCompletedCurrentPeriod) {
                 deadlineLine = `✅ Streak kept active for this period. Period ends ${absoluteEnd} (${formatDuration(remainingMs)} remaining).`;
             } else {

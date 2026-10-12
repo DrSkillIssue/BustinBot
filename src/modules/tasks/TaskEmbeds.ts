@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, time, TimestampStyles } from "discord.js";
 import path from 'path';
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { Task } from "../../models/Task.js";
@@ -51,7 +51,7 @@ export function buildTaskPollEmbed(
 ) {
     const endsAt = options?.endsAt ?? null;
     const isClosed = options?.isClosed ?? false;
-    const timeString = endsAt ? `<t:${Math.floor(endsAt.getTime() / 1000)}:R>` : '';
+    const timeString = endsAt ? time(endsAt, TimestampStyles.RelativeTime) : '';
     const description =
         `${getTaskPollVoteSummary(tasks, voteMap)}` +
         (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : '');

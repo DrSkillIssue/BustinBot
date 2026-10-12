@@ -1,3 +1,4 @@
+import { TimestampStyles, time } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi, storePollableTasks } from "../../../../fixtures.js";
 import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
@@ -17,11 +18,10 @@ describe("/suppress", () => {
         );
         await interact(chatInputInteraction("taskpoll", [], AS.botAdmin));
 
-        // 12:30 UTC on 5 March
+        const until = new Date("2026-03-05T12:30:00Z");
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
-                content:
-                    "Mention suppression enabled for **30** minutes. It will expire <t:1772713800:R> (<t:1772713800:F>).",
+                content: `Mention suppression enabled for **30** minutes. It will expire ${time(until, TimestampStyles.RelativeTime)} (${time(until, TimestampStyles.LongDateTime)}).`,
             }),
         ]);
         const [announcement] = discord.messagesSentTo(IDS.channel);

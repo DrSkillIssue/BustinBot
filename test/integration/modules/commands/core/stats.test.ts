@@ -1,4 +1,4 @@
-import { SnowflakeUtil } from "discord.js";
+import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
@@ -34,8 +34,8 @@ describe("/stats", () => {
         const [reply] = discord.originalEdits(command);
         expect(reply?.embeds?.[0]).toMatchObject({ author: { name: "member's Stats" } });
         expect(reply?.embeds?.[0]?.fields?.slice(0, 3)).toEqual([
-            { name: "🕧 First Active", value: `<t:${joinedAt.getTime() / 1000}:D>`, inline: true },
-            { name: "💬 Last Active", value: `<t:${lastActiveAt.getTime() / 1000}:D>`, inline: true },
+            { name: "🕧 First Active", value: time(joinedAt, TimestampStyles.LongDate), inline: true },
+            { name: "💬 Last Active", value: time(lastActiveAt, TimestampStyles.LongDate), inline: true },
             { name: "🕹️ Commands Run", value: "12", inline: true },
         ]);
         expect(reply?.embeds?.[0]?.fields?.[3]?.value).toContain("🎞️ Movies Added: **3**");

@@ -1,4 +1,4 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, time, TimestampStyles } from 'discord.js';
 import type { Movie } from '../../models/Movie.js';
 import type { TMDbSearchResult } from "./MovieService.js";
 import { getDisplayNameFromAddedBy } from './MovieMockUtils.js';
@@ -73,7 +73,7 @@ export function createMovieNightEmbed(
     scheduledBy: string
 ): EmbedBuilder {
     const trimmedStateMessage = stateMessage?.trim?.() ?? "";
-    const startTimeLines = [`<t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`];
+    const startTimeLines = [`${time(unixTimestamp, TimestampStyles.LongDateTime)} (${time(unixTimestamp, TimestampStyles.RelativeTime)})`];
     if (trimmedStateMessage) {
         startTimeLines.push(trimmedStateMessage);
     }

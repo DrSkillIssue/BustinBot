@@ -1,4 +1,4 @@
-import { SnowflakeUtil } from "discord.js";
+import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 
@@ -10,7 +10,7 @@ describe("/currentmovie", () => {
             movie: { title: "Arrival", overview: "Linguists meet visitors." },
             hostedBy: host.id,
         });
-        const start = night.startTime.getTime() / 1000;
+        const start = night.startTime;
 
         const command = await interact(chatInputInteraction("currentmovie"));
 
@@ -22,7 +22,7 @@ describe("/currentmovie", () => {
                         fields: expect.arrayContaining([
                             {
                                 name: "🎥 Start Time",
-                                value: `<t:${start}:F> (<t:${start}:R>)\n\n🎬 We will be watching **Arrival**!`,
+                                value: `${time(start, TimestampStyles.LongDateTime)} (${time(start, TimestampStyles.RelativeTime)})\n\n🎬 We will be watching **Arrival**!`,
                                 inline: false,
                             },
                         ]),
@@ -42,7 +42,7 @@ describe("/currentmovie", () => {
         discord.user(host);
         // A night scheduled with no movie picked stores this placeholder until one is
         const night = await factories.movieEvent.create({ movie: { id: "TBD", title: "TBD" }, hostedBy: host.id });
-        const start = night.startTime.getTime() / 1000;
+        const start = night.startTime;
 
         const command = await interact(chatInputInteraction("currentmovie"));
 
@@ -51,7 +51,7 @@ describe("/currentmovie", () => {
                 embeds: [
                     expect.objectContaining({
                         title: "🎞️ Upcoming Movie Night!",
-                        description: `<t:${start}:F> (<t:${start}:R>)\n\n📭 No movie has been selected yet.`,
+                        description: `${time(start, TimestampStyles.LongDateTime)} (${time(start, TimestampStyles.RelativeTime)})\n\n📭 No movie has been selected yet.`,
                         footer: { text: "Scheduled by host" },
                     }),
                 ],

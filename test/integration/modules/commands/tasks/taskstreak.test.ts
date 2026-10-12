@@ -1,3 +1,4 @@
+import { TimestampStyles, time } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { IDS, chatInputInteraction } from "../../../../discord/payloads.js";
@@ -28,7 +29,7 @@ describe("/taskstreak", () => {
                 name: "⏰ Deadline",
                 value: expect.stringMatching(
                     new RegExp(
-                        `^✅ Streak kept active for this period\\. Period ends <t:${Math.floor(event.endTime.getTime() / 1000)}:F>`,
+                        `^✅ Streak kept active for this period\\. Period ends ${time(event.endTime, TimestampStyles.LongDateTime)}`,
                     ),
                 ),
                 inline: false,
@@ -48,7 +49,7 @@ describe("/taskstreak", () => {
         const command = await interact(chatInputInteraction("taskstreak"));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields?.[2]?.value).toMatch(
-            new RegExp(`^⏳ Submit before <t:${Math.floor(event.endTime.getTime() / 1000)}:F>`),
+            new RegExp(`^⏳ Submit before ${time(event.endTime, TimestampStyles.LongDateTime)}`),
         );
     });
 

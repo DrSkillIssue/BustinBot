@@ -1,4 +1,4 @@
-import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Message, TextChannel, Client } from "discord.js";
+import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Message, TextChannel, Client, time, TimestampStyles } from "discord.js";
 import type { RepliableInteraction } from "discord.js";
 import { randomUUID } from "node:crypto";
 import type { Movie } from "../../models/Movie.js";
@@ -112,7 +112,7 @@ async function createAndSendMoviePoll(
         }
     }
     const message = (await channel.send({
-        content: `📊 **Vote for the next movie night pick!**\nPoll ends <t:${pollCloseUnix}:R> (<t:${pollCloseUnix}:F>).`,
+        content: `📊 **Vote for the next movie night pick!**\nPoll ends ${time(pollCloseUnix, TimestampStyles.RelativeTime)} (${time(pollCloseUnix, TimestampStyles.LongDateTime)}).`,
         embeds,
         components: [row],
     })) as Message;

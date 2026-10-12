@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, time, TimestampStyles } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -41,9 +41,9 @@ const suppress: Command = {
             updatedAt: new Date(),
         });
 
-        const untilUnix = Math.floor(untilMs / 1000);
+        const until = new Date(untilMs);
         await interaction.editReply({
-            content: `Mention suppression enabled for **${minutes}** minute${minutes === 1 ? "" : "s"}. It will expire <t:${untilUnix}:R> (<t:${untilUnix}:F>).`,
+            content: `Mention suppression enabled for **${minutes}** minute${minutes === 1 ? "" : "s"}. It will expire ${time(until, TimestampStyles.RelativeTime)} (${time(until, TimestampStyles.LongDateTime)}).`,
         });
     },
 };

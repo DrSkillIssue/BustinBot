@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { SnowflakeUtil } from "discord.js";
+import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import cron from "node-cron";
 import { DateTime } from "luxon";
 import type { APIRole } from "discord-api-types/v10";
@@ -228,7 +228,7 @@ describe("the movie night sweep", () => {
             await sweepMovieNight(discord.client, services);
         }
 
-        const startsAt = `<t:${start.toUnixInteger()}:t>`;
+        const startsAt = time(start.toJSDate(), TimestampStyles.ShortTime);
         expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
             `<@&${movieUsers.id}> Movie night starts in **2 hours** (at ${startsAt})! We will be watching **Arrival**!`,
             `<@&${movieUsers.id}> Movie night starts in **30 minutes** (at ${startsAt})! We will be watching **Arrival**!`,
@@ -254,7 +254,7 @@ describe("the movie night sweep", () => {
         await sweepMovieNight(discord.client, services);
 
         expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
-            `<@&${movieUsers.id}> Movie night starts in **20 minutes** (at <t:${start.toUnixInteger()}:t>)! We will be watching **Arrival**!`,
+            `<@&${movieUsers.id}> Movie night starts in **20 minutes** (at ${time(start.toJSDate(), TimestampStyles.ShortTime)})! We will be watching **Arrival**!`,
         ]);
         expect(warn).toHaveBeenCalledWith(
             `[MovieReminders] Skipped the "start time" reminder for ${night.id}: it came due while the bot was down.`,

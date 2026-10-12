@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import type { Client } from 'discord.js';
+import { time, TimestampStyles, type Client } from 'discord.js';
 import type { Reminder } from "../../models/Reminder.js";
 import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
@@ -70,7 +70,7 @@ export async function sendDueReminders(client: Client, services: ServiceContaine
     const remaining = formatRemaining(Math.max(Math.round((event.startTime.getTime() - now.getTime()) / 60000), 0));
     const content = latest.label === 'start time'
         ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
-        : `${mention} Movie night starts in **${remaining}** (at <t:${Math.floor(start.toSeconds())}:t>)! ${stateLine}`;
+        : `${mention} Movie night starts in **${remaining}** (at ${time(start.toJSDate(), TimestampStyles.ShortTime)})! ${stateLine}`;
 
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
     await channel.send(withSuppressedMentions({ content: content.trim() }, suppressMentions));
