@@ -268,8 +268,12 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             prizeExpression,
             async () => {
-                await runPrizeDrawJob(client, services);
-                scheduleNextPrize(new Date());
+                // The next draw's time is updated even when this one fails; node-cron logs the failure
+                try {
+                    await runPrizeDrawJob(client, services);
+                } finally {
+                    scheduleNextPrize(new Date());
+                }
             },
             jobOptions(guildId, 'prizeDraw')
         );

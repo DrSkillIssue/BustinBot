@@ -52,8 +52,9 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         );
     }
 
-    // Moves a member's task completion from one tier to the higher one they reached. In one transaction like
-    // incrementStat, so a member with no stats yet can't have their document created twice.
+    // Moves a member's task completion from one tier to the higher one they reached. It reads the member's stats in a
+    // transaction because a member with no stats yet gets the new tier set to 1 rather than -1 on the old one, which a
+    // single write can't decide; it only runs when an admin approves a higher tier.
     async updateTierStat(
         userId: string,
         fromField: keyof UserStats,
