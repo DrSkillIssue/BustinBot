@@ -268,7 +268,6 @@ function interactionChannel() {
     return { id: IDS.channel, type: ChannelType.GuildText as const, guild_id: IDS.guild, name: NAMES.channel };
 }
 
-// `resolved` carries the users, members and roles that user and role options refer to
 // Interaction fields that make the harness user a member holding one of the bot's admin roles
 export const AS = {
     botAdmin: { member: apiMember({ roles: [IDS.roles.admin] }) },
@@ -276,6 +275,7 @@ export const AS = {
     movieAdmin: { member: apiMember({ roles: [IDS.roles.movieAdmin] }) },
 };
 
+// `resolved` carries the users, members and roles that user and role options refer to
 export function chatInputInteraction(
     name: string,
     options: APIApplicationCommandInteractionDataOption[] = [],

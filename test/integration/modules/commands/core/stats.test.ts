@@ -3,16 +3,6 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 
-// /stats for another member, as Discord delivers it with the user resolved
-function statsFor(user: ReturnType<typeof apiUser>) {
-    return chatInputInteraction(
-        "stats",
-        [{ type: ApplicationCommandOptionType.User, name: "user", value: user.id }],
-        {},
-        { users: { [user.id]: user } },
-    );
-}
-
 describe("/stats", () => {
     test("shows a member's stats, with dates each viewer reads in their own timezone", async ({
         discord,
@@ -32,7 +22,14 @@ describe("/stats", () => {
             taskStreak: 4,
         });
 
-        const command = await interact(statsFor(member));
+        const command = await interact(
+            chatInputInteraction(
+                "stats",
+                [{ type: ApplicationCommandOptionType.User, name: "user", value: member.id }],
+                {},
+                { users: { [member.id]: member } },
+            ),
+        );
 
         const [reply] = discord.originalEdits(command);
         expect(reply?.embeds?.[0]).toMatchObject({ author: { name: "member's Stats" } });
@@ -49,7 +46,14 @@ describe("/stats", () => {
     test("says so when the member has no stats", async ({ discord, interact }) => {
         const member = apiUser({ id: SnowflakeUtil.generate().toString(), username: "member" });
 
-        const command = await interact(statsFor(member));
+        const command = await interact(
+            chatInputInteraction(
+                "stats",
+                [{ type: ApplicationCommandOptionType.User, name: "user", value: member.id }],
+                {},
+                { users: { [member.id]: member } },
+            ),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({

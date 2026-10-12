@@ -5,9 +5,6 @@ import { PRIVATE_DEFERRAL } from "../../../../discord/harness.js";
 import { AS, IDS, apiUser } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
-const roll = { type: ApplicationCommandOptionType.String, name: "action", value: "roll" } as const;
-const snapshotId = { type: ApplicationCommandOptionType.String, name: "snapshot_id" } as const;
-
 describe("/taskdraw", () => {
     test("acknowledges privately before anything else, then asks for the snapshot to roll", async ({
         discord,
@@ -58,7 +55,14 @@ describe("/taskdraw", () => {
             totalEntries: 1,
         });
 
-        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], AS.botAdmin);
+        const interaction = await slash(
+            "taskdraw",
+            [
+                { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
+                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+            ],
+            AS.botAdmin,
+        );
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `Winner rolled for **${draw.id}**: <@${IDS.user}>` }),
@@ -68,7 +72,14 @@ describe("/taskdraw", () => {
     test("says so when a snapshot has no entries to roll", async ({ discord, slash, factories }) => {
         const draw = await factories.prizeDraw.create();
 
-        const interaction = await slash("taskdraw", [roll, { ...snapshotId, value: draw.id }], AS.botAdmin);
+        const interaction = await slash(
+            "taskdraw",
+            [
+                { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
+                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+            ],
+            AS.botAdmin,
+        );
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `No eligible entries found for **${draw.id}**.` }),
@@ -84,7 +95,7 @@ describe("/taskdraw", () => {
             "taskdraw",
             [
                 { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
-                { ...snapshotId, value: draw.id },
+                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
             ],
             AS.botAdmin,
         );
@@ -103,7 +114,7 @@ describe("/taskdraw", () => {
             "taskdraw",
             [
                 { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
-                { ...snapshotId, value: draw.id },
+                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
             ],
             AS.botAdmin,
         );
