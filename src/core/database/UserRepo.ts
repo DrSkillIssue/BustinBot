@@ -43,24 +43,13 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         field: keyof UserStats,
         amount = 1
     ): Promise<void> {
-        const docRef = this.collection.doc(userId);
-
-        // Read and write in one transaction, so increments arriving together for a user with no stats yet
-        // can't each create the document and overwrite one another
-        await this.db.runTransaction(async (transaction) => {
-            const doc = await transaction.get(docRef);
-
-            if (!doc.exists) {
-                transaction.set(docRef, { ...newUserStats(userId, new Date()), [field]: amount });
-                return;
-            }
-
-            // If exists, increment the field
-            transaction.update(docRef, {
-                [field]: FieldValue.increment(amount),
-                lastActiveAt: new Date(),
-            });
-        });
+        // One write with no read: Firestore applies the increment itself, creating the member's stats document
+        // with the field set to `amount` when it doesn't exist yet, so increments arriving together are all counted.
+        // The other counts read as zero until set, and joinedAt is the document's creation time (userStatsConverter).
+        await this.collection.doc(userId).set(
+            { userId, [field]: FieldValue.increment(amount), lastActiveAt: new Date() },
+            { merge: true },
+        );
     }
 
     // Moves a member's task completion from one tier to the higher one they reached. In one transaction like

@@ -37,10 +37,12 @@ function optionalDate(value: unknown, field: string): Date | undefined {
 
 // A converter that reads a document in the stored form its collection is written in. Writes pass through unchanged,
 // because Firestore itself stores Dates as Timestamps.
-function converter<T extends DocumentData, S extends DocumentData = T>(fromStored: (stored: S, id: string) => T): FirestoreDataConverter<T> {
+function converter<T extends DocumentData, S extends DocumentData = T>(
+    fromStored: (stored: S, id: string, snapshot: QueryDocumentSnapshot) => T,
+): FirestoreDataConverter<T> {
     return {
         toFirestore: (model) => model,
-        fromFirestore: (snapshot: QueryDocumentSnapshot) => fromStored(snapshot.data() as S, snapshot.id),
+        fromFirestore: (snapshot: QueryDocumentSnapshot) => fromStored(snapshot.data() as S, snapshot.id, snapshot),
     };
 }
 
@@ -110,12 +112,17 @@ export const taskLeaderboardConverter = converter<TaskLeaderboard>((stored) => s
 export const prizeDrawConverter = converter<PrizeDraw>((stored) => stored);
 
 // Members created by the legacy completion import (src/scripts/importLegacySubmissions.ts, 2025-10-29) were stored with
-// only userId, legacyTasksCompleted and createdAt. Their other counts start at zero and they joined when imported.
+// only userId, legacyTasksCompleted and createdAt, and members whose stats began with incrementStat's merge write are
+// stored with only the counts they have. Their other counts start at zero, and they joined when their stats document
+// was created: the stored joinedAt or createdAt, or else the document's own creation time.
 type StoredUserStats = Partial<Stored<UserStats>> & Pick<UserStats, "userId"> & { createdAt?: Timestamp };
 
-export const userStatsConverter = converter<UserStats, StoredUserStats>((stored) => {
+export const userStatsConverter = converter<UserStats, StoredUserStats>((stored, _id, snapshot) => {
     const { createdAt, joinedAt, lastActiveAt, ...counts } = stored;
-    const joined = optionalDate(joinedAt, "userStats.joinedAt") ?? date(createdAt, "userStats.createdAt");
+    const joined =
+        optionalDate(joinedAt, "userStats.joinedAt") ??
+        optionalDate(createdAt, "userStats.createdAt") ??
+        snapshot.createTime.toDate();
     return {
         ...newUserStats(stored.userId, joined),
         ...counts,
