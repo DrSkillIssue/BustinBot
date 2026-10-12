@@ -15,7 +15,9 @@ export const CONCURRENT_TRANSACTION_TIMEOUT_MS = 35_000;
 function emulatorTarget(): { host: string; projectId: string } {
     const host = process.env.FIRESTORE_EMULATOR_HOST;
     if (!host) {
-        throw new Error("FIRESTORE_EMULATOR_HOST is not set. Run integration tests with `npm test`, which starts the Firestore emulator.");
+        throw new Error(
+            "FIRESTORE_EMULATOR_HOST is not set. Run integration tests with `npm test`, which starts the Firestore emulator.",
+        );
     }
 
     const projectId = process.env.GCLOUD_PROJECT ?? "";
@@ -40,10 +42,9 @@ export function getEmulatorFirestore(): Firestore {
 // Deletes every document in the emulator database (documented emulator REST endpoint)
 export async function clearEmulatorFirestore(): Promise<void> {
     const { host, projectId } = emulatorTarget();
-    const response = await fetch(
-        `http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`,
-        { method: "DELETE" }
-    );
+    const response = await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {
+        method: "DELETE",
+    });
     if (!response.ok) {
         throw new Error(`Failed to clear the Firestore emulator: HTTP ${response.status}`);
     }

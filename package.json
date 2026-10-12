@@ -51,6 +51,7 @@
     "discord-api-types": "^0.38.56",
     "firebase-tools": "^15.33.0",
     "fishery": "^2.4.0",
+    "prettier": "^3.9.10",
     "pure-rand": "^8.4.2",
     "tsx": "^4.23.15",
     "undici": "^8.11.2",

@@ -18,7 +18,11 @@ function command(name: string, overrides: Partial<Command> = {}): Command {
 describe("slashCommandPayloads", () => {
     test("sends a command registered under aliases only once", () => {
         const bustin = command("bustin", { aliases: ["ping"] });
-        const commands = new Map([["bustin", bustin], ["ping", bustin], ["goodbot", command("goodbot")]]);
+        const commands = new Map([
+            ["bustin", bustin],
+            ["ping", bustin],
+            ["goodbot", command("goodbot")],
+        ]);
 
         expect(slashCommandPayloads(commands).map((payload) => payload.name)).toEqual(["bustin", "goodbot"]);
     });

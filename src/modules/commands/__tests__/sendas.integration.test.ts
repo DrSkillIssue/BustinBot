@@ -1,5 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
-import { ApplicationCommandOptionType, ChannelType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
+import {
+    ApplicationCommandOptionType,
+    ChannelType,
+    InteractionResponseType,
+    MessageFlags,
+} from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../tests/discord/harness.js";
 import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/payloads.js";
@@ -7,7 +12,11 @@ import { IDS, apiMember, chatInputInteraction } from "../../../tests/discord/pay
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 // /sendas aimed at a channel, as Discord delivers it with the channel resolved
-function sendas(channel: { id: string; type: ChannelType.GuildText | ChannelType.GuildCategory; name: string }, text: string, overrides = admin) {
+function sendas(
+    channel: { id: string; type: ChannelType.GuildText | ChannelType.GuildCategory; name: string },
+    text: string,
+    overrides = admin,
+) {
     return chatInputInteraction(
         "sendas",
         [
@@ -28,17 +37,26 @@ describe("/sendas", () => {
         const interaction = await interact(sendas(general, "Hello, this is BustinBot!"));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: "Hello, this is BustinBot!" })]);
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: `Message sent in <#${IDS.channel}>.` })]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({ content: "Hello, this is BustinBot!" }),
+        ]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: `Message sent in <#${IDS.channel}>.` }),
+        ]);
     });
 
     test("is refused to members who are not bot admins", async ({ discord, interact }) => {
         const interaction = await interact(sendas(general, "Hello", { member: apiMember() }));
 
-        expect(discord.callbacks(interaction)).toEqual([{
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: expect.objectContaining({ content: "You don't have permission to use this command.", flags: MessageFlags.Ephemeral }),
-        }]);
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
     });
 
@@ -48,15 +66,23 @@ describe("/sendas", () => {
 
         const interaction = await interact(sendas(general, "Hello"));
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Failed to send message." })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Failed to send message." }),
+        ]);
         expect(error).toHaveBeenCalledWith("Error sending message:", expect.objectContaining({ code: 50013 }));
     });
 
     test("refuses a channel that can't hold messages", async ({ discord, interact }) => {
-        const category = { id: SnowflakeUtil.generate().toString(), type: ChannelType.GuildCategory as const, name: "Tasks" };
+        const category = {
+            id: SnowflakeUtil.generate().toString(),
+            type: ChannelType.GuildCategory as const,
+            name: "Tasks",
+        };
 
         const interaction = await interact(sendas(category, "Hello"));
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Please select a valid text channel." })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Please select a valid text channel." }),
+        ]);
     });
 });

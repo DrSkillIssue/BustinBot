@@ -10,7 +10,9 @@ const failing: Command = {
     description: "Always fails",
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
-    execute: async () => { throw new Error("boom"); },
+    execute: async () => {
+        throw new Error("boom");
+    },
 };
 const { user: _user, permissions: _permissions, ...botAdmin } = apiMember({ roles: [IDS.roles.admin] });
 
@@ -20,7 +22,10 @@ describe("prefix commands", () => {
         const message = await prefix("!goodbot");
 
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
-            expect.objectContaining({ content: "🥹", message_reference: expect.objectContaining({ message_id: message.id }) }),
+            expect.objectContaining({
+                content: "🥹",
+                message_reference: expect.objectContaining({ message_id: message.id }),
+            }),
             expect.objectContaining({ content: "*BustinBot has been called a good bot 1 time!*" }),
         ]);
     });
@@ -71,6 +76,9 @@ describe("prefix commands", () => {
 
         await expect(handleMessage(message, new Map([["fail", failing]]), services)).resolves.toBeUndefined();
         expect(error).toHaveBeenCalledWith("[Command Error]: fail", expect.any(Error));
-        expect(error).toHaveBeenCalledWith("[Command Error]: fail: could not send the error reply", expect.objectContaining({ status: 403 }));
+        expect(error).toHaveBeenCalledWith(
+            "[Command Error]: fail: could not send the error reply",
+            expect.objectContaining({ status: 403 }),
+        );
     });
 });

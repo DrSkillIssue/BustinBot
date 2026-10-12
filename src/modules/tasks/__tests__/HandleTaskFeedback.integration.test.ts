@@ -4,28 +4,39 @@ import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmula
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 
 describe("task feedback buttons", () => {
-    test("thank a member for their first vote and raise the task's weight", async ({ discord, interact, services, factories }) => {
+    test("thank a member for their first vote and raise the task's weight", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         await factories.task.create({ id: "PVM001", weight: 50 });
 
         const click = await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
         expect(discord.callbacks(click)).toEqual([PRIVATE_DEFERRAL]);
-        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thanks for your feedback!" })]);
+        expect(discord.originalEdits(click)).toEqual([
+            expect.objectContaining({ content: "Thanks for your feedback!" }),
+        ]);
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
     });
 
-    test("count two quick clicks of the same button once", async ({ discord, interact, services, factories }) => {
-        await factories.task.create({ id: "PVM001", weight: 50 });
+    test(
+        "count two quick clicks of the same button once",
+        async ({ discord, interact, services, factories }) => {
+            await factories.task.create({ id: "PVM001", weight: 50 });
 
-        const [first, second] = await Promise.all([
-            interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
-            interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
-        ]);
+            const [first, second] = await Promise.all([
+                interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
+                interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
+            ]);
 
-        const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content).sort();
-        expect(replies).toEqual(["Thanks for your feedback!", "You already gave this task a 👍."]);
-        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
-    }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
+            const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content).sort();
+            expect(replies).toEqual(["Thanks for your feedback!", "You already gave this task a 👍."]);
+            expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
+        },
+        CONCURRENT_TRANSACTION_TIMEOUT_MS,
+    );
 
     test("let a member change their vote", async ({ discord, interact, services, factories }) => {
         await factories.task.create({ id: "PVM001", weight: 50 });
@@ -42,9 +53,13 @@ describe("task feedback buttons", () => {
 
         const click = await interact(buttonInteraction("task-feedback-down-PVM001-20251006"));
 
-        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thanks for your feedback!" })]);
+        expect(discord.originalEdits(click)).toEqual([
+            expect.objectContaining({ content: "Thanks for your feedback!" }),
+        ]);
         expect((await db.doc(`guilds/${IDS.guild}/taskFeedback/PVM001_${IDS.user}`).get()).data()).toMatchObject({
-            taskId: "PVM001", eventId: "PVM001-20251006", vote: "down",
+            taskId: "PVM001",
+            eventId: "PVM001-20251006",
+            vote: "down",
         });
     });
 

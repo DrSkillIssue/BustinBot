@@ -10,10 +10,20 @@ import { taskFactory } from "../../../tests/factories.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 
-const [oldPeriodMember, overlapMember, upgradedMember] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
+const [oldPeriodMember, overlapMember, upgradedMember] = [
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+];
 
 async function storeEvent(factories: StoringFactories, id: string, start: string, end: string): Promise<string> {
-    await factories.taskEvent.create({ id, task: taskFactory.build({ id }), keyword: id, startTime: new Date(start), endTime: new Date(end) });
+    await factories.taskEvent.create({
+        id,
+        task: taskFactory.build({ id }),
+        keyword: id,
+        startTime: new Date(start),
+        endTime: new Date(end),
+    });
     return id;
 }
 
@@ -23,8 +33,13 @@ describe("TaskLeaderboards initialisation", () => {
 
         await ensureTaskLeaderboardsInitialized(services);
 
-        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 8 } });
-        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({
+            points: { [IDS.user]: 8 },
+        });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
+            points: {},
+            period: { length: 4, eventIds: [], index: 1 },
+        });
     });
 });
 
@@ -37,28 +52,46 @@ describe("the leaderboard buttons", () => {
 
         const click = await interact(buttonInteraction("task-leaderboard|lifetime"));
 
-        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Leaderboard initialisation failed. Please use /reportbug if it continues." })]);
+        expect(discord.originalEdits(click)).toEqual([
+            expect.objectContaining({
+                content: "Leaderboard initialisation failed. Please use /reportbug if it continues.",
+            }),
+        ]);
         expect(error).toHaveBeenCalledWith("[TaskInteractions] Failed to build the leaderboard:", unavailable);
     });
 });
 
 describe("TaskLeaderboards periodic submissions", () => {
-    test("keeps every category event from the fourth week in the completing period", async ({ services, factories }) => {
+    test("keeps every category event from the fourth week in the completing period", async ({
+        services,
+        factories,
+    }) => {
         const eventIds: string[] = [];
         for (const week of [1, 2, 3]) {
             for (const category of ["pvm", "skilling", "minigame"]) {
-                eventIds.push(await storeEvent(
-                    factories,
-                    `week-${week}-${category}`,
-                    `2026-01-${String(week * 7 - 2).padStart(2, "0")}T00:00:00.000Z`,
-                    `2026-01-${String(week * 7 + 5).padStart(2, "0")}T00:00:00.000Z`
-                ));
+                eventIds.push(
+                    await storeEvent(
+                        factories,
+                        `week-${week}-${category}`,
+                        `2026-01-${String(week * 7 - 2).padStart(2, "0")}T00:00:00.000Z`,
+                        `2026-01-${String(week * 7 + 5).padStart(2, "0")}T00:00:00.000Z`,
+                    ),
+                );
             }
         }
         for (const category of ["pvm", "skilling", "minigame"]) {
-            eventIds.push(await storeEvent(factories, `week-4-${category}`, "2026-01-26T00:00:00.000Z", "2026-02-02T00:00:00.000Z"));
+            eventIds.push(
+                await storeEvent(
+                    factories,
+                    `week-4-${category}`,
+                    "2026-01-26T00:00:00.000Z",
+                    "2026-02-02T00:00:00.000Z",
+                ),
+            );
         }
-        eventIds.push(await storeEvent(factories, "week-5-pvm", "2026-02-02T00:00:00.000Z", "2026-02-09T00:00:00.000Z"));
+        eventIds.push(
+            await storeEvent(factories, "week-5-pvm", "2026-02-02T00:00:00.000Z", "2026-02-09T00:00:00.000Z"),
+        );
 
         await ensureTaskLeaderboardsInitialized(services);
         for (const eventId of eventIds) {
@@ -86,9 +119,19 @@ describe("TaskLeaderboards periodic submissions", () => {
         for (const [id] of weeks.slice(0, 4)) {
             await registerPeriodicTaskEvent(services, id);
         }
-        await recordPeriodicTierChange(services, "week-4", { userId: oldPeriodMember, points: 6, from: null, to: SubmissionStatus.Gold });
+        await recordPeriodicTierChange(services, "week-4", {
+            userId: oldPeriodMember,
+            points: 6,
+            from: null,
+            to: SubmissionStatus.Gold,
+        });
         await registerPeriodicTaskEvent(services, "week-5");
-        await recordPeriodicTierChange(services, "week-5", { userId: overlapMember, points: 3, from: null, to: SubmissionStatus.Silver });
+        await recordPeriodicTierChange(services, "week-5", {
+            userId: overlapMember,
+            points: 3,
+            from: null,
+            to: SubmissionStatus.Silver,
+        });
 
         const finalising = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(finalising?.points).toEqual({ [oldPeriodMember]: 6 });
@@ -116,9 +159,24 @@ describe("TaskLeaderboards periodic submissions", () => {
         await registerPeriodicTaskEvent(services, "week-1");
         await registerPeriodicTaskEvent(services, "week-2");
         for (const eventId of ["week-1", "week-2"]) {
-            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 1, from: null, to: SubmissionStatus.Bronze });
-            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 2, from: SubmissionStatus.Bronze, to: SubmissionStatus.Silver });
-            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 3, from: SubmissionStatus.Silver, to: SubmissionStatus.Gold });
+            await recordPeriodicTierChange(services, eventId, {
+                userId: upgradedMember,
+                points: 1,
+                from: null,
+                to: SubmissionStatus.Bronze,
+            });
+            await recordPeriodicTierChange(services, eventId, {
+                userId: upgradedMember,
+                points: 2,
+                from: SubmissionStatus.Bronze,
+                to: SubmissionStatus.Silver,
+            });
+            await recordPeriodicTierChange(services, eventId, {
+                userId: upgradedMember,
+                points: 3,
+                from: SubmissionStatus.Silver,
+                to: SubmissionStatus.Gold,
+            });
         }
 
         const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");

@@ -17,7 +17,8 @@ function writeModule(dir: string, relativePath: string, contents: string): void 
     writeFileSync(fullPath, contents, "utf8");
 }
 
-const command = (name: string, extra = "") => `export default { name: "${name}", description: "${name}", ${extra} execute() {} };`;
+const command = (name: string, extra = "") =>
+    `export default { name: "${name}", description: "${name}", ${extra} execute() {} };`;
 
 describe("loadCommands", () => {
     test("loads command modules recursively and registers their aliases", async ({ commandsDir }) => {
@@ -48,7 +49,10 @@ describe("loadCommands", () => {
 
         expect([...(await loadCommands(commandsDir)).keys()]).toEqual(["working"]);
         expect(warn).toHaveBeenCalledWith(expect.stringContaining("Skipped invalid command module"));
-        expect(error).toHaveBeenCalledWith(expect.stringContaining("Failed to load command broken.js"), expect.any(Error));
+        expect(error).toHaveBeenCalledWith(
+            expect.stringContaining("Failed to load command broken.js"),
+            expect.any(Error),
+        );
     });
 
     test("returns an independent registry each time", async ({ commandsDir }) => {

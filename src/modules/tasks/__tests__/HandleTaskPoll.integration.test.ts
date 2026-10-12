@@ -9,20 +9,37 @@ import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { postAllTaskPolls } from "../HandleTaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
-const options: Task[] = [taskFactory.build({ id: "PVM001", shortName: "Zulrah" }), taskFactory.build({ id: "PVM002", shortName: "Vorkath" }), taskFactory.build({ id: "PVM003", shortName: "Hydra" })];
+const options: Task[] = [
+    taskFactory.build({ id: "PVM001", shortName: "Zulrah" }),
+    taskFactory.build({ id: "PVM002", shortName: "Vorkath" }),
+    taskFactory.build({ id: "PVM003", shortName: "Hydra" }),
+];
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(factories: StoringFactories, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
     const messageId = overrides.messageId ?? SnowflakeUtil.generate().toString();
-    return factories.taskPoll.create({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
+    return factories.taskPoll.create({
+        id: messageId,
+        messageId,
+        options,
+        createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
+        endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
+        ...overrides,
+    });
 }
 
 function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
-    return buttonInteraction(`vote_${poll.category}_${optionId}`, apiMessage({ id: poll.messageId }), { member: apiMember({ user: apiUser({ id: userId }) }) });
+    return buttonInteraction(`vote_${poll.category}_${optionId}`, apiMessage({ id: poll.messageId }), {
+        member: apiMember({ user: apiUser({ id: userId }) }),
+    });
 }
 
 describe("posting the weekly task polls", () => {
-    test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services, factories }) => {
+    test("announces them and posts one open poll per category, each stored with its options", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         for (const task of [
             ...options,
@@ -32,7 +49,8 @@ describe("posting the weekly task polls", () => {
             { id: "MIN001", category: TaskCategory.MinigameMisc },
             { id: "MIN002", category: TaskCategory.MinigameMisc },
             { id: "MIN003", category: TaskCategory.MinigameMisc },
-        ]) await factories.task.create(task);
+        ])
+            await factories.task.create(task);
         discord.acceptMessages(IDS.channel);
 
         await postAllTaskPolls(discord.client, services);
@@ -49,26 +67,40 @@ describe("posting the weekly task polls", () => {
             expect(stored?.options).toHaveLength(3);
             // Votes find their poll by the message they were cast on
             expect(stored).toMatchObject({ isActive: true, channelId: IDS.channel, id: stored?.messageId });
-            expect(stored!.endsAt.getTime() - stored!.createdAt.getTime()).toBe(Duration.fromObject({ hours: 24 }).toMillis());
+            expect(stored!.endsAt.getTime() - stored!.createdAt.getTime()).toBe(
+                Duration.fromObject({ hours: 24 }).toMillis(),
+            );
         }
     });
 });
 
 describe("voting in a task poll", () => {
-    test("records the vote, redraws the poll with it and thanks the member", async ({ discord, interact, services, factories }) => {
+    test("records the vote, redraws the poll with it and thanks the member", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
         const click = await interact(vote(poll, "PVM002"));
 
-        expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thank you for your vote!" })]);
+        expect(discord.originalEdits(click)).toEqual([
+            expect.objectContaining({ content: "Thank you for your vote!" }),
+        ]);
         expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM002" });
         const [redrawn] = discord.messageEdits(IDS.channel, poll.messageId);
         expect(redrawn?.embeds?.[0]?.description).toContain("**1 vote**");
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
-    test("lets a member change their vote without counting them twice", async ({ discord, interact, services, factories }) => {
+    test("lets a member change their vote without counting them twice", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
@@ -79,43 +111,74 @@ describe("voting in a task poll", () => {
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
-    test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services, factories }) => {
+    test("keeps counting every vote on a poll posted before the bot restarted", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
-        const voters = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
+        const voters = [
+            SnowflakeUtil.generate().toString(),
+            SnowflakeUtil.generate().toString(),
+            SnowflakeUtil.generate().toString(),
+        ];
 
         for (const voter of voters) {
             const click = await interact(vote(poll, "PVM001", voter));
-            expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Thank you for your vote!" })]);
+            expect(discord.originalEdits(click)).toEqual([
+                expect.objectContaining({ content: "Thank you for your vote!" }),
+            ]);
         }
 
         expect(Object.keys((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes ?? {})).toEqual(voters);
     });
 
-    test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services, factories }) => {
+    test("refuses votes once the poll has closed or its time is up", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         const closed = await storeOpenPoll(factories, { isActive: false });
-        const expired = await storeOpenPoll(factories, { messageId: SnowflakeUtil.generate().toString(), endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
+        const expired = await storeOpenPoll(factories, {
+            messageId: SnowflakeUtil.generate().toString(),
+            endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(),
+        });
 
         for (const poll of [closed, expired]) {
             const click = await interact(vote(poll, "PVM001"));
-            expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "This poll has closed." })]);
+            expect(discord.originalEdits(click)).toEqual([
+                expect.objectContaining({ content: "This poll has closed." }),
+            ]);
             expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({});
         }
     });
 
-    test("refuses a vote from an outdated button or for an option the poll doesn't have", async ({ discord, interact, factories }) => {
+    test("refuses a vote from an outdated button or for an option the poll doesn't have", async ({
+        discord,
+        interact,
+        factories,
+    }) => {
         const poll = await storeOpenPoll(factories);
 
         const outdated = await interact(vote({ ...poll, category: TaskCategory.Skilling }, "PVM001"));
         const unknown = await interact(vote(poll, "PVM999"));
 
-        expect(discord.originalEdits(outdated)).toEqual([expect.objectContaining({ content: "This poll message is outdated." })]);
+        expect(discord.originalEdits(outdated)).toEqual([
+            expect.objectContaining({ content: "This poll message is outdated." }),
+        ]);
         expect(discord.originalEdits(unknown)).toEqual([expect.objectContaining({ content: "Invalid vote option." })]);
     });
 });
 
 describe("closing a task poll", () => {
-    test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services, factories }) => {
+    test("happens when its winning task starts, and its message stops offering votes", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         for (const task of options) await factories.task.create(task);
         const poll = await storeOpenPoll(factories, { votes: { [SnowflakeUtil.generate().toString()]: "PVM002" } });
         discord.acceptMessages(IDS.channel);

@@ -28,6 +28,12 @@ describe("createMovieEmbed", () => {
         const embed = createMovieEmbed({ title: "Unknown Film" }).toJSON();
 
         expect(embed).toMatchObject({ description: "No description available.", url: "https://www.themoviedb.org/" });
-        expect(embed.fields?.map((field) => field.value)).toEqual(["Unknown", "Unknown", "Unrated", "Unknown", "Unknown"]);
+        expect(embed.fields?.map((field) => field.value)).toEqual([
+            "Unknown",
+            "Unknown",
+            "Unrated",
+            "Unknown",
+            "Unknown",
+        ]);
     });
 });

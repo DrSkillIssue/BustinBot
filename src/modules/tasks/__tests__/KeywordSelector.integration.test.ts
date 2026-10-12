@@ -39,7 +39,10 @@ describe("KeywordSelector", () => {
             const picked = await new KeywordSelector(repo).selectKeyword(`event-${random}`);
 
             expect(words.slice(26)).toContain(picked);
-            expect(await repo.getKeywordById(picked)).toMatchObject({ lastUsedEventId: `event-${random}`, timesUsed: 2 });
+            expect(await repo.getKeywordById(picked)).toMatchObject({
+                lastUsedEventId: `event-${random}`,
+                timesUsed: 2,
+            });
         }
     });
 

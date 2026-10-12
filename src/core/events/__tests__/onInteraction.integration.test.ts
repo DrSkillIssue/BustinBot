@@ -22,41 +22,71 @@ function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyo
 
 describe("slash command routing", () => {
     // Interactions from a guild discord.js hasn't cached carry the member as raw data with role ids only
-        async function fromUncachedGuild(discord: DiscordHarness, db: Firestore, adminRoleName: string) {
+    async function fromUncachedGuild(discord: DiscordHarness, db: Firestore, adminRoleName: string) {
         const admin = apiRole({ name: adminRoleName });
-        discord.guild(apiGuild({ id: IDS.uncachedGuild, roles: [apiRole({ id: IDS.uncachedGuild, name: "@everyone" }), admin] }));
-        await new GuildRepository(db).initGuild(IDS.uncachedGuild, guildFactory.build({ id: IDS.uncachedGuild, roles: { admin: "BustinBot Admin" } }));
+        discord.guild(
+            apiGuild({ id: IDS.uncachedGuild, roles: [apiRole({ id: IDS.uncachedGuild, name: "@everyone" }), admin] }),
+        );
+        await new GuildRepository(db).initGuild(
+            IDS.uncachedGuild,
+            guildFactory.build({ id: IDS.uncachedGuild, roles: { admin: "BustinBot Admin" } }),
+        );
         return { guild_id: IDS.uncachedGuild, member: apiMember({ roles: [admin.id] }) };
     }
 
-    test("recognises a role configured by name for a member Discord sends as role ids", async ({ discord, services, db }) => {
-        const interaction = await discord.dispatch(chatInputInteraction("probe", [], await fromUncachedGuild(discord, db, "BustinBot Admin")));
-        const ran = command(async ({ interaction: probe }) => {
-            await probe?.reply({ content: "ran" });
-        }, [CommandRole.BotAdmin]);
+    test("recognises a role configured by name for a member Discord sends as role ids", async ({
+        discord,
+        services,
+        db,
+    }) => {
+        const interaction = await discord.dispatch(
+            chatInputInteraction("probe", [], await fromUncachedGuild(discord, db, "BustinBot Admin")),
+        );
+        const ran = command(
+            async ({ interaction: probe }) => {
+                await probe?.reply({ content: "ran" });
+            },
+            [CommandRole.BotAdmin],
+        );
 
         await handleInteraction(interaction, new Map([["probe", ran]]), services);
 
-        expect(discord.callbacks(interaction)).toEqual([{ type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "ran" }) }]);
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({ content: "ran" }),
+            },
+        ]);
     });
 
     test("lets a BustinBot Admin Discord sends as role ids run /setup", async ({ discord, services, db, commands }) => {
-        const interaction = await discord.dispatch(chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "BustinBot Admin")));
+        const interaction = await discord.dispatch(
+            chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "BustinBot Admin")),
+        );
 
         await handleInteraction(interaction, commands, services);
 
-        expect(JSON.stringify(discord.callbacks(interaction))).not.toContain("Only members with the **BustinBot Admin** role can run");
+        expect(JSON.stringify(discord.callbacks(interaction))).not.toContain(
+            "Only members with the **BustinBot Admin** role can run",
+        );
     });
 
     test("refuses /setup to a member without the BustinBot Admin role", async ({ discord, services, db, commands }) => {
-        const interaction = await discord.dispatch(chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "Moderator")));
+        const interaction = await discord.dispatch(
+            chatInputInteraction("setup", [], await fromUncachedGuild(discord, db, "Moderator")),
+        );
 
         await handleInteraction(interaction, commands, services);
 
-        expect(discord.callbacks(interaction)).toEqual([{
-            type: InteractionResponseType.ChannelMessageWithSource,
-            data: expect.objectContaining({ content: "Only members with the **BustinBot Admin** role can run `/setup`. Please have a server admin create and assign this role first." }),
-        }]);
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content:
+                        "Only members with the **BustinBot Admin** role can run `/setup`. Please have a server admin create and assign this role first.",
+                }),
+            },
+        ]);
     });
 
     test("replies privately when the command is unknown", async ({ discord, services }) => {
@@ -65,7 +95,10 @@ describe("slash command routing", () => {
         await handleInteraction(interaction, new Map(), services);
 
         expect(discord.callbacks(interaction)).toEqual([
-            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "Command not found.", flags: MessageFlags.Ephemeral }) },
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({ content: "Command not found.", flags: MessageFlags.Ephemeral }),
+            },
         ]);
     });
 
@@ -77,18 +110,32 @@ describe("slash command routing", () => {
 
         expect(execute).not.toHaveBeenCalled();
         expect(discord.callbacks(interaction)).toEqual([
-            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "You don't have permission to use this command.", flags: MessageFlags.Ephemeral }) },
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
         ]);
     });
 
     test("tells members to run /setup before the bot is configured", async ({ discord, services }) => {
-        await services.guilds.update(guildFactory.build().id, { setupComplete: { core: false, movie: false, task: false } });
+        await services.guilds.update(guildFactory.build().id, {
+            setupComplete: { core: false, movie: false, task: false },
+        });
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
 
         await handleInteraction(interaction, new Map([["probe", command(vi.fn())]]), services);
 
         expect(discord.callbacks(interaction)).toEqual([
-            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: expect.stringContaining("run `/setup`"), flags: MessageFlags.Ephemeral }) },
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: expect.stringContaining("run `/setup`"),
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
         ]);
     });
 
@@ -97,10 +144,19 @@ describe("slash command routing", () => {
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
         let statsWhenAcknowledged: unknown;
 
-        await handleInteraction(interaction, new Map([["probe", command(async ({ interaction }) => {
-            await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
-            statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
-        })]]), services);
+        await handleInteraction(
+            interaction,
+            new Map([
+                [
+                    "probe",
+                    command(async ({ interaction }) => {
+                        await interaction!.reply({ content: "pong", flags: MessageFlags.Ephemeral });
+                        statsWhenAcknowledged = await users.getUserById(interaction!.user.id);
+                    }),
+                ],
+            ]),
+            services,
+        );
 
         expect(discord.callbacks(interaction)).toHaveLength(1);
         expect(statsWhenAcknowledged).toBeNull();
@@ -111,13 +167,31 @@ describe("slash command routing", () => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         const interaction = await discord.dispatch(chatInputInteraction("probe"));
 
-        await handleInteraction(interaction, new Map([["probe", command(async () => {
-            throw new Error("boom");
-        })]]), services);
+        await handleInteraction(
+            interaction,
+            new Map([
+                [
+                    "probe",
+                    command(async () => {
+                        throw new Error("boom");
+                    }),
+                ],
+            ]),
+            services,
+        );
 
         expect(discord.callbacks(interaction)).toEqual([
-            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "There was an error executing that command.", flags: MessageFlags.Ephemeral }) },
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "There was an error executing that command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
         ]);
-        expect(error).toHaveBeenCalledWith("[Slash Command Error]: probe", expect.objectContaining({ message: "boom" }));
+        expect(error).toHaveBeenCalledWith(
+            "[Slash Command Error]: probe",
+            expect.objectContaining({ message: "boom" }),
+        );
     });
 });

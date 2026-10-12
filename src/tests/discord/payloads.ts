@@ -69,7 +69,6 @@ const EPOCH = "2026-01-01T00:00:00.000Z";
 const NO_ROLE_FLAGS = 0 as RoleFlags;
 const NO_MEMBER_FLAGS = 0 as GuildMemberFlags;
 
-
 export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
     return {
         id: IDS.user,
@@ -101,7 +100,7 @@ export function apiRole(overrides: Partial<APIRole> = {}): APIRole {
 
 // A guild text channel, as the gateway and REST API send one: with the id of its guild
 export function apiTextChannel(
-    overrides: Partial<APIGuildTextChannel<ChannelType.GuildText>> = {}
+    overrides: Partial<APIGuildTextChannel<ChannelType.GuildText>> = {},
 ): APIGuildTextChannel<ChannelType.GuildText> & { guild_id: string } {
     return {
         id: IDS.channel,
@@ -120,7 +119,9 @@ export function apiTextChannel(
 }
 
 // A guild voice channel, as the gateway and REST API send one
-export function apiVoiceChannel(overrides: Partial<APIGuildVoiceChannel> = {}): APIGuildVoiceChannel & { guild_id: string } {
+export function apiVoiceChannel(
+    overrides: Partial<APIGuildVoiceChannel> = {},
+): APIGuildVoiceChannel & { guild_id: string } {
     return {
         id: SnowflakeUtil.generate().toString(),
         type: ChannelType.GuildVoice,
@@ -140,7 +141,11 @@ export function apiVoiceChannel(overrides: Partial<APIGuildVoiceChannel> = {}): 
 }
 
 // A member's voice connection: in a voice channel, or (channel_id null) in none
-export function apiVoiceState(userId: string, channelId: string | null, overrides: Partial<APIVoiceState> = {}): APIVoiceState & { guild_id: string } {
+export function apiVoiceState(
+    userId: string,
+    channelId: string | null,
+    overrides: Partial<APIVoiceState> = {},
+): APIVoiceState & { guild_id: string } {
     return {
         guild_id: IDS.guild,
         channel_id: channelId,
@@ -257,14 +262,20 @@ export function chatInputInteraction(
     name: string,
     options: APIApplicationCommandInteractionDataOption[] = [],
     overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {},
-    resolved?: APIInteractionDataResolved
+    resolved?: APIInteractionDataResolved,
 ): APIChatInputApplicationCommandGuildInteraction {
     return {
         ...interactionBase,
         id: SnowflakeUtil.generate().toString(),
         token: `token-${SnowflakeUtil.generate().toString()}`,
         type: InteractionType.ApplicationCommand,
-        data: { id: SnowflakeUtil.generate().toString(), name, type: ApplicationCommandType.ChatInput, options, ...(resolved ? { resolved } : {}) },
+        data: {
+            id: SnowflakeUtil.generate().toString(),
+            name,
+            type: ApplicationCommandType.ChatInput,
+            options,
+            ...(resolved ? { resolved } : {}),
+        },
         channel: interactionChannel(),
         channel_id: IDS.channel,
         member: apiMember(),
@@ -275,7 +286,7 @@ export function chatInputInteraction(
 export function buttonInteraction(
     customId: string,
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentButtonInteraction> = {}
+    overrides: Partial<APIMessageComponentButtonInteraction> = {},
 ): APIMessageComponentButtonInteraction {
     const data: APIMessageButtonInteractionData = { custom_id: customId, component_type: ComponentType.Button };
     return {
@@ -295,7 +306,7 @@ export function buttonInteraction(
 function selectInteraction(
     data: APIMessageSelectMenuInteractionData,
     message: APIMessage,
-    overrides: Partial<APIMessageComponentSelectMenuInteraction>
+    overrides: Partial<APIMessageComponentSelectMenuInteraction>,
 ): APIMessageComponentSelectMenuInteraction {
     return {
         ...interactionBase,
@@ -315,35 +326,54 @@ export function channelSelectInteraction(
     customId: string,
     channelIds: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
 ): APIMessageComponentSelectMenuInteraction {
-    const channels = Object.fromEntries(channelIds.map((id) => [id, { id, name: "channel", type: ChannelType.GuildText, permissions: "0" }]));
-    return selectInteraction({ custom_id: customId, component_type: ComponentType.ChannelSelect, values: channelIds, resolved: { channels } }, message, overrides);
+    const channels = Object.fromEntries(
+        channelIds.map((id) => [id, { id, name: "channel", type: ChannelType.GuildText, permissions: "0" }]),
+    );
+    return selectInteraction(
+        {
+            custom_id: customId,
+            component_type: ComponentType.ChannelSelect,
+            values: channelIds,
+            resolved: { channels },
+        },
+        message,
+        overrides,
+    );
 }
 
 export function roleSelectInteraction(
     customId: string,
     roleIds: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
 ): APIMessageComponentSelectMenuInteraction {
     const roles = Object.fromEntries(roleIds.map((id) => [id, apiRole({ id })]));
-    return selectInteraction({ custom_id: customId, component_type: ComponentType.RoleSelect, values: roleIds, resolved: { roles } }, message, overrides);
+    return selectInteraction(
+        { custom_id: customId, component_type: ComponentType.RoleSelect, values: roleIds, resolved: { roles } },
+        message,
+        overrides,
+    );
 }
 
 export function stringSelectInteraction(
     customId: string,
     values: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {}
+    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
 ): APIMessageComponentSelectMenuInteraction {
-    return selectInteraction({ custom_id: customId, component_type: ComponentType.StringSelect, values }, message, overrides);
+    return selectInteraction(
+        { custom_id: customId, component_type: ComponentType.StringSelect, values },
+        message,
+        overrides,
+    );
 }
 
 export function modalSubmitInteraction(
     customId: string,
     fields: Record<string, string>,
-    overrides: Partial<APIModalSubmitGuildInteraction> = {}
+    overrides: Partial<APIModalSubmitGuildInteraction> = {},
 ): APIModalSubmitGuildInteraction {
     return {
         ...interactionBase,
@@ -385,7 +415,10 @@ export function apiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
 }
 
 // A member's message in the harness guild's channel, as delivered by the gateway's MESSAGE_CREATE event
-export function messageCreate(content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): GatewayMessageCreateDispatchData {
+export function messageCreate(
+    content: string,
+    overrides: Partial<GatewayMessageCreateDispatchData> = {},
+): GatewayMessageCreateDispatchData {
     const { user: _user, permissions: _permissions, ...member } = apiMember();
     return {
         ...apiMessage({ content, author: apiUser() }),
@@ -413,7 +446,10 @@ export function apiAttachment(overrides: Partial<APIAttachment> = {}): APIAttach
 }
 
 // A member's message to the bot in their DMs, as delivered by the gateway's MESSAGE_CREATE event
-export function directMessage(content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): GatewayMessageCreateDispatchData {
+export function directMessage(
+    content: string,
+    overrides: Partial<GatewayMessageCreateDispatchData> = {},
+): GatewayMessageCreateDispatchData {
     return {
         ...apiMessage({ content, author: apiUser(), channel_id: IDS.dm }),
         channel_type: ChannelType.DM,

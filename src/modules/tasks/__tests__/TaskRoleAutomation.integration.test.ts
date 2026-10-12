@@ -16,7 +16,11 @@ const milestoneRoles = [
 ];
 
 describe("milestone roles", () => {
-    test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({ discord, services, factories }) => {
+    test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
@@ -28,7 +32,11 @@ describe("milestone roles", () => {
 
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast.id}`]);
         expect(discord.memberRoleChanges("DELETE")).toEqual([`${member}:${participant.id}`]);
-        expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({ content: "You have earned the **Task Enthusiast** role for completing 25 tasks!" })]);
+        expect(discord.messagesSentTo(dm)).toEqual([
+            expect.objectContaining({
+                content: "You have earned the **Task Enthusiast** role for completing 25 tasks!",
+            }),
+        ]);
     });
 
     test("still give the role to a member who doesn't accept DMs", async ({ discord, services, factories }) => {
@@ -43,16 +51,25 @@ describe("milestone roles", () => {
         await applyTaskMilestoneRoles(discord.client, services, member);
 
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${participant.id}`]);
-        expect(warn).toHaveBeenCalledWith(`[TaskMilestones] Granted Task Participant to ${member} but couldn't DM them:`, expect.objectContaining({ code: 50007 }));
+        expect(warn).toHaveBeenCalledWith(
+            `[TaskMilestones] Granted Task Participant to ${member} but couldn't DM them:`,
+            expect.objectContaining({ code: 50007 }),
+        );
     });
 });
 
 describe("champion roles", () => {
-    test("pass from last period's champions to this period's, and count each win", async ({ discord, services, factories }) => {
+    test("pass from last period's champions to this period's, and count each win", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         const first = apiRole({ name: "Task Champion (1st)" });
         const second = apiRole({ name: "Task Champion (2nd)" });
         for (const role of [first, second]) await discord.addRole(IDS.guild, role);
-        await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: first.id, taskChampionSecond: second.id } });
+        await services.guilds.update(IDS.guild, {
+            roles: { taskChampionFirst: first.id, taskChampionSecond: second.id },
+        });
         const previousChampion = SnowflakeUtil.generate().toString();
         const runnerUp = SnowflakeUtil.generate().toString();
         // Champions are awarded once their period has ended and the next one has begun
@@ -66,19 +83,30 @@ describe("champion roles", () => {
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: runnerUp }) }));
         for (const userId of [previousChampion, member, runnerUp]) discord.acceptMemberRoleChanges(IDS.guild, userId);
 
-        await awardTaskChampionRoles(discord.client, services, {
-            first: [{ userId: member, points: 10 }],
-            second: [{ userId: runnerUp, points: 8 }],
-            third: [],
-            winners: [{ userId: member, points: 10 }, { userId: runnerUp, points: 8 }],
-        }, endedPeriod);
+        await awardTaskChampionRoles(
+            discord.client,
+            services,
+            {
+                first: [{ userId: member, points: 10 }],
+                second: [{ userId: runnerUp, points: 8 }],
+                third: [],
+                winners: [
+                    { userId: member, points: 10 },
+                    { userId: runnerUp, points: 8 },
+                ],
+            },
+            endedPeriod,
+        );
 
         expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
         expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);
         expect(await services.repos.userRepo.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
         expect(await services.repos.userRepo.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
         expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.champions).toMatchObject({
-            first: [member], second: [runnerUp], third: [], periodIndex: endedPeriod,
+            first: [member],
+            second: [runnerUp],
+            third: [],
+            periodIndex: endedPeriod,
         });
     });
 });

@@ -6,7 +6,14 @@ import { promisify } from "node:util";
 import { describe, expect, test, vi } from "../tests/fixtures.js";
 import { startBot } from "../bot.js";
 import { DiscordError, DiscordHarness } from "../tests/discord/harness.js";
-import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
+import {
+    IDS,
+    apiAttachment,
+    apiGuild,
+    apiTextChannel,
+    chatInputInteraction,
+    directMessage,
+} from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
 import { guildFactory, submissionDraftFactory, taskEventFactory } from "../tests/factories.js";
 import { getNextPollDate } from "../modules/tasks/TaskScheduler.js";
@@ -23,15 +30,30 @@ describe("startBot", () => {
         await discord.connect();
         const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
-        expect(await discord.originalEdit(interaction)).toEqual(expect.objectContaining({ content: "Bustin makes me feel good!" }));
+        expect(await discord.originalEdit(interaction)).toEqual(
+            expect.objectContaining({ content: "Bustin makes me feel good!" }),
+        );
         expect(services.guildId).toBe(interaction.guildId);
     });
 
-    test("syncs each slash command once to the primary guild when sync is enabled", async ({ db, http, services, commands, onTestFinished }) => {
+    test("syncs each slash command once to the primary guild when sync is enabled", async ({
+        db,
+        http,
+        services,
+        commands,
+        onTestFinished,
+    }) => {
         const discord = DiscordHarness.create(http);
         discord.acceptCommandSync(IDS.guild);
 
-        onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } }));
+        onTestFinished(
+            await startBot(discord.client, {
+                db,
+                commandsDir,
+                fallbackGuildId: null,
+                commandSync: { token: "sync-token", clientId: IDS.application },
+            }),
+        );
 
         const [synced] = discord.guildCommandUpdates(IDS.guild);
         const names = synced!.map((command) => command.name);
@@ -42,24 +64,51 @@ describe("startBot", () => {
 
     test("keeps starting when Discord rejects the command sync", async ({ db, http, services, onTestFinished }) => {
         const discord = DiscordHarness.create(http);
-        discord.refuse("PUT", `/applications/${IDS.application}/guilds/${IDS.guild}/commands`, DiscordError.missingAccess);
+        discord.refuse(
+            "PUT",
+            `/applications/${IDS.application}/guilds/${IDS.guild}/commands`,
+            DiscordError.missingAccess,
+        );
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: { token: "sync-token", clientId: IDS.application } }));
+        onTestFinished(
+            await startBot(discord.client, {
+                db,
+                commandsDir,
+                fallbackGuildId: null,
+                commandSync: { token: "sync-token", clientId: IDS.application },
+            }),
+        );
         await discord.connect();
         const interaction = await discord.dispatch(chatInputInteraction("bustin"));
 
-        expect(error).toHaveBeenCalledWith("Failed to sync guild slash commands:", expect.objectContaining({ status: 403 }));
-        expect(await discord.originalEdit(interaction)).toEqual(expect.objectContaining({ content: "Bustin makes me feel good!" }));
+        expect(error).toHaveBeenCalledWith(
+            "Failed to sync guild slash commands:",
+            expect.objectContaining({ status: 403 }),
+        );
+        expect(await discord.originalEdit(interaction)).toEqual(
+            expect.objectContaining({ content: "Bustin makes me feel good!" }),
+        );
         expect(services.guildId).toBe(IDS.guild);
     });
 
-    test("reports bot-wide praise counts the same in every guild", async ({ db, http, services, otherGuild, onTestFinished }) => {
+    test("reports bot-wide praise counts the same in every guild", async ({
+        db,
+        http,
+        services,
+        otherGuild,
+        onTestFinished,
+    }) => {
         const discord = DiscordHarness.create(http);
 
         onTestFinished(await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }));
         await discord.connect();
-        await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
+        await discord.addGuild(
+            apiGuild({
+                id: IDS.otherGuild,
+                channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
+            }),
+        );
         const inOtherGuild = {
             guild_id: otherGuild.guildId,
             channel_id: IDS.otherGuildChannel,
@@ -70,12 +119,17 @@ describe("startBot", () => {
         await discord.originalEdit(await discord.dispatch(chatInputInteraction("goodbot")));
         const second = await discord.dispatch(chatInputInteraction("goodbot", [], inOtherGuild));
 
-        expect(await discord.originalEdit(second)).toEqual(expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }));
+        expect(await discord.originalEdit(second)).toEqual(
+            expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }),
+        );
         expect(services.guildId).toBe(IDS.guild);
     });
 
     test("stops every scheduled job and disconnects when shut down", async ({ db, http }) => {
-        await new GuildRepository(db).initGuild(IDS.guild, guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false } }));
+        await new GuildRepository(db).initGuild(
+            IDS.guild,
+            guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false } }),
+        );
         const discord = DiscordHarness.create(http);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
@@ -97,17 +151,30 @@ describe("startBot", () => {
         const interaction = await discord.dispatch(chatInputInteraction("bustin"));
         await shutdown();
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Bustin makes me feel good!" })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Bustin makes me feel good!" }),
+        ]);
         expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
-    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services, otherGuild, factories }) => {
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({
+        db,
+        http,
+        services,
+        otherGuild,
+        factories,
+    }) => {
         const otherTasks = otherGuild.repos.taskRepo;
         const event = taskEventFactory.build({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
-        await factories.submissionDraft.create({ taskEventId: "older", createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate() });
-        await otherTasks.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: event.id, createdAt: new Date() }));
+        await factories.submissionDraft.create({
+            taskEventId: "older",
+            createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate(),
+        });
+        await otherTasks.saveSubmissionDraft(
+            submissionDraftFactory.build({ taskEventId: event.id, createdAt: new Date() }),
+        );
         const discord = DiscordHarness.create(http);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -116,30 +183,49 @@ describe("startBot", () => {
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
         await discord.connect();
-        await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
+        await discord.addGuild(
+            apiGuild({
+                id: IDS.otherGuild,
+                channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })],
+            }),
+        );
         await discord.sendMessage(directMessage("", { attachments: [screenshot] }));
         // Shutting down lets the DM being handled finish
         await shutdown();
 
-        expect(discord.messagesSentTo(IDS.dm)).toEqual([expect.objectContaining({ content: expect.stringContaining("received with 1 screenshot and sent for review!") })]);
-        expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([expect.objectContaining({ taskEventId: event.id })]);
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([
+            expect.objectContaining({
+                content: expect.stringContaining("received with 1 screenshot and sent for review!"),
+            }),
+        ]);
+        expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([
+            expect.objectContaining({ taskEventId: event.id }),
+        ]);
         expect(discord.messagesSentTo(IDS.otherGuildChannel)).toHaveLength(2);
         expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 
-    test("refuses to start when no guild is configured and no fallback is given", async ({ db, http, onTestFinished }) => {
+    test("refuses to start when no guild is configured and no fallback is given", async ({
+        db,
+        http,
+        onTestFinished,
+    }) => {
         const discord = DiscordHarness.create(http);
         onTestFinished(() => discord.destroy());
 
-        await expect(startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }))
-            .rejects.toThrow("No guild ID available");
+        await expect(
+            startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null }),
+        ).rejects.toThrow("No guild ID available");
     });
 });
 
 describe("entry point", () => {
     const entry = path.join(import.meta.dirname, "../index.ts");
     // A clean environment and an empty working directory, so no .env file is picked up
-    const options = { cwd: import.meta.dirname, env: { PATH: process.env.PATH, DOTENV_CONFIG_QUIET: "true", TMDB_API_KEY: "test" } };
+    const options = {
+        cwd: import.meta.dirname,
+        env: { PATH: process.env.PATH, DOTENV_CONFIG_QUIET: "true", TMDB_API_KEY: "test" },
+    };
 
     test("loads every command and stops in dry-run mode", async () => {
         const { stdout } = await run("npx", ["tsx", entry, "--dry-run"], options);

@@ -6,11 +6,26 @@ import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../HandlePrizeDraw.js";
 
-const [winner, second, third, fourth] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
+const [winner, second, third, fourth] = [
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+];
 
 // A finished task event and the submissions made for it
-async function storeEvent(factories: StoringFactories, id: string, endTime: DateTime, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
-    await factories.taskEvent.create({ id, startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(), createdAt: endTime.minus({ days: 7 }).toJSDate() });
+async function storeEvent(
+    factories: StoringFactories,
+    id: string,
+    endTime: DateTime,
+    submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>,
+) {
+    await factories.taskEvent.create({
+        id,
+        startTime: endTime.minus({ days: 7 }).toJSDate(),
+        endTime: endTime.toJSDate(),
+        createdAt: endTime.minus({ days: 7 }).toJSDate(),
+    });
     for (const [index, submission] of submissions.entries()) {
         await factories.taskSubmission.create({ id: `${id}-${index}`, taskEventId: id, ...submission });
     }
@@ -29,22 +44,34 @@ const yesterdaysDraw = {
 };
 
 describe("a prize draw snapshot", () => {
-    test("gives one entry per task however many times the member upgraded their submission", async ({ services, factories }) => {
+    test("gives one entry per task however many times the member upgraded their submission", async ({
+        services,
+        factories,
+    }) => {
         await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
             { userId: winner, status: SubmissionStatus.Bronze },
             { userId: winner, status: SubmissionStatus.Silver },
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
-        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 1 }, totalEntries: 1, tierCounts: { bronze: 0, silver: 0, gold: 1 } });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 1 },
+            totalEntries: 1,
+            tierCounts: { bronze: 0, silver: 0, gold: 1 },
+        });
     });
 
     test("gives one entry for each task the member completed", async ({ services, factories }) => {
         for (const id of ["pvm", "skilling", "minigame"]) {
-            await storeEvent(factories, id, DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
+            await storeEvent(factories, id, DateTime.now().minus({ days: 2 }), [
+                { userId: winner, status: SubmissionStatus.Gold },
+            ]);
         }
 
-        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 3 }, totalEntries: 3 });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 3 },
+            totalEntries: 3,
+        });
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services, factories }) => {
@@ -53,14 +80,24 @@ describe("a prize draw snapshot", () => {
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
 
-        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: {}, totalEntries: 0 });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: {},
+            totalEntries: 0,
+        });
     });
 
     test("leaves out a task event that is still running", async ({ services, factories }) => {
-        await storeEvent(factories, "finished", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
-        await storeEvent(factories, "running", DateTime.now().plus({ hours: 1 }), [{ userId: second, status: SubmissionStatus.Gold }]);
+        await storeEvent(factories, "finished", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+        await storeEvent(factories, "running", DateTime.now().plus({ hours: 1 }), [
+            { userId: second, status: SubmissionStatus.Gold },
+        ]);
 
-        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 1 }, taskEventIds: ["finished"] });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 1 },
+            taskEventIds: ["finished"],
+        });
     });
 
     test("carries over approvals the previous draw's snapshot missed", async ({ services, factories }) => {
@@ -77,13 +114,30 @@ describe("a prize draw snapshot", () => {
         });
         await storeEvent(factories, "previous-event", previousEnd, [
             // Approved after the previous snapshot, before its roll: in neither draw until carried over
-            { userId: second, status: SubmissionStatus.Silver, submittedAt: previousEnd.minus({ days: 1 }).toJSDate(), reviewedAt: previousSnapshot.plus({ hours: 1 }).toJSDate() },
+            {
+                userId: second,
+                status: SubmissionStatus.Silver,
+                submittedAt: previousEnd.minus({ days: 1 }).toJSDate(),
+                reviewedAt: previousSnapshot.plus({ hours: 1 }).toJSDate(),
+            },
             // Approved before the previous snapshot: already counted there
-            { userId: third, status: SubmissionStatus.Gold, submittedAt: previousEnd.minus({ days: 1 }).toJSDate(), reviewedAt: previousEnd.minus({ hours: 1 }).toJSDate() },
+            {
+                userId: third,
+                status: SubmissionStatus.Gold,
+                submittedAt: previousEnd.minus({ days: 1 }).toJSDate(),
+                reviewedAt: previousEnd.minus({ hours: 1 }).toJSDate(),
+            },
             // Made after the previous period ended
-            { userId: fourth, status: SubmissionStatus.Bronze, submittedAt: previousEnd.plus({ days: 1 }).toJSDate(), reviewedAt: previousEnd.plus({ days: 2 }).toJSDate() },
+            {
+                userId: fourth,
+                status: SubmissionStatus.Bronze,
+                submittedAt: previousEnd.plus({ days: 1 }).toJSDate(),
+                reviewedAt: previousEnd.plus({ days: 2 }).toJSDate(),
+            },
         ]);
-        await storeEvent(factories, "current-event", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
+        await storeEvent(factories, "current-event", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
 
         const draw = await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
 
@@ -93,7 +147,10 @@ describe("a prize draw snapshot", () => {
 
     test("carries over only from the most recent rolled draw", async ({ services, factories }) => {
         const members = { older: SnowflakeUtil.generate().toString(), latest: SnowflakeUtil.generate().toString() };
-        for (const [id, endDaysAgo] of [["older", 42], ["latest", 21]] as const) {
+        for (const [id, endDaysAgo] of [
+            ["older", 42],
+            ["latest", 21],
+        ] as const) {
             const end = DateTime.now().minus({ days: endDaysAgo });
             await factories.prizeDraw.create({
                 ...yesterdaysDraw,
@@ -105,12 +162,19 @@ describe("a prize draw snapshot", () => {
                 taskEventIds: [`${id}-event`],
             });
             await storeEvent(factories, `${id}-event`, end, [
-                { userId: members[id], status: SubmissionStatus.Bronze, submittedAt: end.minus({ days: 1 }).toJSDate(), reviewedAt: end.plus({ hours: 36 }).toJSDate() },
+                {
+                    userId: members[id],
+                    status: SubmissionStatus.Bronze,
+                    submittedAt: end.minus({ days: 1 }).toJSDate(),
+                    reviewedAt: end.plus({ hours: 36 }).toJSDate(),
+                },
             ]);
         }
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-        expect((await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants).toEqual({ [members.latest]: 1 });
+        expect(
+            (await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants,
+        ).toEqual({ [members.latest]: 1 });
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
     });
 });
@@ -123,7 +187,11 @@ describe("rolling a prize draw", () => {
     });
 
     test("keeps the winner already rolled", async ({ services, factories }) => {
-        await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: second, rolledAt: DateTime.now().minus({ days: 1 }).toUTC().toISO() });
+        await factories.prizeDraw.create({
+            ...yesterdaysDraw,
+            winnerId: second,
+            rolledAt: DateTime.now().minus({ days: 1 }).toUTC().toISO(),
+        });
 
         expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(second);
     });
@@ -133,13 +201,20 @@ describe("rolling a prize draw", () => {
         await factories.prizeDraw.create(yesterdaysDraw);
 
         expect(await rollWinnerForSnapshot(services.repos.prizeRepo, "draw-1", services)).toBe(winner);
-        expect(await services.repos.prizeRepo.getPrizeDrawById("draw-1")).toMatchObject({ winnerId: winner, rolledAt: expect.any(String) });
+        expect(await services.repos.prizeRepo.getPrizeDrawById("draw-1")).toMatchObject({
+            winnerId: winner,
+            rolledAt: expect.any(String),
+        });
         expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskPrizesWon: 1 });
     });
 });
 
 describe("announcing a prize draw winner", () => {
-    test("posts one message mentioning the task role with the winner's embed, and congratulates the winner", async ({ discord, services, factories }) => {
+    test("posts one message mentioning the task role with the winner's embed, and congratulates the winner", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         const taskUser = apiRole({ name: "Task User" });
         await discord.addRole(IDS.guild, taskUser);
         await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
@@ -150,12 +225,20 @@ describe("announcing a prize draw winner", () => {
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(true);
 
-        expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({
-            content: `<@&${taskUser.id}>`,
-            embeds: [expect.objectContaining({ thumbnail: { url: "attachment://task_prize.png" } })],
-            files: ["task_prize.png"],
-        })]);
-        expect(discord.messagesSentTo(dm)).toEqual([expect.objectContaining({ content: expect.stringContaining("You've won the latest OSRS community tasks prize draw in **Test Guild**") })]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({
+                content: `<@&${taskUser.id}>`,
+                embeds: [expect.objectContaining({ thumbnail: { url: "attachment://task_prize.png" } })],
+                files: ["task_prize.png"],
+            }),
+        ]);
+        expect(discord.messagesSentTo(dm)).toEqual([
+            expect.objectContaining({
+                content: expect.stringContaining(
+                    "You've won the latest OSRS community tasks prize draw in **Test Guild**",
+                ),
+            }),
+        ]);
     });
 
     test("still posts the winner's embed when no task role is configured", async ({ discord, services, factories }) => {
@@ -173,7 +256,11 @@ describe("announcing a prize draw winner", () => {
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] Task user role not configured or not found.");
     });
 
-    test("reports that the task channel can't be reached instead of posting anywhere else", async ({ discord, services, factories }) => {
+    test("reports that the task channel can't be reached instead of posting anywhere else", async ({
+        discord,
+        services,
+        factories,
+    }) => {
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
         discord.user(apiUser({ id: winner, username: "lucky" }));

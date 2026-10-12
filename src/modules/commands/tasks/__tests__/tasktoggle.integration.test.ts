@@ -13,7 +13,11 @@ function jobCount(guildId: string): number {
 
 describe("/tasktoggle schedule", () => {
     test("starts this guild's task jobs and saves the toggle", async ({ discord, slash, services }) => {
-        const interaction = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
+        const interaction = await slash(
+            "tasktoggle",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+            admin,
+        );
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
@@ -26,7 +30,11 @@ describe("/tasktoggle schedule", () => {
         await initTaskScheduler(discord.client, otherGuild);
         await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
 
-        const interaction = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
+        const interaction = await slash(
+            "tasktoggle",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+            admin,
+        );
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "⏹️ Task scheduler **disabled** and stopped for this guild." }),
@@ -40,7 +48,11 @@ describe("/tasktoggle schedule", () => {
         const { toggles: _toggles, ...withoutToggles } = guildFactory.build();
         await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
 
-        const interaction = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);
+        const interaction = await slash(
+            "tasktoggle",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+            admin,
+        );
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
@@ -51,13 +63,21 @@ describe("/tasktoggle schedule", () => {
 
 describe("/tasktoggle leaderboard", () => {
     test("switches periodic leaderboard automation off and back on", async ({ discord, slash, services }) => {
-        const off = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }], admin);
+        const off = await slash(
+            "tasktoggle",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
+            admin,
+        );
         expect(discord.originalEdits(off)).toEqual([
             expect.objectContaining({ content: "🧊 Periodic leaderboard automation **disabled** (read-only mode)." }),
         ]);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskLeaderboard).toBe(false);
 
-        const on = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }], admin);
+        const on = await slash(
+            "tasktoggle",
+            [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
+            admin,
+        );
         expect(discord.originalEdits(on)).toEqual([
             expect.objectContaining({ content: "🏆 Periodic leaderboard automation **enabled**." }),
         ]);

@@ -45,7 +45,9 @@ export const taskEventFactory = Factory.define<TaskEvent>(({ params }) => {
     };
 });
 
-export const userStatsFactory = Factory.define<UserStats>(() => newUserStats(IDS.user, new Date("2026-01-01T00:00:00.000Z")));
+export const userStatsFactory = Factory.define<UserStats>(() =>
+    newUserStats(IDS.user, new Date("2026-01-01T00:00:00.000Z")),
+);
 
 export const taskSubmissionFactory = Factory.define<TaskSubmission>(() => ({
     id: "submission-1",
@@ -68,7 +70,11 @@ export const taskPollFactory = Factory.define<TaskPoll>(() => ({
     id: "poll-1",
     type: "task",
     category: TaskCategory.PvM,
-    options: [taskFactory.build({ id: "PVM001" }), taskFactory.build({ id: "PVM002" }), taskFactory.build({ id: "PVM003" })],
+    options: [
+        taskFactory.build({ id: "PVM001" }),
+        taskFactory.build({ id: "PVM002" }),
+        taskFactory.build({ id: "PVM003" }),
+    ],
     // Posted in the harness guild's channel, so flows that fetch the poll message reach the harness
     messageId: SnowflakeUtil.generate().toString(),
     channelId: IDS.channel,
@@ -91,7 +97,12 @@ export const guildFactory = Factory.define<Guild>(() => ({
     id: IDS.guild,
     toggles: { taskScheduler: false, leaguesEnabled: false },
     roles: { ...IDS.roles },
-    channels: { announcements: IDS.channel, taskChannel: IDS.channel, taskVerification: IDS.channel, movieNight: IDS.channel },
+    channels: {
+        announcements: IDS.channel,
+        taskChannel: IDS.channel,
+        taskVerification: IDS.channel,
+        movieNight: IDS.channel,
+    },
     setupComplete: { core: true, movie: true, task: true },
     timezone: "UTC",
 }));

@@ -22,7 +22,12 @@ function importWith(filename: string) {
 }
 
 describe("/importtasks", () => {
-    test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({ discord, interact, services, factories }) => {
+    test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         const tasks = services.repos.taskRepo;
         await factories.task.create({ id: "PVM001", taskName: "Already stored" });
         const upload = importWith("tasks.csv");
@@ -30,9 +35,11 @@ describe("/importtasks", () => {
 
         const interaction = await interact(upload.interaction);
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({
-            content: "✅ Import complete.\n• 1 new tasks added\n• 1 skipped (existing)\n• 2 total in file.",
-        })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({
+                content: "✅ Import complete.\n• 1 new tasks added\n• 1 skipped (existing)\n• 2 total in file.",
+            }),
+        ]);
         expect(await tasks.getTaskById("PVM001")).toMatchObject({ taskName: "Already stored" });
         expect(await tasks.getTaskById("PVM002")).toMatchObject({ taskName: "Kill {amount} Vorkath", amtGold: 20 });
     });
@@ -40,17 +47,23 @@ describe("/importtasks", () => {
     test("refuses a file that isn't a CSV", async ({ discord, interact }) => {
         const interaction = await interact(importWith("tasks.xlsx").interaction);
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Please upload a valid CSV file." })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Please upload a valid CSV file." }),
+        ]);
     });
 
     test("reports a failed download", async ({ discord, interact, http }) => {
         const upload = importWith("tasks.csv");
-        http.get("https://cdn.discordapp.com").intercept({ path: new URL(upload.attachment.url).pathname, method: "GET" }).reply(404, "Not Found");
+        http.get("https://cdn.discordapp.com")
+            .intercept({ path: new URL(upload.attachment.url).pathname, method: "GET" })
+            .reply(404, "Not Found");
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
         const interaction = await interact(upload.interaction);
 
-        expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Import failed. Check logs for details." })]);
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Import failed. Check logs for details." }),
+        ]);
         expect(error).toHaveBeenCalledWith(new Error("Failed to download tasks.csv: HTTP 404"));
     });
 });

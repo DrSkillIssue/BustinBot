@@ -9,7 +9,14 @@ const milestones = [participant, enthusiast, expert];
 
 describe("TaskMilestones helpers", () => {
     test("counts legacy completions toward totals", () => {
-        expect(getTotalTaskCompletions({ tasksCompletedBronze: 2, tasksCompletedSilver: 1, tasksCompletedGold: 0, legacyTasksCompleted: 8 })).toBe(11);
+        expect(
+            getTotalTaskCompletions({
+                tasksCompletedBronze: 2,
+                tasksCompletedSilver: 1,
+                tasksCompletedGold: 0,
+                legacyTasksCompleted: 8,
+            }),
+        ).toBe(11);
     });
 
     test("returns the highest milestone reached", () => {
@@ -17,6 +24,11 @@ describe("TaskMilestones helpers", () => {
     });
 
     test("skips disabled milestones", () => {
-        expect(getHighestMilestone(milestones.map((milestone) => ({ ...milestone, enabled: milestone !== enthusiast })), 30)?.id).toBe(participant.id);
+        expect(
+            getHighestMilestone(
+                milestones.map((milestone) => ({ ...milestone, enabled: milestone !== enthusiast })),
+                30,
+            )?.id,
+        ).toBe(participant.id);
     });
 });

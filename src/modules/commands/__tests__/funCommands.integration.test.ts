@@ -8,7 +8,9 @@ describe("fun commands", () => {
         const interaction = await slash("goodbot");
 
         // Public: the deferral carries no ephemeral flag
-        expect(discord.callbacks(interaction)).toEqual([{ type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: 0 } }]);
+        expect(discord.callbacks(interaction)).toEqual([
+            { type: InteractionResponseType.DeferredChannelMessageWithSource, data: { flags: 0 } },
+        ]);
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "🥹 *BustinBot has been called a good bot 2 times!*" }),
         ]);

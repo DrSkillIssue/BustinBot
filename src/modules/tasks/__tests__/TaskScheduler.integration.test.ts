@@ -12,12 +12,15 @@ function jobsOf(guildId: string): Record<string, string> {
     return Object.fromEntries(
         [...cron.getTasks().values()]
             .filter((job) => job.name?.startsWith(prefix))
-            .map((job) => [job.name!.slice(prefix.length), job.getPattern()])
+            .map((job) => [job.name!.slice(prefix.length), job.getPattern()]),
     );
 }
 
 describe("task scheduler", () => {
-    test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({ discord, services }) => {
+    test("schedules the weekly poll, task start, prize draw and leaderboard jobs at midnight UTC", async ({
+        discord,
+        services,
+    }) => {
         await initTaskScheduler(discord.client, services);
 
         expect(jobsOf(IDS.guild)).toEqual({
@@ -33,8 +36,11 @@ describe("task scheduler", () => {
         }
     });
 
-    test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({ discord, services, otherGuild }) => {
-
+    test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({
+        discord,
+        services,
+        otherGuild,
+    }) => {
         await initTaskScheduler(discord.client, services);
         await initTaskScheduler(discord.client, otherGuild);
         await initTaskScheduler(discord.client, services);
@@ -64,7 +70,14 @@ describe("the task channel", () => {
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
         const category = SnowflakeUtil.generate().toString();
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
-        discord.channel({ id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] });
+        discord.channel({
+            id: category,
+            type: ChannelType.GuildCategory,
+            guild_id: IDS.guild,
+            name: "Tasks",
+            position: 0,
+            permission_overwrites: [],
+        });
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
     });
@@ -75,6 +88,9 @@ describe("the task channel", () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await getDefaultChannel(discord.client, services)).toBeNull();
-        expect(warn).toHaveBeenCalledWith(`[TaskScheduler] Can't reach the task channel ${IDS.missingChannel} in ${IDS.guild}:`, expect.objectContaining({ code: 10003 }));
+        expect(warn).toHaveBeenCalledWith(
+            `[TaskScheduler] Can't reach the task channel ${IDS.missingChannel} in ${IDS.guild}:`,
+            expect.objectContaining({ code: 10003 }),
+        );
     });
 });

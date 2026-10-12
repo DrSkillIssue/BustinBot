@@ -1,6 +1,12 @@
 import path from "node:path";
 import type { Interaction, Message } from "discord.js";
-import type { APIApplicationCommandInteractionDataOption, APIChatInputApplicationCommandGuildInteraction, APIInteraction, GatewayMessageCreateDispatchData, GatewayVoiceStateUpdateDispatchData } from "discord-api-types/v10";
+import type {
+    APIApplicationCommandInteractionDataOption,
+    APIChatInputApplicationCommandGuildInteraction,
+    APIInteraction,
+    GatewayMessageCreateDispatchData,
+    GatewayVoiceStateUpdateDispatchData,
+} from "discord-api-types/v10";
 import { test as base } from "vitest";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { createServiceContainer } from "../core/services/ServiceFactory.js";
@@ -16,32 +22,56 @@ import { DiscordHarness } from "./discord/harness.js";
 import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
 import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
 import {
-    guildFactory, keywordFactory, lifetimeLeaderboardFactory, movieEventFactory, movieFactory, moviePollFactory, periodicLeaderboardFactory,
-    prizeDrawFactory, submissionDraftFactory, taskEventFactory, taskFactory, taskPollFactory, taskSubmissionFactory, userStatsFactory,
+    guildFactory,
+    keywordFactory,
+    lifetimeLeaderboardFactory,
+    movieEventFactory,
+    movieFactory,
+    moviePollFactory,
+    periodicLeaderboardFactory,
+    prizeDrawFactory,
+    submissionDraftFactory,
+    taskEventFactory,
+    taskFactory,
+    taskPollFactory,
+    taskSubmissionFactory,
+    userStatsFactory,
 } from "./factories.js";
 
 // The fishery factories whose create() stores what they build in a guild, through its repositories
 function storingFactories(db: Firestore, services: ServiceContainer) {
     const { repos } = services;
-    const storedWith = <T>(store: (value: T) => Promise<unknown>) => async (value: T) => {
-        await store(value);
-        return value;
-    };
+    const storedWith =
+        <T>(store: (value: T) => Promise<unknown>) =>
+        async (value: T) => {
+            await store(value);
+            return value;
+        };
     return {
         task: taskFactory.onCreate(storedWith((task) => repos.taskRepo.createTask(task))),
         taskEvent: taskEventFactory.onCreate(storedWith((event) => repos.taskRepo.createTaskEvent(event))),
         taskPoll: taskPollFactory.onCreate(storedWith((poll) => repos.taskRepo.createTaskPoll(poll))),
-        taskSubmission: taskSubmissionFactory.onCreate(storedWith((submission) => repos.taskRepo.createSubmission(submission))),
-        submissionDraft: submissionDraftFactory.onCreate(storedWith((draft) => repos.taskRepo.saveSubmissionDraft(draft))),
+        taskSubmission: taskSubmissionFactory.onCreate(
+            storedWith((submission) => repos.taskRepo.createSubmission(submission)),
+        ),
+        submissionDraft: submissionDraftFactory.onCreate(
+            storedWith((draft) => repos.taskRepo.saveSubmissionDraft(draft)),
+        ),
         userStats: userStatsFactory.onCreate(storedWith((stats) => repos.userRepo.createUser(stats))),
-        periodicLeaderboard: periodicLeaderboardFactory.onCreate(storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board))),
-        lifetimeLeaderboard: lifetimeLeaderboardFactory.onCreate(storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board))),
+        periodicLeaderboard: periodicLeaderboardFactory.onCreate(
+            storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board)),
+        ),
+        lifetimeLeaderboard: lifetimeLeaderboardFactory.onCreate(
+            storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board)),
+        ),
         prizeDraw: prizeDrawFactory.onCreate(storedWith((draw) => repos.prizeRepo.createPrizeDraw(draw))),
         movie: movieFactory.onCreate(storedWith((movie) => repos.movieRepo.upsertMovie(movie))),
         movieEvent: movieEventFactory.onCreate(storedWith((event) => repos.movieRepo.createMovieEvent(event))),
         moviePoll: moviePollFactory.onCreate(storedWith((poll) => repos.movieRepo.createPoll(poll))),
         // No repository stores a keyword with its usage, so it is written as the keyword repository reads it
-        keyword: keywordFactory.onCreate(storedWith((keyword) => db.doc(`guilds/${services.guildId}/keywords/${keyword.id}`).set(keyword))),
+        keyword: keywordFactory.onCreate(
+            storedWith((keyword) => db.doc(`guilds/${services.guildId}/keywords/${keyword.id}`).set(keyword)),
+        ),
     };
 }
 
@@ -78,7 +108,9 @@ export const test = base
             const unused = agent.pendingInterceptors().filter((interceptor) => !interceptor.persist);
             await agent.close();
             if (unused.length) {
-                const routes = unused.map(({ method, origin, path }) => `${method} ${origin}${String(path)}`).join("\n");
+                const routes = unused
+                    .map(({ method, origin, path }) => `${method} ${origin}${String(path)}`)
+                    .join("\n");
                 throw new Error(`Expected requests were never made:\n${routes}`);
             }
         });
@@ -103,7 +135,12 @@ export const test = base
     .extend("factories", ({ db, services }) => storingFactories(db, services))
     .extend("otherGuild", async ({ db, services }) => {
         const channel = IDS.otherGuildChannel;
-        const channels = { announcements: channel, taskChannel: channel, taskVerification: channel, movieNight: channel };
+        const channels = {
+            announcements: channel,
+            taskChannel: channel,
+            taskVerification: channel,
+            movieNight: channel,
+        };
         await new GuildRepository(db).initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild, channels }));
         return createServiceContainer(db, IDS.otherGuild, services.botStats);
     })
@@ -113,32 +150,33 @@ export const test = base
         return { guild_id: IDS.uncachedGuild };
     })
     .extend("commands", { scope: "file" }, () => loadCommands(path.join(import.meta.dirname, "../modules/commands")))
-    .extend("interact", ({ discord, services, commands }): Interact =>
-        async (payload) => {
-            const interaction = await discord.dispatch(payload);
-            await routeInteraction(interaction, discord.client, commands, services);
-            return interaction;
-        }
+    .extend("interact", ({ discord, services, commands }): Interact => async (payload) => {
+        const interaction = await discord.dispatch(payload);
+        await routeInteraction(interaction, discord.client, commands, services);
+        return interaction;
+    })
+    .extend(
+        "slash",
+        ({ interact }) =>
+            (
+                name: string,
+                options: APIApplicationCommandInteractionDataOption[] = [],
+                overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {},
+            ): Promise<Interaction> =>
+                interact(chatInputInteraction(name, options, overrides)),
     )
-    .extend("slash", ({ interact }) =>
-        (
-            name: string,
-            options: APIApplicationCommandInteractionDataOption[] = [],
-            overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {}
-        ): Promise<Interaction> => interact(chatInputInteraction(name, options, overrides))
-    )
-    .extend("voice", ({ discord, services }) =>
-        async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
-            const [oldState, newState] = await discord.voiceStateUpdate(state);
-            services.movieAttendance.voiceStateChanged(oldState, newState);
-        }
-    )
-    .extend("prefix", ({ discord, services, commands }) =>
-        async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {
-            const message = await discord.sendMessage(messageCreate(content, overrides));
-            await handleMessage(message, commands, services);
-            return message;
-        }
+    .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
+        const [oldState, newState] = await discord.voiceStateUpdate(state);
+        services.movieAttendance.voiceStateChanged(oldState, newState);
+    })
+    .extend(
+        "prefix",
+        ({ discord, services, commands }) =>
+            async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {
+                const message = await discord.sendMessage(messageCreate(content, overrides));
+                await handleMessage(message, commands, services);
+                return message;
+            },
     );
 
 export { describe, expect, vi, beforeEach, afterEach } from "vitest";
