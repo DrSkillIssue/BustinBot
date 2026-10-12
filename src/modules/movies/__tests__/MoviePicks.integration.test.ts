@@ -1,11 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import { DateTime } from "luxon";
-import { describe, expect, test } from "../../../tests/fixtures.js";
+import { describe, expect, test, type StoringFactories } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction } from "../../../tests/discord/payloads.js";
-import { movieFactory, movieEventFactory, moviePollFactory } from "../../../tests/factories.js";
+import { movieFactory } from "../../../tests/factories.js";
 import type { Movie } from "../../../models/Movie.js";
 import { addMovieWithStats } from "../MovieService.js";
 
@@ -15,15 +14,17 @@ const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
-async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
-    const stored = movies.map((movie, index) => movieFactory.build({ id: `movie-${index + 1}`, addedBy: SUBMITTER, addedAt: new Date(Date.UTC(2026, 0, index + 1)), ...movie }));
-    for (const movie of stored) await services.repos.movieRepo.upsertMovie(movie);
+async function storeMovies(factories: StoringFactories, movies: Partial<Movie>[]): Promise<Movie[]> {
+    const stored: Movie[] = [];
+    for (const [index, movie] of movies.entries()) {
+        stored.push(await factories.movie.create({ id: `movie-${index + 1}`, addedBy: SUBMITTER, addedAt: new Date(Date.UTC(2026, 0, index + 1)), ...movie }));
+    }
     return stored;
 }
 
 describe("a movie poll", () => {
-    test("is posted with a button per movie, leaving out one watched since it was chosen, and stored", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
+    test("is posted with a button per movie, leaving out one watched since it was chosen, and stored", async ({ discord, interact, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
         discord.acceptMessages(IDS.channel);
         await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2", "movie-3"], pickMessage, movieAdmin));
 
@@ -38,8 +39,8 @@ describe("a movie poll", () => {
         expect(poll?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
 
-    test("needs at least two unwatched movies", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Heat", watched: true }]);
+    test("needs at least two unwatched movies", async ({ discord, interact, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Heat", watched: true }]);
         await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, movieAdmin));
 
         const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
@@ -48,9 +49,8 @@ describe("a movie poll", () => {
         expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
     });
 
-    test("counts a member's vote once, lets them change it, and shows the counts", async ({ discord, interact, services }) => {
-        const poll = moviePollFactory.build();
-        await services.repos.movieRepo.createPoll(poll);
+    test("counts a member's vote once, lets them change it, and shows the counts", async ({ discord, interact, services, factories }) => {
+        const poll = await factories.moviePoll.create();
         const pollMessage = apiMessage({ id: poll.messageId, embeds: [{ title: "Inception", footer: { text: "🗳️ 0 votes" } }, { title: "Arrival", footer: { text: "🗳️ 0 votes" } }] });
         discord.acceptMessageEdits(IDS.channel);
 
@@ -71,9 +71,9 @@ describe("a movie poll", () => {
 });
 
 describe("choosing the movie for movie night", () => {
-    test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        await services.repos.movieRepo.createMovieEvent(movieEventFactory.build({ startTime: DateTime.now().plus({ days: 1 }).toJSDate(), movie: movieFactory.build({ id: "TBD", title: "TBD" }) }));
+    test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }]);
+        await factories.movieEvent.create({ startTime: DateTime.now().plus({ days: 1 }).toJSDate(), movie: movieFactory.build({ id: "TBD", title: "TBD" }) });
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
@@ -92,16 +92,16 @@ describe("choosing the movie for movie night", () => {
         expect(discord.messagesSentTo(dm)).toHaveLength(2);
     });
 
-    test("says so when nothing matches", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception" }]);
+    test("says so when nothing matches", async ({ discord, interact, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }]);
 
         const submit = await interact(modalSubmitInteraction("movie_pick_choose_modal", { movie_input: "Paddington" }));
 
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "No matching movie found." })]);
     });
 
-    test("locks in a random pick, but never a movie already watched", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception", watched: true }, { title: "Arrival" }]);
+    test("locks in a random pick, but never a movie already watched", async ({ discord, interact, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception", watched: true }, { title: "Arrival" }]);
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
         discord.acceptDirectMessages(SUBMITTER);
@@ -120,8 +120,8 @@ describe("choosing the movie for movie night", () => {
 });
 
 describe("/pickmovie", () => {
-    test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, services }) => {
-        await storeMovies(services, [{ title: "Inception" }]);
+    test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }]);
         const command = await slash("pickmovie", [], movieAdmin);
         const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
 
@@ -135,8 +135,8 @@ describe("/pickmovie", () => {
         expect(JSON.stringify(discord.callbacks(pollRandom))).toContain('"custom_id":"movie_poll_random_count"');
     });
 
-    test("builds a poll from the movies picked in the manual menu", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
+    test("builds a poll from the movies picked in the manual menu", async ({ discord, interact, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
         discord.acceptMessages(IDS.channel);
 
         const open = await interact(buttonInteraction("movie_poll_manual", pickMessage, movieAdmin));
@@ -152,8 +152,8 @@ describe("/pickmovie", () => {
         expect((await services.repos.movieRepo.getActivePoll())?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
 
-    test("answers a menu choice when every movie has been watched", async ({ discord, interact, services }) => {
-        await storeMovies(services, [{ title: "Inception", watched: true }]);
+    test("answers a menu choice when every movie has been watched", async ({ discord, interact, factories }) => {
+        await storeMovies(factories, [{ title: "Inception", watched: true }]);
 
         const choose = await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1"], apiMessage({ flags: MessageFlags.Ephemeral }), movieAdmin));
 
@@ -165,8 +165,8 @@ describe("/pickmovie", () => {
 });
 
 describe("/listmovies", () => {
-    test("pages through the unwatched movies with buttons that keep working", async ({ discord, interact, slash, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat" }, { title: "Alien" }, { title: "Jaws", watched: true }]);
+    test("pages through the unwatched movies with buttons that keep working", async ({ discord, interact, slash, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat" }, { title: "Alien" }, { title: "Jaws", watched: true }]);
 
         const command = await slash("listmovies");
         const [firstPage] = discord.originalEdits(command);
@@ -183,8 +183,8 @@ describe("/listmovies", () => {
 });
 
 describe("the movie list", () => {
-    test("lets members remove their own movies and admins remove anyone's", async ({ discord, slash, services }) => {
-        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
+    test("lets members remove their own movies and admins remove anyone's", async ({ discord, slash, services, factories }) => {
+        await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }]);
         const someoneElse = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }) }) };
         const admin = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }), permissions: String(PermissionFlagsBits.Administrator) }) };
 

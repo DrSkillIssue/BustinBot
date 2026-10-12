@@ -1,10 +1,9 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, test } from "../../../tests/fixtures.js";
+import { describe, expect, test, type StoringFactories } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
-import { taskFactory, taskEventFactory, taskPollFactory, taskSubmissionFactory } from "../../../tests/factories.js";
+import { taskFactory } from "../../../tests/factories.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
 
@@ -14,28 +13,25 @@ const completer = SnowflakeUtil.generate().toString();
 const voter = SnowflakeUtil.generate().toString();
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
-async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
-    const task = taskFactory.build({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
-    await services.repos.taskRepo.createTask(task);
-    const event = taskEventFactory.build({
+async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
+    const task = await factories.task.create({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
+    return factories.taskEvent.create({
         id: "PVM001-week", task, startTime: DateTime.now().minus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         messageId: eventMessage, channelId: IDS.channel, ...overrides,
     });
-    await services.repos.taskRepo.createTaskEvent(event);
-    return event;
 }
 
 describe("the update task form", () => {
-    test("saves the task and redraws its running event and open poll, keeping their completions and votes", async ({ discord, interact, services }) => {
+    test("saves the task and redraws its running event and open poll, keeping their completions and votes", async ({ discord, interact, services, factories }) => {
         const tasks = services.repos.taskRepo;
-        await storeRunningEvent(services);
+        await storeRunningEvent(factories);
         // A completion approved after the event was posted
-        await tasks.createSubmission(taskSubmissionFactory.build({ id: "approved", userId: completer, taskEventId: "PVM001-week" }));
+        await factories.taskSubmission.create({ id: "approved", userId: completer, taskEventId: "PVM001-week" });
         await tasks.reviewSubmission({ submissionId: "approved", reviewedBy: IDS.user, decision: SubmissionStatus.Bronze });
-        await tasks.createTaskPoll(taskPollFactory.build({
+        await factories.taskPoll.create({
             id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [taskFactory.build({ id: "PVM001" }), taskFactory.build({ id: "PVM002" })],
             votes: { [voter]: "PVM001" }, endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
-        }));
+        });
         for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
@@ -53,8 +49,8 @@ describe("the update task form", () => {
         expect(discord.messageEdits(IDS.channel, pollMessage)).toHaveLength(1);
     });
 
-    test("leaves an event that hasn't started yet alone", async ({ discord, interact, services }) => {
-        await storeRunningEvent(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 8 }).toJSDate() });
+    test("leaves an event that hasn't started yet alone", async ({ discord, interact, services, factories }) => {
+        await storeRunningEvent(factories, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 8 }).toJSDate() });
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
 
@@ -62,8 +58,8 @@ describe("the update task form", () => {
         expect(await services.repos.taskRepo.getTaskEventById("PVM001-week")).toMatchObject({ task: { taskName: "Kill {amount} Zulrah" } });
     });
 
-    test("changes nothing when the type isn't one the bot knows", async ({ discord, interact, services }) => {
-        await storeRunningEvent(services);
+    test("changes nothing when the type isn't one the bot knows", async ({ discord, interact, services, factories }) => {
+        await storeRunningEvent(factories);
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, type: "Kills" }));
 
@@ -73,8 +69,8 @@ describe("the update task form", () => {
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
     });
 
-    test("changes nothing when an amount isn't a whole number", async ({ discord, interact, services }) => {
-        await storeRunningEvent(services);
+    test("changes nothing when an amount isn't a whole number", async ({ discord, interact, services, factories }) => {
+        await storeRunningEvent(factories);
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, silver: "lots", gold: "1.5" }));
 

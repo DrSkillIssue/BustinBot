@@ -1,6 +1,5 @@
-import type { Firestore } from "firebase-admin/firestore";
 import { DateTime } from "luxon";
-import { test as base, describe, expect, vi } from "../../../tests/fixtures.js";
+import { test as base, describe, expect, vi, type StoringFactories } from "../../../tests/fixtures.js";
 import { IDS } from "../../../tests/discord/payloads.js";
 import { KeywordRepository } from "../../../core/database/KeywordRepo.js";
 import { KeywordSelector } from "../KeywordSelector.js";
@@ -8,10 +7,10 @@ import { KeywordSelector } from "../KeywordSelector.js";
 const test = base.extend("repo", ({ db }) => new KeywordRepository(db, IDS.guild));
 
 // Stores keywords that were each used once, the first most recently
-async function storeKeywordsUsedInOrder(db: Firestore, words: string[]): Promise<void> {
+async function storeKeywordsUsedInOrder(factories: StoringFactories, words: string[]): Promise<void> {
     const lastUse = DateTime.fromISO("2026-01-01T00:00:00Z");
     for (const [index, word] of words.entries()) {
-        await db.doc(`guilds/${IDS.guild}/keywords/${word}`).set({
+        await factories.keyword.create({
             id: word,
             word,
             lastUsedAt: lastUse.minus({ minutes: index }).toJSDate(),
@@ -30,11 +29,11 @@ describe("KeywordSelector", () => {
         expect(warn).toHaveBeenCalledWith("[KeywordSelector] No keywords found in Firestore.");
     });
 
-    test("never picks one of the 26 most recently used keywords, and records the pick", async ({ repo, db }) => {
+    test("never picks one of the 26 most recently used keywords, and records the pick", async ({ repo, factories }) => {
         const words = Array.from({ length: 30 }, (_, index) => `word${String(index).padStart(2, "0")}`);
 
         for (const random of [0, 0.5, 0.99]) {
-            await storeKeywordsUsedInOrder(db, words);
+            await storeKeywordsUsedInOrder(factories, words);
             vi.spyOn(Math, "random").mockReturnValue(random);
 
             const picked = await new KeywordSelector(repo).selectKeyword(`event-${random}`);
@@ -44,9 +43,9 @@ describe("KeywordSelector", () => {
         }
     });
 
-    test("never repeats the keyword used last when there are only a few", async ({ repo, db }) => {
+    test("never repeats the keyword used last when there are only a few", async ({ repo, factories }) => {
         for (const random of [0, 0.5, 0.99]) {
-            await storeKeywordsUsedInOrder(db, ["alpha", "bravo", "charlie"]);
+            await storeKeywordsUsedInOrder(factories, ["alpha", "bravo", "charlie"]);
             vi.spyOn(Math, "random").mockReturnValue(random);
 
             expect(await new KeywordSelector(repo).selectKeyword("event-next")).not.toBe("alpha");

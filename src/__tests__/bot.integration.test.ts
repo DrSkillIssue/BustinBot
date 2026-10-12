@@ -8,7 +8,7 @@ import { startBot } from "../bot.js";
 import { DiscordError, DiscordHarness } from "../tests/discord/harness.js";
 import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
-import { guildFactory, taskEventFactory } from "../tests/factories.js";
+import { guildFactory, submissionDraftFactory, taskEventFactory } from "../tests/factories.js";
 import { getNextPollDate } from "../modules/tasks/TaskScheduler.js";
 
 const commandsDir = path.join(import.meta.dirname, "../modules/commands");
@@ -101,13 +101,13 @@ describe("startBot", () => {
         expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
     });
 
-    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services, otherGuild }) => {
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services, otherGuild, factories }) => {
         const otherTasks = otherGuild.repos.taskRepo;
         const event = taskEventFactory.build({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
-        await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate() });
-        await otherTasks.saveSubmissionDraft({ userId: IDS.user, taskEventId: event.id, createdAt: new Date() });
+        await factories.submissionDraft.create({ taskEventId: "older", createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate() });
+        await otherTasks.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: event.id, createdAt: new Date() }));
         const discord = DiscordHarness.create(http);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);

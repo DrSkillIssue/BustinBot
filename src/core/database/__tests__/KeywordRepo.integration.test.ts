@@ -1,6 +1,6 @@
 import { test as base, describe, expect, vi } from '../../../tests/fixtures.js';
 import { IDS } from '../../../tests/discord/payloads.js';
-import { Timestamp } from 'firebase-admin/firestore';
+import { keywordFactory } from '../../../tests/factories.js';
 import { KeywordRepository } from '../KeywordRepo.js';
 
 const test = base.extend('repo', ({ db }) => new KeywordRepository(db, IDS.guild));
@@ -41,13 +41,7 @@ describe('KeywordRepository', () => {
 
     test('picks only from keywords outside the most recently used ones', async ({ repo, db }) => {
         for (const [index, word] of ['a', 'b', 'c', 'd'].entries()) {
-            await db.doc(`guilds/${IDS.guild}/keywords/${word}`).set({
-                id: word,
-                word,
-                lastUsedAt: Timestamp.fromMillis(1000 - index),
-                timesUsed: 1,
-                usageHistory: [],
-            });
+            await db.doc(`guilds/${IDS.guild}/keywords/${word}`).set(keywordFactory.build({ id: word, word, lastUsedAt: new Date(1000 - index), timesUsed: 1 }));
         }
         vi.spyOn(Math, 'random').mockReturnValue(0.99);
 

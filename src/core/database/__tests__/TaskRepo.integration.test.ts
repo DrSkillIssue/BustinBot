@@ -5,7 +5,7 @@ import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus, type SubmissionTier } from '../../../models/TaskSubmission.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
-import { taskFactory, taskEventFactory, taskPollFactory, taskSubmissionFactory } from '../../../tests/factories.js';
+import { taskFactory, taskEventFactory, taskPollFactory, taskSubmissionFactory, submissionDraftFactory, taskFeedbackFactory } from '../../../tests/factories.js';
 
 const test = base.extend('repo', ({ db }) => new TaskRepository(db, IDS.guild));
 const otherUser = SnowflakeUtil.generate().toString();
@@ -122,18 +122,16 @@ describe('TaskRepository submissions', () => {
 });
 
 describe('TaskRepository submission drafts', () => {
-    const draft = (taskEventId: string, createdAt = new Date('2026-01-06T00:00:00.000Z')) => ({ userId: IDS.user, taskEventId, createdAt });
-
     test('keeps one draft per member, the latest replacing the one before', async ({ repo }) => {
-        await repo.saveSubmissionDraft(draft('week-1'));
-        await repo.saveSubmissionDraft(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'week-1' }));
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'week-2', createdAt: new Date('2026-01-06T01:00:00.000Z') }));
 
-        expect(await repo.getSubmissionDraft(IDS.user)).toEqual(draft('week-2', new Date('2026-01-06T01:00:00.000Z')));
+        expect(await repo.getSubmissionDraft(IDS.user)).toEqual(submissionDraftFactory.build({ taskEventId: 'week-2', createdAt: new Date('2026-01-06T01:00:00.000Z') }));
         expect(await repo.getSubmissionDraft(otherUser)).toBeNull();
     });
 
     test('turns a draft into a submission once', async ({ repo }) => {
-        await repo.saveSubmissionDraft(draft('PVM001-20260105'));
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'PVM001-20260105' }));
 
         expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'first' }))).toBe(true);
         expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'second' }))).toBe(false);
@@ -143,7 +141,7 @@ describe('TaskRepository submission drafts', () => {
     });
 
     test('turns a draft into one submission when two arrive at the same moment', async ({ repo }) => {
-        await repo.saveSubmissionDraft(draft('PVM001-20260105'));
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'PVM001-20260105' }));
 
         const outcomes = await Promise.all([repo.submitDraft(taskSubmissionFactory.build({ id: 'a' })), repo.submitDraft(taskSubmissionFactory.build({ id: 'b' }))]);
 
@@ -152,7 +150,7 @@ describe('TaskRepository submission drafts', () => {
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('refuses a submission for another task than the draft is for', async ({ repo }) => {
-        await repo.saveSubmissionDraft(draft('week-2'));
+        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: 'week-2' }));
 
         expect(await repo.submitDraft(taskSubmissionFactory.build({ taskEventId: 'week-1' }))).toBe(false);
         expect(await repo.getSubmissionDraft(IDS.user)).not.toBeNull();
@@ -231,15 +229,13 @@ describe('TaskRepository reviews', () => {
 });
 
 describe('TaskRepository feedback', () => {
-    const vote = (userId: string, direction: 'up' | 'down') => ({ taskId: 'PVM001', eventId: 'week-1', userId, vote: direction });
-
     test('moves the task weight by a member\'s first vote, a changed vote and not a repeated one', async ({ repo }) => {
         await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 50 }));
 
-        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('added');
-        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('unchanged');
-        expect(await repo.recordFeedback(vote(otherUser, 'down'))).toBe('added');
-        expect(await repo.recordFeedback(vote(IDS.user, 'down'))).toBe('changed');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' }))).toBe('added');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' }))).toBe('unchanged');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: otherUser, vote: 'down' }))).toBe('added');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'down' }))).toBe('changed');
 
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 48 });
     });
@@ -247,7 +243,7 @@ describe('TaskRepository feedback', () => {
     test('counts a member\'s votes at the same moment once', async ({ repo }) => {
         await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 50 }));
 
-        const outcomes = await Promise.all([repo.recordFeedback(vote(IDS.user, 'up')), repo.recordFeedback(vote(IDS.user, 'up'))]);
+        const outcomes = await Promise.all([repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' })), repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' }))]);
 
         expect(outcomes.sort()).toEqual(['added', 'unchanged']);
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 51 });
@@ -255,16 +251,16 @@ describe('TaskRepository feedback', () => {
 
     test('treats a vote stored under an older id as the member\'s previous vote and moves it', async ({ repo, db }) => {
         await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 51 }));
-        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({ id: '1730000000000', ...vote(IDS.user, 'up') });
+        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({ id: '1730000000000', ...taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' }) });
 
-        expect(await repo.recordFeedback(vote(IDS.user, 'down'))).toBe('changed');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'down' }))).toBe('changed');
 
         expect(await repo.getTaskById('PVM001')).toMatchObject({ weight: 49 });
         expect((await db.collection(`guilds/${IDS.guild}/taskFeedback`).get()).docs.map((doc) => doc.id)).toEqual([`PVM001_${IDS.user}`]);
     });
 
     test('records nothing for a task that doesn\'t exist', async ({ repo }) => {
-        expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('taskNotFound');
+        expect(await repo.recordFeedback(taskFeedbackFactory.build({ eventId: 'week-1', userId: IDS.user, vote: 'up' }))).toBe('taskNotFound');
     });
 });
 
@@ -279,7 +275,7 @@ describe('TaskRepository dates', () => {
         await repo.createTaskEvent(event);
         await repo.createTaskPoll(poll);
         await repo.createSubmission(submission);
-        const draft = { userId: IDS.user, taskEventId: event.id, createdAt: new Date('2026-01-06T00:30:00.000Z') };
+        const draft = submissionDraftFactory.build({ taskEventId: event.id, createdAt: new Date('2026-01-06T00:30:00.000Z') });
         await repo.saveSubmissionDraft(draft);
 
         expect(await repo.getSubmissionDraft(IDS.user)).toEqual(draft);

@@ -8,7 +8,7 @@ import { IDS, apiGuild, apiMember, apiRole, chatInputInteraction } from "../../.
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { GuildRepository } from "../../database/GuildRepo.js";
-import { guildFactory, taskFactory } from "../../../tests/factories.js";
+import { guildFactory } from "../../../tests/factories.js";
 
 const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 
@@ -126,8 +126,8 @@ describe("slash command routing", () => {
 });
 
 describe("/updatetask", () => {
-    test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, services }) => {
-        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 }));
+    test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, services, factories }) => {
+        await factories.task.create({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 });
         const interaction = await discord.dispatch(
             chatInputInteraction("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }], taskAdmin)
         );

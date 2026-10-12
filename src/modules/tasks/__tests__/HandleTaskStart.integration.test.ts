@@ -1,9 +1,8 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
+import { describe, expect, test, vi, type StoringFactories } from "../../../tests/fixtures.js";
 import { IDS, apiMember } from "../../../tests/discord/payloads.js";
-import { taskFactory, taskPollFactory } from "../../../tests/factories.js";
+import { taskFactory } from "../../../tests/factories.js";
 import { TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
@@ -14,19 +13,19 @@ const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) => taskFactory.build({ id: `${prefix}00${n}`, category, taskName: `${prefix} task ${n}`, amtBronze: n, amtSilver: n * 2, amtGold: n * 3 }));
 
 // A poll for a category whose voting has just ended, with the given votes
-async function storePoll(services: ServiceContainer, category: TaskCategory, options: Task[], votes: Record<string, string>, overrides: Partial<TaskPoll> = {}): Promise<void> {
+async function storePoll(factories: StoringFactories, category: TaskCategory, options: Task[], votes: Record<string, string>, overrides: Partial<TaskPoll> = {}): Promise<void> {
     const messageId = SnowflakeUtil.generate().toString();
-    await services.repos.taskRepo.seedTasks(options);
-    await services.repos.taskRepo.createTaskPoll(taskPollFactory.build({ id: messageId, messageId, category, options, votes, endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(), ...overrides }));
+    for (const task of options) await factories.task.create(task);
+    await factories.taskPoll.create({ id: messageId, messageId, category, options, votes, endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(), ...overrides });
 }
 
 describe("/taskstart", () => {
-    test("announces the week's keyword and starts each category's most voted task", async ({ discord, slash, services, db }) => {
+    test("announces the week's keyword and starts each category's most voted task", async ({ discord, slash, services, db, factories }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.keywordRepo.addKeyword("Bustin");
-        await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM002", [SnowflakeUtil.generate().toString()]: "PVM002", [SnowflakeUtil.generate().toString()]: "PVM001" });
-        await storePoll(services, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), { [SnowflakeUtil.generate().toString()]: "SKL003" });
-        await storePoll(services, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), { [SnowflakeUtil.generate().toString()]: "MIN001" });
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM002", [SnowflakeUtil.generate().toString()]: "PVM002", [SnowflakeUtil.generate().toString()]: "PVM001" });
+        await storePoll(factories, TaskCategory.Skilling, tasksFor(TaskCategory.Skilling, "SKL"), { [SnowflakeUtil.generate().toString()]: "SKL003" });
+        await storePoll(factories, TaskCategory.MinigameMisc, tasksFor(TaskCategory.MinigameMisc, "MIN"), { [SnowflakeUtil.generate().toString()]: "MIN001" });
         discord.acceptMessages(IDS.channel);
 
         const interaction = await slash("taskstart", [], admin);
@@ -48,8 +47,8 @@ describe("/taskstart", () => {
 });
 
 describe("starting a category's task", () => {
-    test("breaks a tie in favour of the option listed first in the poll", async ({ discord, services }) => {
-        await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM003", [SnowflakeUtil.generate().toString()]: "PVM002" });
+    test("breaks a tie in favour of the option listed first in the poll", async ({ discord, services, factories }) => {
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM003", [SnowflakeUtil.generate().toString()]: "PVM002" });
         discord.acceptMessages(IDS.channel);
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
@@ -57,8 +56,8 @@ describe("starting a category's task", () => {
         expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM002");
     });
 
-    test("uses the poll that has just been closed, which is the usual case when polls end as tasks start", async ({ discord, services }) => {
-        await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM003" }, { isActive: false });
+    test("uses the poll that has just been closed, which is the usual case when polls end as tasks start", async ({ discord, services, factories }) => {
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM003" }, { isActive: false });
         discord.acceptMessages(IDS.channel);
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
@@ -66,8 +65,8 @@ describe("starting a category's task", () => {
         expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM003");
     });
 
-    test("keeps both events when the same task starts twice in a day", async ({ discord, services, db }) => {
-        await storePoll(services, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM001" });
+    test("keeps both events when the same task starts twice in a day", async ({ discord, services, db, factories }) => {
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), { [SnowflakeUtil.generate().toString()]: "PVM001" });
         discord.acceptMessages(IDS.channel);
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");

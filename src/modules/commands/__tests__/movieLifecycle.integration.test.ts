@@ -1,24 +1,22 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, test } from "../../../tests/fixtures.js";
+import { describe, expect, test, type StoringFactories } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, apiUser, apiMember } from "../../../tests/discord/payloads.js";
-import { movieFactory, movieEventFactory, moviePollFactory } from "../../../tests/factories.js";
+import { movieFactory } from "../../../tests/factories.js";
 
 const movieAdmin = { member: apiMember({ roles: [IDS.roles.movieAdmin] }) };
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const ANNOUNCEMENT = SnowflakeUtil.generate().toString();
 
-async function storeTonight(services: ServiceContainer, overrides = {}) {
-    const movie = movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, selectedAt: new Date() });
-    await services.repos.movieRepo.upsertMovie(movie);
-    await services.repos.movieRepo.createMovieEvent(movieEventFactory.build({ startTime: DateTime.now().minus({ hours: 1 }).toJSDate(), movie, ...overrides }));
+async function storeTonight(factories: StoringFactories, overrides = {}) {
+    const movie = await factories.movie.create({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, selectedAt: new Date() });
+    await factories.movieEvent.create({ startTime: DateTime.now().minus({ hours: 1 }).toJSDate(), movie, ...overrides });
 }
 
 describe("/endmovie", () => {
-    test("ends tonight's movie night, archives the movie and thanks everyone in the movie night channel", async ({ discord, slash, services }) => {
-        await storeTonight(services);
+    test("ends tonight's movie night, archives the movie and thanks everyone in the movie night channel", async ({ discord, slash, services, factories }) => {
+        await storeTonight(factories);
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
         discord.acceptDirectMessages(SUBMITTER);
@@ -38,9 +36,8 @@ describe("/endmovie", () => {
 });
 
 describe("/closemoviepoll", () => {
-    test("closes the poll and announces the winner in the movie night channel", async ({ discord, slash, services }) => {
-        const poll = moviePollFactory.build({ options: [movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }), movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { [SnowflakeUtil.generate().toString()]: "movie-2", [SnowflakeUtil.generate().toString()]: "movie-2" } });
-        await services.repos.movieRepo.createPoll(poll);
+    test("closes the poll and announces the winner in the movie night channel", async ({ discord, slash, factories }) => {
+        const poll = await factories.moviePoll.create({ options: [movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }), movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { [SnowflakeUtil.generate().toString()]: "movie-2", [SnowflakeUtil.generate().toString()]: "movie-2" } });
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
@@ -61,10 +58,9 @@ describe("/closemoviepoll", () => {
 });
 
 describe("/cancelmovie", () => {
-    test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({ discord, slash, services }) => {
-        const poll = moviePollFactory.build({ endsAt: DateTime.now().plus({ days: 1 }).toJSDate() });
-        await services.repos.movieRepo.createPoll(poll);
-        await storeTonight(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
+    test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({ discord, slash, services, factories }) => {
+        const poll = await factories.moviePoll.create({ endsAt: DateTime.now().plus({ days: 1 }).toJSDate() });
+        await storeTonight(factories, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
         for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
@@ -86,8 +82,8 @@ describe("/cancelmovie", () => {
         expect((await services.repos.movieRepo.getMovieById("movie-2"))?.selectedAt).toBeUndefined();
     });
 
-    test("posts the cancellation in the movie night channel when its announcement is gone", async ({ discord, slash, services }) => {
-        await storeTonight(services, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
+    test("posts the cancellation in the movie night channel when its announcement is gone", async ({ discord, slash, factories }) => {
+        await storeTonight(factories, { startTime: DateTime.now().plus({ days: 1 }).toJSDate(), announcementMessageId: ANNOUNCEMENT });
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 
@@ -100,8 +96,8 @@ describe("/cancelmovie", () => {
 });
 
 describe("/listmovies", () => {
-    test("says the queue is empty when every movie has been watched", async ({ discord, slash, services }) => {
-        await services.repos.movieRepo.upsertMovie(movieFactory.build({ watched: true }));
+    test("says the queue is empty when every movie has been watched", async ({ discord, slash, factories }) => {
+        await factories.movie.create({ watched: true });
 
         const command = await slash("listmovies");
 

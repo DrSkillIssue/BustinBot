@@ -1,10 +1,8 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { beforeEach, describe, expect, test, vi, type StoringFactories } from "../../../tests/fixtures.js";
 import type { MockAgent } from "undici";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
-import { movieFactory } from "../../../tests/factories.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
@@ -28,8 +26,8 @@ function tmdbMovie(http: MockAgent, movie: typeof matrix, runtime: number, direc
 }
 
 // The most movies a member may have in the list, added by them
-async function storeFullList(services: ServiceContainer, userId: string): Promise<void> {
-    for (let i = 0; i < 3; i++) await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId }));
+async function storeFullList(factories: StoringFactories, userId: string): Promise<void> {
+    for (let i = 0; i < 3; i++) await factories.movie.create({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId });
 }
 
 beforeEach(() => {
@@ -54,10 +52,10 @@ describe("/addmovie", () => {
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ moviesAdded: 1 });
     });
 
-    test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
+    test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, http, factories }) => {
         const lister = SnowflakeUtil.generate().toString();
-        await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
-        await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
+        await factories.movie.create({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister });
+        await factories.movie.create({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true });
         tmdbMovie(http, reloaded, 138, "Lana Wachowski");
 
         const duplicate = await interact(buttonInteraction("addmovie|select|603", resultsMessage));
@@ -69,9 +67,9 @@ describe("/addmovie", () => {
         expect(discord.originalEdits(rewatch)).toEqual([expect.objectContaining({ embeds: [expect.objectContaining({ title: "Added: The Matrix Reloaded" })] })]);
     });
 
-    test("stops a member at three movies in the list, unless they are a movie admin or the server owner", async ({ discord, slash, services, http }) => {
-        await storeFullList(services, IDS.user);
-        await storeFullList(services, IDS.owner);
+    test("stops a member at three movies in the list, unless they are a movie admin or the server owner", async ({ discord, slash, http, factories }) => {
+        await storeFullList(factories, IDS.user);
+        await storeFullList(factories, IDS.owner);
         tmdbSearch(http, "The Matrix", [matrix]);
         tmdbSearch(http, "The Matrix", [matrix]);
 
@@ -86,9 +84,9 @@ describe("/addmovie", () => {
         expect(discord.originalEdits(owner)[0]?.embeds).toHaveLength(1);
     });
 
-    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, services, uncachedGuild, http }) => {
+    test("recognises a movie admin whose member Discord sends as role ids", async ({ discord, interact, uncachedGuild, http, factories }) => {
         // Interactions from a guild discord.js hasn't cached carry the member as raw data, roles as ids
-        await storeFullList(services, IDS.user);
+        await storeFullList(factories, IDS.user);
         tmdbSearch(http, "The Matrix", [matrix]);
 
         const command = await interact(chatInputInteraction("addmovie", [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }], {

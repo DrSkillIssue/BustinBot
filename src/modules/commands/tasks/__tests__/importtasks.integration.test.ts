@@ -1,7 +1,6 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { IDS, apiAttachment, chatInputInteraction, apiMember } from "../../../../tests/discord/payloads.js";
-import { taskFactory } from "../../../../tests/factories.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 const CSV = [
@@ -23,9 +22,9 @@ function importWith(filename: string) {
 }
 
 describe("/importtasks", () => {
-    test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({ discord, interact, services }) => {
+    test("adds the tasks in the uploaded file that aren't stored yet, leaving stored ones untouched", async ({ discord, interact, services, factories }) => {
         const tasks = services.repos.taskRepo;
-        await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Already stored" }));
+        await factories.task.create({ id: "PVM001", taskName: "Already stored" });
         const upload = importWith("tasks.csv");
         discord.serveAttachment(upload.attachment, Buffer.from(CSV));
 

@@ -2,12 +2,12 @@ import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags, type APIAttachment, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi, type StoringFactories } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
-import { leaderboardPeriodFactory, lifetimeLeaderboardFactory, periodicLeaderboardFactory, taskFactory, taskEventFactory, taskSubmissionFactory, userStatsFactory } from "../../../tests/factories.js";
+import { leaderboardPeriodFactory, taskFactory } from "../../../tests/factories.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
 import { handleDirectMessage } from "../TaskInteractions.js";
 
@@ -26,8 +26,8 @@ function offeredButtons(discord: DiscordHarness, interaction: Interaction): stri
 }
 
 // This week's task, posted in the task channel
-async function storeEvent(services: ServiceContainer) {
-    const event = taskEventFactory.build({
+async function storeEvent(factories: StoringFactories) {
+    return factories.taskEvent.create({
         id: EVENT,
         task: taskFactory.build({ id: "PVM001", taskName: "Kill Zulrah" }),
         startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
@@ -35,13 +35,11 @@ async function storeEvent(services: ServiceContainer) {
         channelId: IDS.channel,
         messageId: EVENT_POST,
     });
-    await services.repos.taskRepo.createTaskEvent(event);
-    return event;
 }
 
 // A submission waiting in the verification channel for review
-async function storePendingSubmission(services: ServiceContainer, overrides: Partial<TaskSubmission> = {}): Promise<TaskSubmission> {
-    const submission = taskSubmissionFactory.build({
+async function storePendingSubmission(factories: StoringFactories, overrides: Partial<TaskSubmission> = {}): Promise<TaskSubmission> {
+    return factories.taskSubmission.create({
         id: "submission-1",
         userId: IDS.user,
         taskEventId: EVENT,
@@ -51,20 +49,18 @@ async function storePendingSubmission(services: ServiceContainer, overrides: Par
         screenshotMessage: SCREENSHOT_POST,
         ...overrides,
     });
-    await services.repos.taskRepo.createSubmission(submission);
-    return submission;
 }
 
 // A member's approval already counted, as it was stored when it was approved
-async function storeApproval(services: ServiceContainer, tier: SubmissionStatus.Bronze | SubmissionStatus.Silver) {
-    await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() }));
-    await services.repos.taskRepo.createTaskEvent({
+async function storeApproval(services: ServiceContainer, factories: StoringFactories, tier: SubmissionStatus.Bronze | SubmissionStatus.Silver) {
+    await factories.taskSubmission.create({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() });
+    await factories.taskEvent.create({
         ...(await services.repos.taskRepo.getTaskEventById(EVENT))!,
         completionCounts: { bronze: tier === SubmissionStatus.Bronze ? 1 : 0, silver: tier === SubmissionStatus.Silver ? 1 : 0, gold: 0 },
         completedUserIds: [IDS.user],
     });
     const field = tier === SubmissionStatus.Bronze ? "tasksCompletedBronze" : "tasksCompletedSilver";
-    await services.repos.userRepo.createUser(userStatsFactory.build({ userId: IDS.user, [field]: 1 }));
+    await factories.userStats.create({ userId: IDS.user, [field]: 1 });
 }
 
 // Discord's side of what follows a review: the member's DM, the archive copy made from the review post's
@@ -91,8 +87,8 @@ describe("submitting a task", () => {
         await handleDirectMessage(await discord.sendMessage(payload), discord.client, [services]);
     }
 
-    test("asks for screenshots in DMs, then posts them for review and stores the submission", async ({ discord, interact, services }) => {
-        await storeEvent(services);
+    test("asks for screenshots in DMs, then posts them for review and stores the submission", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
         const dm = discord.acceptDirectMessages(IDS.user);
 
         const click = await interact(buttonInteraction(`task-submit-${EVENT}`));
@@ -123,8 +119,8 @@ describe("submitting a task", () => {
         expect(await services.tasks.getSubmissionDraft(IDS.user)).toBeNull();
     });
 
-    test("asks again when the DM has no image, and takes the screenshots sent next", async ({ discord, services }) => {
-        await storeEvent(services);
+    test("asks again when the DM has no image, and takes the screenshots sent next", async ({ discord, services, factories }) => {
+        await storeEvent(factories);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -141,9 +137,9 @@ describe("submitting a task", () => {
         expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
     });
 
-    test("tells the member to send again when the Task Admins can't be reached, and takes the next try", async ({ discord, services }) => {
+    test("tells the member to send again when the Task Admins can't be reached, and takes the next try", async ({ discord, services, factories }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
-        await storeEvent(services);
+        await storeEvent(factories);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -163,8 +159,8 @@ describe("submitting a task", () => {
         expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
     });
 
-    test("takes one submission when two DMs arrive at once, removing the other's review post", async ({ discord, services }) => {
-        await storeEvent(services);
+    test("takes one submission when two DMs arrive at once, removing the other's review post", async ({ discord, services, factories }) => {
+        await storeEvent(factories);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -190,9 +186,9 @@ describe("submitting a task", () => {
         expect(discord.messageDeletions(IDS.channel)).not.toContain(submission!.screenshotMessage);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
-    test("removes the review post and keeps the draft when the submission can't be stored", async ({ discord, services }) => {
+    test("removes the review post and keeps the draft when the submission can't be stored", async ({ discord, services, factories }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
-        await storeEvent(services);
+        await storeEvent(factories);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -214,9 +210,9 @@ describe("submitting a task", () => {
         expect(error).toHaveBeenCalledWith("[TaskDM] Failed to store submission:", unavailable);
     });
 
-    test("tells the member to send again when no verification channel is set up", async ({ discord, services }) => {
+    test("tells the member to send again when no verification channel is set up", async ({ discord, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await storeEvent(services);
+        await storeEvent(factories);
         await services.guilds.update(IDS.guild, { channels: { taskVerification: "" } });
         await services.tasks.startSubmission(IDS.user, EVENT);
         discord.acceptMessages(IDS.dm);
@@ -238,9 +234,9 @@ describe("submitting a task", () => {
         expect(discord.requests()).toEqual([]);
     });
 
-    test("warns the Task Admins when the member already holds a tier for the task", async ({ discord, services }) => {
-        await storeEvent(services);
-        await storeApproval(services, SubmissionStatus.Bronze);
+    test("warns the Task Admins when the member already holds a tier for the task", async ({ discord, services, factories }) => {
+        await storeEvent(factories);
+        await storeApproval(services, factories, SubmissionStatus.Bronze);
         await services.tasks.startSubmission(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
@@ -261,9 +257,9 @@ describe("approving a submission", () => {
         return interact(buttonInteraction(confirm!, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
     }
 
-    test("asks the admin to confirm, then records the tier and everything that follows from it", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storePendingSubmission(services);
+    test("asks the admin to confirm, then records the tier and everything that follows from it", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         const { dm, screenshot } = await acceptReviewEffects(discord, services);
 
         const prompt = await interact(buttonInteraction("approve_silver_submission-1", apiMessage({ id: REVIEW_POST }), admin));
@@ -297,15 +293,15 @@ describe("approving a submission", () => {
         })]);
     });
 
-    test("moves the member's counts, stats and points up to a higher tier rather than adding to them", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storeApproval(services, SubmissionStatus.Bronze);
-        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build({
+    test("moves the member's counts, stats and points up to a higher tier rather than adding to them", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storeApproval(services, factories, SubmissionStatus.Bronze);
+        await factories.periodicLeaderboard.create({
             points: { [IDS.user]: 1 }, tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } },
             period: leaderboardPeriodFactory.build({ eventIds: [EVENT] }),
-        }));
-        await services.repos.taskLeaderboardRepo.createLeaderboard(lifetimeLeaderboardFactory.build({ points: { [IDS.user]: 1 } }));
-        await storePendingSubmission(services);
+        });
+        await factories.lifetimeLeaderboard.create({ points: { [IDS.user]: 1 } });
+        await storePendingSubmission(factories);
         await acceptReviewEffects(discord, services);
 
         await approve(discord, interact, "gold");
@@ -318,10 +314,10 @@ describe("approving a submission", () => {
         });
     });
 
-    test("starts the lifetime leaderboard from the member's stats before this approval", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: IDS.user, tasksCompletedBronze: 2 }));
-        await storePendingSubmission(services);
+    test("starts the lifetime leaderboard from the member's stats before this approval", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await factories.userStats.create({ userId: IDS.user, tasksCompletedBronze: 2 });
+        await storePendingSubmission(factories);
         await acceptReviewEffects(discord, services);
 
         await approve(discord, interact, "gold");
@@ -329,9 +325,9 @@ describe("approving a submission", () => {
         expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 2 + 6 } });
     });
 
-    test("counts once when two admins confirm at the same moment", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storePendingSubmission(services);
+    test("counts once when two admins confirm at the same moment", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         const { dm } = await acceptReviewEffects(discord, services);
         const prompt = await interact(buttonInteraction("approve_bronze_submission-1", apiMessage({ id: REVIEW_POST }), admin));
         const [confirmButton] = offeredButtons(discord, prompt);
@@ -351,10 +347,10 @@ describe("approving a submission", () => {
         expect(discord.messagesSentTo(dm)).toHaveLength(1);
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
-    test("resolves a submission approved below the member's tier without changing their tier", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storeApproval(services, SubmissionStatus.Silver);
-        await storePendingSubmission(services);
+    test("resolves a submission approved below the member's tier without changing their tier", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storeApproval(services, factories, SubmissionStatus.Silver);
+        await storePendingSubmission(factories);
         const { dm } = await acceptReviewEffects(discord, services);
 
         const confirm = await approve(discord, interact, "bronze");
@@ -371,10 +367,10 @@ describe("approving a submission", () => {
         })]);
     });
 
-    test("still completes when the member can't be DMed and the archive channel refuses the copy", async ({ discord, interact, services }) => {
+    test("still completes when the member can't be DMed and the archive channel refuses the copy", async ({ discord, interact, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await storeEvent(services);
-        await storePendingSubmission(services);
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         // Registered first, so these answer before the routes that accept
         discord.refuseDirectMessages(IDS.user);
         discord.refuse("POST", `/channels/${ARCHIVE}/messages`, DiscordError.missingPermissions);
@@ -389,10 +385,10 @@ describe("approving a submission", () => {
         expect(warn).toHaveBeenCalledWith("[TaskService] Failed to archive submission submission-1:", expect.objectContaining({ code: 50013 }));
     });
 
-    test("still completes when the task's post has been deleted", async ({ discord, interact, services }) => {
+    test("still completes when the task's post has been deleted", async ({ discord, interact, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await storeEvent(services);
-        await storePendingSubmission(services);
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         // Registered first, so it answers before the route that serves the post
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${EVENT_POST}`, DiscordError.unknownMessage);
         await acceptReviewEffects(discord, services);
@@ -404,10 +400,10 @@ describe("approving a submission", () => {
         expect(warn).toHaveBeenCalledWith(`[TaskService] Failed to redraw task event ${EVENT}:`, expect.objectContaining({ code: 10008 }));
     });
 
-    test("still completes when no archive channel is configured", async ({ discord, interact, services }) => {
+    test("still completes when no archive channel is configured", async ({ discord, interact, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        await storeEvent(services);
-        await storePendingSubmission(services);
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         await acceptReviewEffects(discord, services);
         await services.guilds.update(IDS.guild, { channels: { botArchive: "" } });
 
@@ -418,8 +414,8 @@ describe("approving a submission", () => {
         expect(warn).toHaveBeenCalledWith(`[SubmissionActions] Bot archive channel not configured for guild ${IDS.guild}.`);
     });
 
-    test("tells the admin when another admin already reviewed it", async ({ discord, interact, services }) => {
-        await storePendingSubmission(services, { status: SubmissionStatus.Rejected });
+    test("tells the admin when another admin already reviewed it", async ({ discord, interact, factories }) => {
+        await storePendingSubmission(factories, { status: SubmissionStatus.Rejected });
 
         const confirm = await approve(discord, interact, "gold");
 
@@ -429,8 +425,8 @@ describe("approving a submission", () => {
     test.for([
         ["review-confirm||", "Invalid confirmation payload. Please try again."],
         ["review-confirm|approve|platinum|submission-1", "Invalid tier selected for approval."],
-    ])("answers a confirmation button it can't read (%s) without reviewing", async ([customId, reply], { discord, interact, services }) => {
-        await storePendingSubmission(services);
+    ])("answers a confirmation button it can't read (%s) without reviewing", async ([customId, reply], { discord, interact, services, factories }) => {
+        await storePendingSubmission(factories);
 
         const confirm = await interact(buttonInteraction(customId!, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
 
@@ -438,8 +434,8 @@ describe("approving a submission", () => {
         expect(await services.repos.taskRepo.getSubmissionById("submission-1")).toMatchObject({ status: SubmissionStatus.Pending });
     });
 
-    test("can be cancelled, leaving the submission pending", async ({ discord, interact, services }) => {
-        await storePendingSubmission(services);
+    test("can be cancelled, leaving the submission pending", async ({ discord, interact, services, factories }) => {
+        await storePendingSubmission(factories);
         const prompt = await interact(buttonInteraction("approve_gold_submission-1", apiMessage({ id: REVIEW_POST }), admin));
         const [, cancelButton] = offeredButtons(discord, prompt);
 
@@ -465,9 +461,9 @@ describe("rejecting a submission", () => {
         return discord.modal(confirm)!.custom_id;
     }
 
-    test("asks for a reason, then records it, tells the member and archives the submission", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storePendingSubmission(services);
+    test("asks for a reason, then records it, tells the member and archives the submission", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storePendingSubmission(factories);
         const { dm } = await acceptReviewEffects(discord, services);
 
         const form = await openRejectionForm(discord, interact);
@@ -489,10 +485,10 @@ describe("rejecting a submission", () => {
         expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({ completionCounts: { bronze: 0, silver: 0, gold: 0 }, completedUserIds: [] });
     });
 
-    test("leaves the tier the member already holds", async ({ discord, interact, services }) => {
-        await storeEvent(services);
-        await storeApproval(services, SubmissionStatus.Bronze);
-        await storePendingSubmission(services);
+    test("leaves the tier the member already holds", async ({ discord, interact, services, factories }) => {
+        await storeEvent(factories);
+        await storeApproval(services, factories, SubmissionStatus.Bronze);
+        await storePendingSubmission(factories);
         await acceptReviewEffects(discord, services);
 
         const form = await openRejectionForm(discord, interact);

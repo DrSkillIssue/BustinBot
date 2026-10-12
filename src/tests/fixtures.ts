@@ -10,10 +10,42 @@ import { loadCommands } from "../core/services/CommandService.js";
 import { routeInteraction } from "../core/events/routeInteraction.js";
 import { handleMessage } from "../core/events/onMessage.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
+import type { ServiceContainer } from "../core/services/ServiceContainer.js";
+import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
 import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
 import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
-import { guildFactory } from "./factories.js";
+import {
+    guildFactory, keywordFactory, lifetimeLeaderboardFactory, movieEventFactory, movieFactory, moviePollFactory, periodicLeaderboardFactory,
+    prizeDrawFactory, submissionDraftFactory, taskEventFactory, taskFactory, taskPollFactory, taskSubmissionFactory, userStatsFactory,
+} from "./factories.js";
+
+// The fishery factories whose create() stores what they build in a guild, through its repositories
+function storingFactories(db: Firestore, services: ServiceContainer) {
+    const { repos } = services;
+    const storedWith = <T>(store: (value: T) => Promise<unknown>) => async (value: T) => {
+        await store(value);
+        return value;
+    };
+    return {
+        task: taskFactory.onCreate(storedWith((task) => repos.taskRepo.createTask(task))),
+        taskEvent: taskEventFactory.onCreate(storedWith((event) => repos.taskRepo.createTaskEvent(event))),
+        taskPoll: taskPollFactory.onCreate(storedWith((poll) => repos.taskRepo.createTaskPoll(poll))),
+        taskSubmission: taskSubmissionFactory.onCreate(storedWith((submission) => repos.taskRepo.createSubmission(submission))),
+        submissionDraft: submissionDraftFactory.onCreate(storedWith((draft) => repos.taskRepo.saveSubmissionDraft(draft))),
+        userStats: userStatsFactory.onCreate(storedWith((stats) => repos.userRepo.createUser(stats))),
+        periodicLeaderboard: periodicLeaderboardFactory.onCreate(storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board))),
+        lifetimeLeaderboard: lifetimeLeaderboardFactory.onCreate(storedWith((board) => repos.taskLeaderboardRepo.createLeaderboard(board))),
+        prizeDraw: prizeDrawFactory.onCreate(storedWith((draw) => repos.prizeRepo.createPrizeDraw(draw))),
+        movie: movieFactory.onCreate(storedWith((movie) => repos.movieRepo.upsertMovie(movie))),
+        movieEvent: movieEventFactory.onCreate(storedWith((event) => repos.movieRepo.createMovieEvent(event))),
+        moviePoll: moviePollFactory.onCreate(storedWith((poll) => repos.movieRepo.createPoll(poll))),
+        // No repository stores a keyword with its usage, so it is written as the keyword repository reads it
+        keyword: keywordFactory.onCreate(storedWith((keyword) => db.doc(`guilds/${services.guildId}/keywords/${keyword.id}`).set(keyword))),
+    };
+}
+
+export type StoringFactories = ReturnType<typeof storingFactories>;
 
 // The one test API for the suite. Fixtures are created only when a test asks for them:
 // - http: the test's own undici MockAgent, answering only the requests the test declares; one the test expected but
@@ -21,6 +53,7 @@ import { guildFactory } from "./factories.js";
 // - discord: a real discord.js client logged in through a test gateway, with Discord's REST API answered by `http`
 // - db: the Firestore emulator, emptied before the test (integration tests only)
 // - services: the bot's real service container on a freshly cleared emulator, with a fully set-up guild
+// - factories: the fishery factories whose create() stores what they build in the test guild, through its repositories
 // - otherGuild: the service container of a second fully set-up guild, whose channels are all IDS.otherGuildChannel
 // - uncachedGuild: a set-up guild discord.js hasn't cached; returns the interaction fields that place an interaction in it
 // - commands: the bot's real slash command registry
@@ -64,6 +97,7 @@ export const test = base
         await botStats.init();
         return createServiceContainer(db, guildFactory.build().id, botStats);
     })
+    .extend("factories", ({ db, services }) => storingFactories(db, services))
     .extend("otherGuild", async ({ db, services }) => {
         const channel = IDS.otherGuildChannel;
         const channels = { announcements: channel, taskChannel: channel, taskVerification: channel, movieNight: channel };

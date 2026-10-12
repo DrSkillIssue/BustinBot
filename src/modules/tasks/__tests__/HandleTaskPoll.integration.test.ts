@@ -1,10 +1,9 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, test, vi } from "../../../tests/fixtures.js";
+import { describe, expect, test, vi, type StoringFactories } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
-import { taskFactory, taskPollFactory } from "../../../tests/factories.js";
+import { taskFactory } from "../../../tests/factories.js";
 import { Skill, TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { postAllTaskPolls } from "../HandleTaskPoll.js";
@@ -13,11 +12,9 @@ import { startTaskEventForCategory } from "../HandleTaskStart.js";
 const options: Task[] = [taskFactory.build({ id: "PVM001", shortName: "Zulrah" }), taskFactory.build({ id: "PVM002", shortName: "Vorkath" }), taskFactory.build({ id: "PVM003", shortName: "Hydra" })];
 
 // A poll that is open in the harness channel, as stored when it was posted
-async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
+async function storeOpenPoll(factories: StoringFactories, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
     const messageId = overrides.messageId ?? SnowflakeUtil.generate().toString();
-    const poll = taskPollFactory.build({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
-    await services.repos.taskRepo.createTaskPoll(poll);
-    return poll;
+    return factories.taskPoll.create({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
 }
 
 function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
@@ -25,17 +22,17 @@ function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
 }
 
 describe("posting the weekly task polls", () => {
-    test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services }) => {
+    test("announces them and posts one open poll per category, each stored with its options", async ({ discord, services, factories }) => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
-        await services.repos.taskRepo.seedTasks([
+        for (const task of [
             ...options,
-            taskFactory.build({ id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining }),
-            taskFactory.build({ id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing }),
-            taskFactory.build({ id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking }),
-            taskFactory.build({ id: "MIN001", category: TaskCategory.MinigameMisc }),
-            taskFactory.build({ id: "MIN002", category: TaskCategory.MinigameMisc }),
-            taskFactory.build({ id: "MIN003", category: TaskCategory.MinigameMisc }),
-        ]);
+            { id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining },
+            { id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing },
+            { id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking },
+            { id: "MIN001", category: TaskCategory.MinigameMisc },
+            { id: "MIN002", category: TaskCategory.MinigameMisc },
+            { id: "MIN003", category: TaskCategory.MinigameMisc },
+        ]) await factories.task.create(task);
         discord.acceptMessages(IDS.channel);
 
         await postAllTaskPolls(discord.client, services);
@@ -58,8 +55,8 @@ describe("posting the weekly task polls", () => {
 });
 
 describe("voting in a task poll", () => {
-    test("records the vote, redraws the poll with it and thanks the member", async ({ discord, interact, services }) => {
-        const poll = await storeOpenPoll(services);
+    test("records the vote, redraws the poll with it and thanks the member", async ({ discord, interact, services, factories }) => {
+        const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
         const click = await interact(vote(poll, "PVM002"));
@@ -71,8 +68,8 @@ describe("voting in a task poll", () => {
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
-    test("lets a member change their vote without counting them twice", async ({ discord, interact, services }) => {
-        const poll = await storeOpenPoll(services);
+    test("lets a member change their vote without counting them twice", async ({ discord, interact, services, factories }) => {
+        const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
         await interact(vote(poll, "PVM001"));
@@ -82,8 +79,8 @@ describe("voting in a task poll", () => {
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
     });
 
-    test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services }) => {
-        const poll = await storeOpenPoll(services);
+    test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services, factories }) => {
+        const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
         const voters = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
@@ -95,9 +92,9 @@ describe("voting in a task poll", () => {
         expect(Object.keys((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes ?? {})).toEqual(voters);
     });
 
-    test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services }) => {
-        const closed = await storeOpenPoll(services, { isActive: false });
-        const expired = await storeOpenPoll(services, { messageId: SnowflakeUtil.generate().toString(), endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
+    test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services, factories }) => {
+        const closed = await storeOpenPoll(factories, { isActive: false });
+        const expired = await storeOpenPoll(factories, { messageId: SnowflakeUtil.generate().toString(), endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
 
         for (const poll of [closed, expired]) {
             const click = await interact(vote(poll, "PVM001"));
@@ -106,8 +103,8 @@ describe("voting in a task poll", () => {
         }
     });
 
-    test("refuses a vote from an outdated button or for an option the poll doesn't have", async ({ discord, interact, services }) => {
-        const poll = await storeOpenPoll(services);
+    test("refuses a vote from an outdated button or for an option the poll doesn't have", async ({ discord, interact, factories }) => {
+        const poll = await storeOpenPoll(factories);
 
         const outdated = await interact(vote({ ...poll, category: TaskCategory.Skilling }, "PVM001"));
         const unknown = await interact(vote(poll, "PVM999"));
@@ -118,9 +115,9 @@ describe("voting in a task poll", () => {
 });
 
 describe("closing a task poll", () => {
-    test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services }) => {
-        await services.repos.taskRepo.seedTasks(options);
-        const poll = await storeOpenPoll(services, { votes: { [SnowflakeUtil.generate().toString()]: "PVM002" } });
+    test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services, factories }) => {
+        for (const task of options) await factories.task.create(task);
+        const poll = await storeOpenPoll(factories, { votes: { [SnowflakeUtil.generate().toString()]: "PVM002" } });
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
         discord.message(apiMessage({ id: poll.messageId }));

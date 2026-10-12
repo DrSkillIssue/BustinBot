@@ -2,9 +2,8 @@ import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, type APIRole } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
+import { milestoneRoleFactory } from "../../../../tests/factories.js";
 import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, apiMember } from "../../../../tests/discord/payloads.js";
-import { periodicLeaderboardFactory, userStatsFactory } from "../../../../tests/factories.js";
-import type { TaskMilestoneRole } from "../../../../models/Guild.js";
 
 const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 const member = SnowflakeUtil.generate().toString();
@@ -14,10 +13,6 @@ const NEUTRAL = 0x95a5a6;
 // The guild's roles as Discord lists them: the harness guild's own plus any a test adds
 function serveRoles(discord: DiscordHarness, extra: APIRole[] = []): void {
     discord.guildRoles(IDS.guild, [...apiGuild().roles, ...extra]);
-}
-
-function milestone(role: APIRole, requiredSubmissions: number): TaskMilestoneRole {
-    return { id: role.id, label: role.name, roleId: role.id, requiredSubmissions, enabled: true };
 }
 
 describe("/taskroles list", () => {
@@ -55,7 +50,7 @@ describe("/taskroles add", () => {
         const interaction = await slash("taskroles", [{ type: ApplicationCommandOptionType.Subcommand, name: "add", options: [{ type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" }, { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" }, { type: ApplicationCommandOptionType.Integer, name: "value", value: 200 }] }], taskAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Added milestone role **Task Legend** (200)." })]);
-        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toContainEqual(milestone(legend, 200));
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toContainEqual(milestoneRoleFactory.build({ roleId: legend.id, label: legend.name, requiredSubmissions: 200 }));
     });
 
     test("rejects a milestone threshold of zero without creating a role", async ({ discord, slash }) => {
@@ -91,13 +86,13 @@ describe("/taskroles edit", () => {
     test("renames a milestone role and changes its threshold", async ({ discord, slash, services }) => {
         const expert = apiRole({ name: "Task Expert" });
         serveRoles(discord, [expert]);
-        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles: [milestone(expert, 50)] } });
+        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles: [milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 50 })] } });
         discord.roleEdited(IDS.guild, { ...expert, name: "Task Pro" });
 
         const interaction = await slash("taskroles", [{ type: ApplicationCommandOptionType.Subcommand, name: "edit", options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` }, { type: ApplicationCommandOptionType.String, name: "newrole", value: "Task Pro" }, { type: ApplicationCommandOptionType.Integer, name: "value", value: 60 }] }], taskAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Updated milestone role **Task Pro** (60)." })]);
-        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([{ ...milestone(expert, 60), label: "Task Pro" }]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([{ ...milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 60 }), label: "Task Pro" }]);
     });
 
     test("moves a champion role to another placement", async ({ discord, slash, services }) => {
@@ -117,13 +112,13 @@ describe("/taskroles delete", () => {
         const expert = apiRole({ name: "Task Expert" });
         const master = apiRole({ name: "Task Master" });
         serveRoles(discord, [expert, master]);
-        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles: [milestone(expert, 50), milestone(master, 100)] } });
+        await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles: [milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 50 }), milestoneRoleFactory.build({ roleId: master.id, label: master.name, requiredSubmissions: 100 })] } });
         discord.roleDeleted(IDS.guild, expert.id);
 
         const interaction = await slash("taskroles", [{ type: ApplicationCommandOptionType.Subcommand, name: "delete", options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` }] }], taskAdmin);
 
         expect(discord.originalEdits(interaction)).toEqual([expect.objectContaining({ content: "Deleted milestone role **Task Expert**." })]);
-        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([milestone(master, 100)]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([milestoneRoleFactory.build({ roleId: master.id, label: master.name, requiredSubmissions: 100 })]);
     });
 
     test("says so when Discord won't delete the role it stopped using", async ({ discord, slash, services }) => {
@@ -152,11 +147,11 @@ describe("/taskroles toggle", () => {
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles?.every((role) => !role.enabled)).toBe(true);
     });
 
-    test("disables champion roles and takes them off the current champions", async ({ discord, slash, services }) => {
+    test("disables champion roles and takes them off the current champions", async ({ discord, slash, services, factories }) => {
         const gold = apiRole({ name: "Gold Champion" });
         serveRoles(discord, [gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
-        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build({ champions: { first: [member] } }));
+        await factories.periodicLeaderboard.create({ champions: { first: [member] } });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 
@@ -192,7 +187,7 @@ describe("/taskroles grant", () => {
 });
 
 describe("/taskroles init", () => {
-    test("creates the missing task roles and gives members the milestone role they have earned", async ({ discord, slash, services }) => {
+    test("creates the missing task roles and gives members the milestone role they have earned", async ({ discord, slash, services, factories }) => {
         serveRoles(discord);
         const created = [
             apiRole({ name: "Task Participant" }),
@@ -204,7 +199,7 @@ describe("/taskroles init", () => {
             apiRole({ name: "Task Champion (3rd)" }),
         ];
         for (const role of created) discord.roleCreated(IDS.guild, role);
-        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
+        await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 
