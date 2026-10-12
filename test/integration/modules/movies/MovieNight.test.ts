@@ -110,21 +110,23 @@ describe("scheduling a movie night", () => {
         services,
         factories,
     }) => {
+        const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
+        vi.setSystemTime(now.toJSDate());
         const movieUsers = await setUpMovieNight(discord, services);
-        const date = DateTime.utc().plus({ days: 2 }).toISODate();
+        const date = "2026-03-07";
         const start = DateTime.fromISO(`${date}T20:30:00.000Z`);
         const movies = services.repos.movieRepo;
         await factories.movie.create({
             id: "old-pick",
             title: "Old Pick",
-            selectedAt: DateTime.now().minus({ hours: 2 }).toJSDate(),
+            selectedAt: now.minus({ hours: 2 }).toJSDate(),
         });
         await factories.movie.create({
             id: "latest-pick",
             title: "Latest Pick",
-            selectedAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
+            selectedAt: now.minus({ hours: 1 }).toJSDate(),
         });
-        await factories.movie.create({ id: "watched", title: "Watched", watched: true, selectedAt: new Date() });
+        await factories.movie.create({ id: "watched", title: "Watched", watched: true, selectedAt: now.toJSDate() });
         await storeNight(factories, { id: "previous" });
         await factories.moviePoll.create({ endsAt: start.plus({ hours: 1 }).toJSDate() });
         discord.acceptMessages(IDS.channel);
@@ -164,11 +166,13 @@ describe("scheduling a movie night", () => {
         services,
         factories,
     }) => {
+        const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
+        vi.setSystemTime(now.toJSDate());
         await setUpMovieNight(discord, services);
-        const date = DateTime.utc().plus({ days: 2 }).toISODate();
+        const date = "2026-03-07";
         const pollChannel = SnowflakeUtil.generate().toString();
         await factories.moviePoll.create({
-            endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
+            endsAt: now.plus({ hours: 1 }).toJSDate(),
             channelId: pollChannel,
         });
         discord.acceptMessages(IDS.channel);
@@ -206,19 +210,21 @@ describe("scheduling a movie night", () => {
 
 describe("the movie night sweep", () => {
     test("sends each reminder once when it comes due", async ({ discord, services, factories }) => {
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ hours: 3 }).toJSDate());
         const movieUsers = await setUpMovieNight(discord, services);
-        const start = DateTime.now().plus({ hours: 3 });
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
         for (const sweepAt of [
-            start.minus({ hours: 2 }).toJSDate(),
-            start.minus({ hours: 2 }).plus({ minutes: 1 }).toJSDate(),
-            start.minus({ minutes: 30 }).toJSDate(),
-            start.toJSDate(),
-            start.plus({ minutes: 1 }).toJSDate(),
+            start.minus({ hours: 2 }),
+            start.minus({ hours: 2 }).plus({ minutes: 1 }),
+            start.minus({ minutes: 30 }),
+            start,
+            start.plus({ minutes: 1 }),
         ]) {
-            await sweepMovieNight(discord.client, services, sweepAt);
+            vi.setSystemTime(sweepAt.toJSDate());
+            await sweepMovieNight(discord.client, services);
         }
 
         const startsAt = `<t:${start.toUnixInteger()}:t>`;
@@ -235,13 +241,16 @@ describe("the movie night sweep", () => {
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ hours: 1 }).toJSDate());
         const movieUsers = await setUpMovieNight(discord, services);
-        const start = DateTime.now().plus({ hours: 1 });
         const night = await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
-        await sweepMovieNight(discord.client, services, start.minus({ minutes: 20 }).toJSDate());
-        await sweepMovieNight(discord.client, services, start.plus({ minutes: 20 }).toJSDate());
+        vi.setSystemTime(start.minus({ minutes: 20 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
+        vi.setSystemTime(start.plus({ minutes: 20 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
 
         expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
             `<@&${movieUsers.id}> Movie night starts in **20 minutes** (at <t:${start.toUnixInteger()}:t>)! We will be watching **Arrival**!`,
@@ -257,15 +266,17 @@ describe("the movie night sweep", () => {
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());
         await setUpMovieNight(discord, services);
         await services.guilds.update(IDS.guild, { channels: { movieNight: "" } });
-        const start = DateTime.now().plus({ minutes: 30 });
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
-        await sweepMovieNight(discord.client, services, start.minus({ minutes: 30 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
         await services.guilds.update(IDS.guild, { channels: { movieNight: IDS.channel } });
-        await sweepMovieNight(discord.client, services, start.minus({ minutes: 29 }).toJSDate());
+        vi.setSystemTime(start.minus({ minutes: 29 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
 
         expect(warn).toHaveBeenCalledWith(
             `[MovieChannel] Movie night channel (not set) not found for guild ${IDS.guild}.`,
@@ -276,14 +287,15 @@ describe("the movie night sweep", () => {
     });
 
     test("keeps working from what is stored after a restart", async ({ discord, services, db, factories }) => {
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());
         await setUpMovieNight(discord, services);
-        const start = DateTime.now().plus({ minutes: 30 });
         await storeNight(factories, { startTime: start.toJSDate(), remindersSent: ["2 hours before"] });
         discord.acceptMessages(IDS.channel);
         // A new container, as the bot builds after restarting: nothing carried over in memory
         const restarted = createServiceContainer(db, IDS.guild, services.botStats);
 
-        await sweepMovieNight(discord.client, restarted, start.minus({ minutes: 30 }).toJSDate());
+        await sweepMovieNight(discord.client, restarted);
 
         expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
             expect.stringContaining("Movie night starts in **30 minutes**"),
@@ -295,17 +307,19 @@ describe("the movie night sweep", () => {
         services,
         factories,
     }) => {
+        const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
+        vi.setSystemTime(now.toJSDate());
         await setUpMovieNight(discord, services);
         const poll = await factories.moviePoll.create({
             options: [
                 movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }),
                 movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER }),
             ],
-            endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(),
+            endsAt: now.minus({ minutes: 1 }).toJSDate(),
             votes: { [present]: "movie-2", [joiner]: "movie-2", [leaver]: "movie-1" },
         });
         await storeNight(factories, {
-            startTime: DateTime.now().plus({ hours: 3 }).toJSDate(),
+            startTime: now.plus({ hours: 3 }).toJSDate(),
             movie: movieFactory.build({ id: "TBD", title: "TBD" }),
         });
         discord.message(apiMessage({ id: poll.messageId }));
@@ -313,8 +327,8 @@ describe("the movie night sweep", () => {
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
-        await sweepMovieNight(discord.client, services, new Date());
-        await sweepMovieNight(discord.client, services, new Date());
+        await sweepMovieNight(discord.client, services);
+        await sweepMovieNight(discord.client, services);
 
         expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
         expect(await services.repos.movieRepo.getMovieById("movie-2")).toMatchObject({
@@ -339,8 +353,9 @@ describe("the movie night sweep", () => {
         voice,
         factories,
     }) => {
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ minutes: 10 }).toJSDate());
         await setUpMovieNight(discord, services);
-        const start = DateTime.now().minus({ minutes: 10 });
         // Its reminders have gone out; this is about the night itself
         const night = await storeNight(factories, {
             startTime: start.toJSDate(),
@@ -352,16 +367,21 @@ describe("the movie night sweep", () => {
         const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
         await factories.userStats.create({ userId: present });
 
-        await sweepMovieNight(discord.client, services, start.minus({ minutes: 5 }).toJSDate());
+        vi.setSystemTime(start.minus({ minutes: 5 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
         expect(services.movieAttendance.isTracking(night.id)).toBe(false);
 
-        await sweepMovieNight(discord.client, services, start.toJSDate());
+        vi.setSystemTime(start.toJSDate());
+        await sweepMovieNight(discord.client, services);
         // Ten minutes in: one member leaves for good and another arrives
+        vi.setSystemTime(start.plus({ minutes: 10 }).toJSDate());
         await voice(apiVoiceState(leaver, null));
         await voice(apiVoiceState(joiner, VOICE));
         // The movie runs 30 minutes, and the night ends 30 minutes after that
-        await sweepMovieNight(discord.client, services, start.plus({ minutes: 60 }).toJSDate());
-        await sweepMovieNight(discord.client, services, start.plus({ minutes: 61 }).toJSDate());
+        vi.setSystemTime(start.plus({ minutes: 60 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
+        vi.setSystemTime(start.plus({ minutes: 61 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
 
         expect(await services.repos.userRepo.getUserById(present)).toMatchObject({ moviesAttended: 1 });
         expect(await services.repos.userRepo.getUserById(joiner)).toMatchObject({ moviesAttended: 1 });
@@ -385,14 +405,17 @@ describe("the movie night sweep", () => {
     });
 
     test("sends nothing more for a night that was cancelled", async ({ discord, services, slash, factories }) => {
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ hours: 1 }).toJSDate());
         await setUpMovieNight(discord, services);
-        const start = DateTime.now().plus({ hours: 1 });
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
         await slash("cancelmovie", [], AS.movieAdmin);
-        await sweepMovieNight(discord.client, services, start.minus({ minutes: 30 }).toJSDate());
-        await sweepMovieNight(discord.client, services, start.toJSDate());
+        vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
+        vi.setSystemTime(start.toJSDate());
+        await sweepMovieNight(discord.client, services);
 
         expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
             `❌ Movie night has been cancelled by <@${IDS.user}>.`,
@@ -400,6 +423,8 @@ describe("the movie night sweep", () => {
     });
 
     test("keeps each guild's movie night to itself", async ({ discord, services, otherGuild, factories }) => {
+        const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
+        vi.setSystemTime(now.toJSDate());
         await discord.addGuild(
             apiGuild({
                 id: IDS.otherGuild,
@@ -407,17 +432,17 @@ describe("the movie night sweep", () => {
             }),
         );
         const duePoll = moviePollFactory.build({
-            endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(),
+            endsAt: now.minus({ minutes: 1 }).toJSDate(),
             votes: { [present]: "movie-2" },
             messageId: "",
             channelId: IDS.otherGuildChannel,
         });
         await otherGuild.repos.movieRepo.createPoll(duePoll);
-        await factories.moviePoll.create({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate() });
+        await factories.moviePoll.create({ endsAt: now.plus({ hours: 1 }).toJSDate() });
         discord.acceptMessages(IDS.otherGuildChannel);
         discord.acceptDirectMessages(apiUser());
 
-        for (const guild of [services, otherGuild]) await sweepMovieNight(discord.client, guild, new Date());
+        for (const guild of [services, otherGuild]) await sweepMovieNight(discord.client, guild);
 
         expect(discord.messagesSentTo(IDS.otherGuildChannel)).toEqual([
             expect.objectContaining({ embeds: [expect.objectContaining({ title: "🏆 Movie poll closed!" })] }),

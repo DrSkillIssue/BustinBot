@@ -23,16 +23,17 @@ export async function resolveGuildTimezone(services: ServiceContainer, guildId: 
 // never repeats it, and node-cron's shutdown stops the job.
 export function startMovieScheduler(client: Client, guildServices: () => ServiceContainer[]): ScheduledTask {
     return cron.schedule('* * * * *', async () => {
-        const now = new Date();
         for (const services of guildServices()) {
-            await sweepMovieNight(client, services, now);
+            await sweepMovieNight(client, services);
         }
     }, { name: 'movieScheduler:sweep', noOverlap: true });
 }
 
 // One guild's sweep: close a poll whose time is up, send a reminder that is due, count attendance once the night
 // has started, and end it once its movie has run. A failing step is logged and doesn't stop the others.
-export async function sweepMovieNight(client: Client, services: ServiceContainer, now: Date): Promise<void> {
+export async function sweepMovieNight(client: Client, services: ServiceContainer): Promise<void> {
+    // Every step of the sweep works from the same time
+    const now = new Date();
     const movieRepo = services.repos.movieRepo;
 
     const step = async (name: string, work: () => Promise<void>) => {

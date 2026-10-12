@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
+import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
 import { IDS } from "../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import { calculateTaskStreakSummary } from "../../../../src/modules/tasks/TaskStreaks.js";
@@ -37,9 +37,9 @@ describe("task streaks", () => {
         await storeWeeks(factories, start, ["week-1"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
 
-        expect(
-            await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo, start.plus({ days: 2 }).toJSDate()),
-        ).toMatchObject({
+        vi.setSystemTime(start.plus({ days: 2 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 1,
             longestStreak: 1,
             hasCompletedCurrentPeriod: true,
@@ -52,9 +52,9 @@ describe("task streaks", () => {
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
         await submit(factories, "week-2", start.plus({ days: 8 }).toJSDate());
 
-        expect(
-            await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo, start.plus({ days: 8 }).toJSDate()),
-        ).toMatchObject({
+        vi.setSystemTime(start.plus({ days: 8 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 2,
             longestStreak: 2,
             hasCompletedCurrentPeriod: true,
@@ -66,9 +66,9 @@ describe("task streaks", () => {
         await storeWeeks(factories, start, ["week-1", "week-2", "week-3"]);
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
 
-        expect(
-            await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo, start.plus({ days: 16 }).toJSDate()),
-        ).toMatchObject({
+        vi.setSystemTime(start.plus({ days: 16 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 0,
             longestStreak: 1,
             hasCompletedCurrentPeriod: false,
@@ -88,13 +88,9 @@ describe("task streaks", () => {
         });
         await submit(factories, "before-break", start.plus({ days: 1 }).toJSDate());
 
-        expect(
-            await calculateTaskStreakSummary(
-                IDS.user,
-                services.repos.taskRepo,
-                afterBreak.plus({ days: 1 }).toJSDate(),
-            ),
-        ).toMatchObject({
+        vi.setSystemTime(afterBreak.plus({ days: 1 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
             currentStreak: 1,
             longestStreak: 1,
             hasCompletedCurrentPeriod: false,
@@ -113,9 +109,12 @@ describe("task streaks", () => {
             createdAt: end.plus({ hours: 2 }).toJSDate(),
         });
 
-        expect(
-            await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo, end.plus({ days: 1 }).toJSDate()),
-        ).toMatchObject({ currentStreak: 1, longestStreak: 1 });
+        vi.setSystemTime(end.plus({ days: 1 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
+            currentStreak: 1,
+            longestStreak: 1,
+        });
     });
 
     test("ignore submissions that were rejected or are still pending", async ({ services, factories }) => {
@@ -124,8 +123,11 @@ describe("task streaks", () => {
         await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate(), { status: SubmissionStatus.Rejected });
         await submit(factories, "week-2", start.plus({ days: 8 }).toJSDate(), { status: SubmissionStatus.Pending });
 
-        expect(
-            await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo, start.plus({ days: 9 }).toJSDate()),
-        ).toMatchObject({ currentStreak: 0, longestStreak: 0 });
+        vi.setSystemTime(start.plus({ days: 9 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
+            currentStreak: 0,
+            longestStreak: 0,
+        });
     });
 });
