@@ -3,7 +3,6 @@ import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPI
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
-import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 
@@ -62,7 +61,7 @@ describe("the setup commands", () => {
 });
 
 describe("/setup choices", () => {
-    test("saves the chosen channels and marks the core setup complete", async ({ discord, interact, db }) => {
+    test("saves the chosen channels and marks the core setup complete", async ({ discord, interact, services }) => {
         await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
         await interact(channelSelectInteraction("setup_log", [CHANNELS.log]));
         await interact(channelSelectInteraction("setup_archive", [CHANNELS.archive]));
@@ -73,7 +72,7 @@ describe("/setup choices", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: expect.stringContaining("Setup complete!"), components: [] }),
         }]);
-        expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
             channels: { announcements: CHANNELS.announce, botLog: CHANNELS.log, botArchive: CHANNELS.archive, taskChannel: IDS.channel },
             setupComplete: { core: true, movie: true, task: true },
         });
@@ -116,7 +115,7 @@ describe("/setup choices", () => {
         ]);
     });
 
-    test("opens the timezone form and saves a recognised zone", async ({ discord, interact, db }) => {
+    test("opens the timezone form and saves a recognised zone", async ({ discord, interact, services }) => {
         const button = await interact(buttonInteraction("setup_timezone"));
         expect(discord.modal(button)?.custom_id).toBe("setup_timezone_modal");
 
@@ -126,22 +125,22 @@ describe("/setup choices", () => {
             type: InteractionResponseType.ChannelMessageWithSource,
             data: expect.objectContaining({ content: expect.stringContaining("Timezone set to **Australia/Melbourne**"), flags: MessageFlags.Ephemeral }),
         }]);
-        expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({ timezone: "Australia/Melbourne", channels: buildGuild().channels });
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({ timezone: "Australia/Melbourne", channels: buildGuild().channels });
     });
 
-    test("rejects a timezone it does not recognise", async ({ discord, interact, db }) => {
+    test("rejects a timezone it does not recognise", async ({ discord, interact, services }) => {
         const submit = await interact(modalSubmitInteraction("setup_timezone_modal", { timezone_input: "not a zone" }));
 
         expect(discord.callbacks(submit)).toEqual([{
             type: InteractionResponseType.ChannelMessageWithSource,
             data: expect.objectContaining({ content: expect.stringContaining("Could not recognise that timezone"), flags: MessageFlags.Ephemeral }),
         }]);
-        expect((await new GuildRepository(db).getGuild(IDS.guild))?.timezone).toBe(buildGuild().timezone);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.timezone).toBe(buildGuild().timezone);
     });
 });
 
 describe("/moviesetup choices", () => {
-    test("saves the movie roles and channels without touching other settings", async ({ discord, interact, db }) => {
+    test("saves the movie roles and channels without touching other settings", async ({ discord, interact, services }) => {
         await interact(roleSelectInteraction("moviesetup_admin_role", [MOVIE_ADMIN_ROLE]));
         await interact(roleSelectInteraction("moviesetup_user_role", [MOVIE_USER_ROLE]));
         await interact(channelSelectInteraction("moviesetup_channel", [MOVIE_CHANNEL]));
@@ -153,7 +152,7 @@ describe("/moviesetup choices", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: expect.stringContaining("Movie module setup complete!"), components: [] }),
         }]);
-        expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
             roles: { ...buildGuild().roles, movieAdmin: MOVIE_ADMIN_ROLE, movieUser: MOVIE_USER_ROLE },
             channels: { ...buildGuild().channels, movieNight: MOVIE_CHANNEL, movieVC: MOVIE_VOICE_CHANNEL },
         });
@@ -172,7 +171,7 @@ describe("/moviesetup choices", () => {
 });
 
 describe("/tasksetup choices", () => {
-    test("saves the task roles, channels and leaderboard period", async ({ discord, interact, db }) => {
+    test("saves the task roles, channels and leaderboard period", async ({ discord, interact, services }) => {
         await interact(roleSelectInteraction("tasksetup_admin_role", [TASK_ADMIN_ROLE]));
         await interact(roleSelectInteraction("tasksetup_user_role", [TASK_USER_ROLE]));
         await interact(channelSelectInteraction("tasksetup_channel", [TASK_CHANNEL]));
@@ -185,14 +184,14 @@ describe("/tasksetup choices", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: expect.stringContaining("Task module setup complete!"), components: [] }),
         }]);
-        expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
             roles: { ...buildGuild().roles, taskAdmin: TASK_ADMIN_ROLE, taskUser: TASK_USER_ROLE },
             channels: { ...buildGuild().channels, taskChannel: TASK_CHANNEL, taskVerification: TASK_VERIFICATION_CHANNEL },
             taskSettings: { periodEvents: 6 },
         });
     });
 
-    test("cancels without saving anything", async ({ discord, interact, db }) => {
+    test("cancels without saving anything", async ({ discord, interact, services }) => {
         await interact(roleSelectInteraction("tasksetup_admin_role", [TASK_ADMIN_ROLE]));
 
         const cancel = await interact(buttonInteraction("tasksetup_cancel"));
@@ -201,6 +200,6 @@ describe("/tasksetup choices", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: "Task setup cancelled. No changes were made.", components: [] }),
         }]);
-        expect((await new GuildRepository(db).getGuild(IDS.guild))?.roles).toEqual(buildGuild().roles);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.roles).toEqual(buildGuild().roles);
     });
 });

@@ -437,6 +437,11 @@ export class DiscordHarness {
             .reply(this.answered(() => ({ statusCode: 200, data: role, responseOptions: JSON_RESPONSE })));
     }
 
+    // Roles the bot asked Discord to create in a guild
+    rolesCreated(guildId: string): Partial<APIRole>[] {
+        return this.bodies("POST", `/guilds/${guildId}/roles`);
+    }
+
     // Discord editing one role, answering with the role as it now is
     roleEdited(guildId: string, role: APIRole): void {
         this.api

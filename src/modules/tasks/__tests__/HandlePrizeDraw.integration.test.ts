@@ -20,10 +20,6 @@ async function storeEvent(services: ServiceContainer, id: string, endTime: DateT
     }
 }
 
-async function snapshot(services: ServiceContainer): Promise<PrizeDraw> {
-    return generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
-}
-
 // A draw whose snapshot was taken yesterday, the winner holding two of its three entries
 function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
     return buildPrizeDraw({
@@ -47,7 +43,7 @@ describe("a prize draw snapshot", () => {
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
-        expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 1 }, totalEntries: 1, tierCounts: { bronze: 0, silver: 0, gold: 1 } });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 1 }, totalEntries: 1, tierCounts: { bronze: 0, silver: 0, gold: 1 } });
     });
 
     test("gives one entry for each task the member completed", async ({ services }) => {
@@ -55,7 +51,7 @@ describe("a prize draw snapshot", () => {
             await storeEvent(services, id, DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
         }
 
-        expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 3 }, totalEntries: 3 });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 3 }, totalEntries: 3 });
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services }) => {
@@ -64,14 +60,14 @@ describe("a prize draw snapshot", () => {
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
 
-        expect(await snapshot(services)).toMatchObject({ participants: {}, totalEntries: 0 });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: {}, totalEntries: 0 });
     });
 
     test("leaves out a task event that is still running", async ({ services }) => {
         await storeEvent(services, "finished", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
         await storeEvent(services, "running", DateTime.now().plus({ hours: 1 }), [{ userId: second, status: SubmissionStatus.Gold }]);
 
-        expect(await snapshot(services)).toMatchObject({ participants: { [winner]: 1 }, taskEventIds: ["finished"] });
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({ participants: { [winner]: 1 }, taskEventIds: ["finished"] });
     });
 
     test("carries over approvals the previous draw's snapshot missed", async ({ services }) => {
@@ -95,7 +91,7 @@ describe("a prize draw snapshot", () => {
         ]);
         await storeEvent(services, "current-event", DateTime.now().minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
 
-        const draw = await snapshot(services);
+        const draw = await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
 
         expect(draw.participants).toEqual({ [winner]: 1, [second]: 1 });
         expect(draw.taskEventIds).toEqual(expect.arrayContaining(["current-event", "previous-event"]));
@@ -119,7 +115,7 @@ describe("a prize draw snapshot", () => {
         }
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-        expect((await snapshot(services)).participants).toEqual({ [members.latest]: 1 });
+        expect((await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants).toEqual({ [members.latest]: 1 });
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
     });
 });

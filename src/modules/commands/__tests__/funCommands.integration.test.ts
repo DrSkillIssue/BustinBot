@@ -1,5 +1,6 @@
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
+import { BotRepository } from "../../../core/database/BotRepo.js";
 
 describe("fun commands", () => {
     test("/goodbot replies publicly with the updated praise count", async ({ discord, db, slash }) => {
@@ -11,7 +12,7 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "🥹 *BustinBot has been called a good bot 2 times!*" }),
         ]);
-        expect((await db.doc("bot/stats").get()).get("funStats.goodbotCount")).toBe(2);
+        expect((await new BotRepository(db).getBotStats())?.funStats.goodbotCount).toBe(2);
     });
 
     test("/badbot replies publicly with the criticism count", async ({ discord, db, slash }) => {
@@ -23,7 +24,7 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "😭 *BustinBot has been called a bad bot 1 time!*" }),
         ]);
-        expect((await db.doc("bot/stats").get()).get("funStats.badbotCount")).toBe(1);
+        expect((await new BotRepository(db).getBotStats())?.funStats.badbotCount).toBe(1);
     });
 
     test("/bustin replies publicly and counts the ping", async ({ discord, db, slash }) => {
@@ -35,6 +36,6 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
         ]);
-        expect((await db.doc("bot/stats").get()).get("funStats.bustinCount")).toBe(1);
+        expect((await new BotRepository(db).getBotStats())?.funStats.bustinCount).toBe(1);
     });
 });

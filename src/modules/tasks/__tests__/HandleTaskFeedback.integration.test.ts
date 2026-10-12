@@ -1,10 +1,8 @@
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
-import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask } from "../../../tests/fakes/builders.js";
-
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({ discord, interact, services }) => {
@@ -17,12 +15,13 @@ describe("task feedback buttons", () => {
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
     });
 
-    test("count two quick clicks of the same button once", async ({ discord, services, commands }) => {
+    test("count two quick clicks of the same button once", async ({ discord, interact, services }) => {
         await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
-        const first = await discord.dispatch(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
-        const second = await discord.dispatch(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
-        await Promise.all([first, second].map((click) => routeInteraction(click, discord.client, commands, services)));
+        const [first, second] = await Promise.all([
+            interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
+            interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
+        ]);
 
         const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content).sort();
         expect(replies).toEqual(["Thanks for your feedback!", "You already gave this task a 👍."]);

@@ -1,6 +1,5 @@
 import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
-import type { ButtonInteraction } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
@@ -8,11 +7,12 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 import type { Movie } from "../../../models/Movie.js";
-import { pollMovieWithList } from "../MoviePolls.js";
 import { addMovieWithStats } from "../MovieService.js";
 
 const SUBMITTER = SnowflakeUtil.generate().toString();
 const VOICE = SnowflakeUtil.generate().toString();
+const movieAdmin = withRoles(IDS.roles.movieAdmin);
+const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
 async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
@@ -22,12 +22,12 @@ async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[])
 }
 
 describe("a movie poll", () => {
-    test("is posted with a button per movie, leaving out watched ones, and stored", async ({ discord, services }) => {
-        const movies = await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
+    test("is posted with a button per movie, leaving out one watched since it was chosen, and stored", async ({ discord, interact, services }) => {
+        await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
         discord.acceptMessages(IDS.channel);
-        const click = await discord.dispatch(buttonInteraction("movie_poll_manual_confirm")) as ButtonInteraction;
+        await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2", "movie-3"], pickMessage, movieAdmin));
 
-        await pollMovieWithList(services, click, movies);
+        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
 
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Poll confirmed and posted!" })]);
         const posted = discord.messagesSentTo(IDS.channel).find((message) => message.content?.startsWith("📊 **Vote for the next movie night pick!**"));
@@ -38,13 +38,13 @@ describe("a movie poll", () => {
         expect(poll?.options.map((movie) => movie.id)).toEqual(["movie-1", "movie-2"]);
     });
 
-    test("needs at least two unwatched movies", async ({ discord, services }) => {
-        const movies = await storeMovies(services, [{ title: "Inception" }, { title: "Heat", watched: true }]);
-        const click = await discord.dispatch(buttonInteraction("movie_poll_manual_confirm")) as ButtonInteraction;
+    test("needs at least two unwatched movies", async ({ discord, interact, services }) => {
+        await storeMovies(services, [{ title: "Inception" }, { title: "Heat", watched: true }]);
+        await interact(stringSelectInteraction("movie_poll_manual_select", ["movie-1", "movie-2"], pickMessage, movieAdmin));
 
-        await pollMovieWithList(services, click, movies);
+        const click = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, movieAdmin));
 
-        expect(discord.callbacks(click)).toEqual([{ type: 4, data: expect.objectContaining({ content: "You must select between 2 and 5 movies.", flags: MessageFlags.Ephemeral }) }]);
+        expect(discord.callbacks(click)).toEqual([{ type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "You must select between 2 and 5 movies.", flags: MessageFlags.Ephemeral }) }]);
         expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
     });
 
@@ -120,13 +120,10 @@ describe("choosing the movie for movie night", () => {
 });
 
 describe("/pickmovie", () => {
-    const movieAdmin = withRoles(IDS.roles.movieAdmin);
-
     test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({ discord, interact, slash, services }) => {
         await storeMovies(services, [{ title: "Inception" }]);
         const command = await slash("pickmovie", [], movieAdmin);
         const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
-        const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
         const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, movieAdmin));
         const random = await interact(buttonInteraction("movie_pick_random", pickMessage, movieAdmin));
@@ -140,7 +137,6 @@ describe("/pickmovie", () => {
 
     test("builds a poll from the movies picked in the manual menu", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }, { title: "Heat", watched: true }]);
-        const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
         discord.acceptMessages(IDS.channel);
 
         const open = await interact(buttonInteraction("movie_poll_manual", pickMessage, movieAdmin));

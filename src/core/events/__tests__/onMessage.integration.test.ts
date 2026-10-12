@@ -4,6 +4,14 @@ import { handleMessage } from "../onMessage.js";
 import { CommandModule, CommandRole, type Command } from "../../../models/Command.js";
 import { IDS, apiMember, apiUser, messageCreate } from "../../../tests/discord/payloads.js";
 
+// A prefix command that always throws
+const failing: Command = {
+    name: "fail",
+    description: "Always fails",
+    module: CommandModule.Core,
+    allowedRoles: [CommandRole.Everyone],
+    execute: async () => { throw new Error("boom"); },
+};
 const { user: _user, permissions: _permissions, ...botAdmin } = apiMember({ roles: [IDS.roles.admin] });
 
 describe("prefix commands", () => {
@@ -46,13 +54,6 @@ describe("prefix commands", () => {
     test("tells the member when a command fails", async ({ discord, services }) => {
         discord.acceptMessages(IDS.channel);
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
-        const failing: Command = {
-            name: "fail",
-            description: "Always fails",
-            module: CommandModule.Core,
-            allowedRoles: [CommandRole.Everyone],
-            execute: async () => { throw new Error("boom"); },
-        };
         const message = await discord.sendMessage(messageCreate("!fail"));
 
         await handleMessage(message, new Map([["fail", failing]]), services);
@@ -66,13 +67,6 @@ describe("prefix commands", () => {
     test("survives Discord rejecting the error reply", async ({ discord, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
-        const failing: Command = {
-            name: "fail",
-            description: "Always fails",
-            module: CommandModule.Core,
-            allowedRoles: [CommandRole.Everyone],
-            execute: async () => { throw new Error("boom"); },
-        };
         const message = await discord.sendMessage(messageCreate("!fail"));
 
         await expect(handleMessage(message, new Map([["fail", failing]]), services)).resolves.toBeUndefined();

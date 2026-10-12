@@ -5,7 +5,6 @@ import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
-import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
@@ -330,18 +329,17 @@ describe("approving a submission", () => {
         expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 2 + 6 } });
     });
 
-    test("counts once when two admins confirm at the same moment", async ({ discord, interact, services, commands }) => {
+    test("counts once when two admins confirm at the same moment", async ({ discord, interact, services }) => {
         await storeEvent(services);
         await storePendingSubmission(services);
         const { dm } = await acceptReviewEffects(discord, services);
         const prompt = await interact(buttonInteraction("approve_bronze_submission-1", apiMessage({ id: REVIEW_POST }), admin));
         const [confirmButton] = offeredButtons(discord, prompt);
-        const confirms = [
-            await discord.dispatch(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
-            await discord.dispatch(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
-        ];
 
-        await Promise.all(confirms.map((confirm) => routeInteraction(confirm, discord.client, commands, services)));
+        const confirms = await Promise.all([
+            interact(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
+            interact(buttonInteraction(confirmButton!, apiMessage({ flags: MessageFlags.Ephemeral }), admin)),
+        ]);
 
         expect(confirms.map((confirm) => discord.originalEdits(confirm).at(-1)?.content).sort()).toEqual([
             "⚠️ This submission has already been reviewed (bronze). Another admin may have processed it.",

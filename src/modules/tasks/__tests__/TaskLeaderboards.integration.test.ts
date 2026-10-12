@@ -7,7 +7,6 @@ import {
     registerPeriodicTaskEvent,
 } from "../TaskLeaderboards.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
@@ -21,10 +20,6 @@ async function storeEvent(services: ServiceContainer, id: string, start: string,
     return id;
 }
 
-async function periodic(services: ServiceContainer): Promise<TaskLeaderboard | null> {
-    return services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
-}
-
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {
         await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
@@ -32,7 +27,7 @@ describe("TaskLeaderboards initialisation", () => {
         await ensureTaskLeaderboardsInitialized(services);
 
         expect(await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime")).toMatchObject({ points: { [IDS.user]: 8 } });
-        expect(await periodic(services)).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({ points: {}, period: { length: 4, eventIds: [], index: 1 } });
     });
 });
 
@@ -73,7 +68,7 @@ describe("TaskLeaderboards periodic submissions", () => {
             await registerPeriodicTaskEvent(services, eventId);
         }
 
-        const stored = await periodic(services);
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored?.period?.eventIds).toEqual(eventIds.slice(0, 12));
         expect(stored?.pendingPeriod?.period.eventIds).toEqual(["week-5-pvm"]);
     });
@@ -98,7 +93,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         await registerPeriodicTaskEvent(services, "week-5");
         await recordPeriodicTierChange(services, "week-5", { userId: overlapMember, points: 3, from: null, to: SubmissionStatus.Silver });
 
-        const finalising = await periodic(services);
+        const finalising = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(finalising?.points).toEqual({ [oldPeriodMember]: 6 });
         // The leaderboard starts at its first period
         const firstPeriod = 1;
@@ -107,7 +102,7 @@ describe("TaskLeaderboards periodic submissions", () => {
         const finalised = await finalizePeriodicLeaderboard(services, firstPeriod);
 
         expect(finalised?.placements.first).toEqual([{ userId: oldPeriodMember, points: 6 }]);
-        const stored = await periodic(services);
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored?.completedPeriod?.topThree).toEqual([{ userId: oldPeriodMember, points: 6 }]);
         expect(stored?.completedPeriod?.topTen).toEqual([{ userId: oldPeriodMember, points: 6 }]);
         expect(stored?.period?.eventIds).toEqual(["week-5"]);
@@ -129,7 +124,7 @@ describe("TaskLeaderboards periodic submissions", () => {
             await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 3, from: SubmissionStatus.Silver, to: SubmissionStatus.Gold });
         }
 
-        const stored = await periodic(services);
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored?.points).toEqual({ [upgradedMember]: 12 });
         expect(stored?.tierCounts).toEqual({ [upgradedMember]: { bronze: 0, silver: 0, gold: 2 } });
     });
