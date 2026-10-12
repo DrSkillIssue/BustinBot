@@ -8,7 +8,7 @@ import { taskFactory } from "../../../factories.js";
 import { TaskCategory } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../../../src/modules/tasks/HandleTaskPoll.js";
-import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
+import { runTaskPollJob } from "../../../../src/modules/tasks/TaskScheduler.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
 
 // A poll that is open in the harness channel, as stored when it was posted
@@ -66,29 +66,22 @@ describe("posting the weekly task polls", () => {
 });
 
 describe("the scheduled task poll job", () => {
-    test("posts the task polls in the task channel", async ({ discord, services, factories, runScheduledJob }) => {
+    test("posts the task polls in the task channel", async ({ discord, services, factories }) => {
         await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
-        await initTaskScheduler(discord.client, services);
 
-        await runScheduledJob(IDS.guild, "poll");
+        await runTaskPollJob(discord.client, services);
 
         const [announcement, ...polls] = discord.messagesSentTo(IDS.channel);
         expect(announcement?.content).toContain("**New task polls are live!**");
         expect(polls).toHaveLength(3);
     });
 
-    test("posts nothing when no task channel is configured", async ({
-        discord,
-        services,
-        factories,
-        runScheduledJob,
-    }) => {
+    test("posts nothing when no task channel is configured", async ({ discord, services, factories }) => {
         await storePollableTasks(factories);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
-        await initTaskScheduler(discord.client, services);
 
-        await runScheduledJob(IDS.guild, "poll");
+        await runTaskPollJob(discord.client, services);
 
         expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
     });

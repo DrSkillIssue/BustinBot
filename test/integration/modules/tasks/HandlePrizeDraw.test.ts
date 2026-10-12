@@ -9,7 +9,7 @@ import {
     generatePrizeDrawSnapshot,
     rollWinnerForSnapshot,
 } from "../../../../src/modules/tasks/HandlePrizeDraw.js";
-import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
+import { runPrizeDrawJob } from "../../../../src/modules/tasks/TaskScheduler.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -281,19 +281,13 @@ describe("announcing a prize draw winner", () => {
 });
 
 describe("the scheduled prize draw job", () => {
-    test("draws and announces a winner on a prize draw week", async ({
-        discord,
-        services,
-        factories,
-        runScheduledJob,
-    }) => {
+    test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
         await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
 
-        await initTaskScheduler(discord.client, services);
 
-        await runScheduledJob(IDS.guild, "prizeDraw");
+        await runPrizeDrawJob(discord.client, services);
 
         const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
         expect(draw).toMatchObject({ winnerId: winner, totalEntries: 1 });
@@ -301,14 +295,13 @@ describe("the scheduled prize draw job", () => {
         expect(discord.messagesSentTo(dm)).toHaveLength(1);
     });
 
-    test("does nothing on the weeks between draws", async ({ discord, services, factories, runScheduledJob }) => {
+    test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
         await storeEvent(factories, "pvm", NOW.minus({ days: 2 }), [{ userId: winner, status: SubmissionStatus.Gold }]);
 
         // The Tuesday after a draw
         vi.setSystemTime(NOW.plus({ weeks: 1 }).toJSDate());
-        await initTaskScheduler(discord.client, services);
 
-        await runScheduledJob(IDS.guild, "prizeDraw");
+        await runPrizeDrawJob(discord.client, services);
 
         expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
     });

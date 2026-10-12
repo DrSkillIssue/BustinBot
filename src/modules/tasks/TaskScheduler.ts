@@ -149,6 +149,36 @@ export async function getDefaultChannel(client: Client, services: ServiceContain
     return channel?.isTextBased() ? (channel as TextChannel) : null;
 }
 
+// The weekly task poll job: posts the task polls when the task channel can be reached
+export async function runTaskPollJob(client: Client, services: ServiceContainer): Promise<void> {
+    console.log('[TaskScheduler] Running weekly task poll post...');
+    const channel = await getDefaultChannel(client, services);
+    if (channel) {
+        await postAllTaskPolls(client, services);
+    }
+}
+
+// The weekly task start job: starts the new task events when the task channel can be reached
+export async function runTaskStartJob(client: Client, services: ServiceContainer): Promise<void> {
+    console.log('[TaskScheduler] Closing poll and starting task event...');
+    const channel = await getDefaultChannel(client, services);
+    if (channel) {
+        await startAllTaskEvents(client, services);
+    }
+}
+
+// The prize draw job, which runs every Tuesday and draws on prize draw weeks
+export async function runPrizeDrawJob(client: Client, services: ServiceContainer): Promise<void> {
+    if (!isPrizeDrawWeek(new Date())) return;
+
+    console.log('[TaskScheduler] Running prize draw...');
+    try {
+        await drawPrize(client, services);
+    } catch (err) {
+        console.error('[TaskScheduler] Prize draw job failed:', err);
+    }
+}
+
 // Schedules the guild's task jobs, replacing any it already has
 export async function initTaskScheduler(client: Client, services: ServiceContainer): Promise<void> {
     console.log('[TaskScheduler] Initialising default task schedule...');
@@ -203,11 +233,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`,
             async () => {
-                console.log('[TaskScheduler] Running weekly task poll post...');
-                const channel = await getDefaultChannel(client, services);
-                if (channel) {
-                    await postAllTaskPolls(client, services);
-                }
+                await runTaskPollJob(client, services);
                 const pollExpr = `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`;
                 nextPollTime = getNextRunDate(pollExpr);
                 if (nextPollTime) SchedulerStatusReporter.onNewTrigger('Task Poll', nextPollTime);
@@ -218,11 +244,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             `0 ${defaultSchedule.pollHourUTC} * * ${(defaultSchedule.pollDay + 1) % 7}`,
             async () => {
-                console.log('[TaskScheduler] Closing poll and starting task event...');
-                const channel = await getDefaultChannel(client, services);
-                if (channel) {
-                    await startAllTaskEvents(client, services,);
-                }
+                await runTaskStartJob(client, services);
                 const eventExpr = `0 ${defaultSchedule.pollHourUTC} * * ${(defaultSchedule.pollDay + 1) % 7}`;
                 nextEventTime = getNextRunDate(eventExpr);
                 if (nextEventTime) SchedulerStatusReporter.onNewTrigger('Task Event', nextEventTime);
@@ -240,17 +262,8 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         cron.schedule(
             prizeExpression,
             async () => {
-                // Runs every Tuesday; draws on prize draw weeks
-                const now = new Date();
-                if (isPrizeDrawWeek(now)) {
-                    console.log('[TaskScheduler] Running prize draw...');
-                    try {
-                        await drawPrize(client, services);
-                    } catch (err) {
-                        console.error('[TaskScheduler] Prize draw job failed:', err);
-                    }
-                }
-                scheduleNextPrize(now);
+                await runPrizeDrawJob(client, services);
+                scheduleNextPrize(new Date());
             },
             jobOptions(guildId, 'prizeDraw')
         );

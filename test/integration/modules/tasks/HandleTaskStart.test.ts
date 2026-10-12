@@ -6,7 +6,7 @@ import { taskFactory } from "../../../factories.js";
 import { TaskCategory, type Task } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
-import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
+import { runTaskStartJob } from "../../../../src/modules/tasks/TaskScheduler.js";
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) =>
@@ -86,7 +86,7 @@ describe("/taskstart", () => {
 });
 
 describe("the scheduled task start job", () => {
-    test("starts the week's tasks from the polls", async ({ discord, services, factories, runScheduledJob }) => {
+    test("starts the week's tasks from the polls", async ({ discord, services, factories }) => {
         await services.repos.keywordRepo.addKeyword("Bustin");
         await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
             [SnowflakeUtil.generate().toString()]: "PVM002",
@@ -98,9 +98,8 @@ describe("the scheduled task start job", () => {
             [SnowflakeUtil.generate().toString()]: "MIN001",
         });
         discord.acceptMessages(IDS.channel);
-        await initTaskScheduler(discord.client, services);
 
-        await runScheduledJob(IDS.guild, "taskStart");
+        await runTaskStartJob(discord.client, services);
 
         const [announcement, ...eventPosts] = discord.messagesSentTo(IDS.channel);
         expect(announcement?.content).toContain("Include the keyword **Bustin** in your screenshots");
