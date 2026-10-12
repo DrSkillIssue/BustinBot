@@ -1,10 +1,11 @@
+import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { ChannelType } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, nextId } from "../../../tests/discord/payloads.js";
+import { IDS } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 import { getDefaultChannel, initTaskScheduler, stopTaskScheduler } from "../TaskScheduler.js";
 
@@ -71,7 +72,7 @@ describe("the task channel", () => {
     });
 
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
-        const category = nextId();
+        const category = SnowflakeUtil.generate().toString();
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
         discord.channel({ id: category, type: ChannelType.GuildCategory, guild_id: IDS.guild, name: "Tasks", position: 0, permission_overwrites: [] });
 

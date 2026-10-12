@@ -1,17 +1,18 @@
+import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags, PermissionFlagsBits, type APIEmbed } from "discord-api-types/v10";
 import type { ButtonInteraction } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, nextId, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 import type { Movie } from "../../../models/Movie.js";
 import { pollMovieWithList } from "../MoviePolls.js";
 import { addMovieWithStats } from "../MovieService.js";
 
-const SUBMITTER = nextId();
-const VOICE = nextId();
+const SUBMITTER = SnowflakeUtil.generate().toString();
+const VOICE = SnowflakeUtil.generate().toString();
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
 async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
@@ -188,8 +189,8 @@ describe("/listmovies", () => {
 describe("the movie list", () => {
     test("lets members remove their own movies and admins remove anyone's", async ({ discord, slash, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        const someoneElse = { member: apiMember({ user: apiUser({ id: nextId() }) }) };
-        const admin = { member: apiMember({ user: apiUser({ id: nextId() }), permissions: String(PermissionFlagsBits.Administrator) }) };
+        const someoneElse = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }) }) };
+        const admin = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }), permissions: String(PermissionFlagsBits.Administrator) }) };
 
         const refused = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], someoneElse);
         const byAdmin = await slash("removemovie", [{ type: 3, name: "title", value: "Inception" }], admin);

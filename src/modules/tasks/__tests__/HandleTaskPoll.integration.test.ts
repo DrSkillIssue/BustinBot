@@ -1,8 +1,9 @@
+import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, nextId } from "../../../tests/discord/payloads.js";
+import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
 import { Skill, TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
@@ -13,7 +14,7 @@ const options: Task[] = [buildTask({ id: "PVM001", shortName: "Zulrah" }), build
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
-    const messageId = overrides.messageId ?? "100000000000000500";
+    const messageId = overrides.messageId ?? SnowflakeUtil.generate().toString();
     const poll = buildTaskPoll({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
     await services.repos.taskRepo.createTaskPoll(poll);
     return poll;
@@ -84,7 +85,7 @@ describe("voting in a task poll", () => {
     test("keeps counting every vote on a poll posted before the bot restarted", async ({ discord, interact, services }) => {
         const poll = await storeOpenPoll(services);
         discord.acceptMessageEdits(IDS.channel);
-        const voters = [nextId(), nextId(), nextId()];
+        const voters = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
         for (const voter of voters) {
             const click = await interact(vote(poll, "PVM001", voter));
@@ -96,7 +97,7 @@ describe("voting in a task poll", () => {
 
     test("refuses votes once the poll has closed or its time is up", async ({ discord, interact, services }) => {
         const closed = await storeOpenPoll(services, { isActive: false });
-        const expired = await storeOpenPoll(services, { messageId: "100000000000000501", endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
+        const expired = await storeOpenPoll(services, { messageId: SnowflakeUtil.generate().toString(), endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
 
         for (const poll of [closed, expired]) {
             const click = await interact(vote(poll, "PVM001"));
@@ -119,7 +120,7 @@ describe("voting in a task poll", () => {
 describe("closing a task poll", () => {
     test("happens when its winning task starts, and its message stops offering votes", async ({ discord, services }) => {
         await services.repos.taskRepo.seedTasks(options);
-        const poll = await storeOpenPoll(services, { votes: { [nextId()]: "PVM002" } });
+        const poll = await storeOpenPoll(services, { votes: { [SnowflakeUtil.generate().toString()]: "PVM002" } });
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
         discord.message(apiMessage({ id: poll.messageId }));

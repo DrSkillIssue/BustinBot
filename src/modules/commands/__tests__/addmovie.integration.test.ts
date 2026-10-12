@@ -1,9 +1,10 @@
+import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, nextId, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie } from "../../../tests/fakes/builders.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
@@ -56,7 +57,7 @@ describe("/addmovie", () => {
     });
 
     test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
-        const lister = nextId();
+        const lister = SnowflakeUtil.generate().toString();
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
         await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
         tmdbMovie(http, reloaded, 138, "Lana Wachowski");

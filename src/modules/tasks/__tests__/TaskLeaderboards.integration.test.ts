@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import {
     ensureTaskLeaderboardsInitialized,
@@ -10,6 +11,8 @@ import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
+
+const [oldPeriodMember, overlapMember, upgradedMember] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
     await services.repos.taskRepo.createTaskEvent(
@@ -91,25 +94,25 @@ describe("TaskLeaderboards periodic submissions", () => {
         for (const [id] of weeks.slice(0, 4)) {
             await registerPeriodicTaskEvent(services, id);
         }
-        await recordPeriodicTierChange(services, "week-4", { userId: "old-period-user", points: 6, from: null, to: SubmissionStatus.Gold });
+        await recordPeriodicTierChange(services, "week-4", { userId: oldPeriodMember, points: 6, from: null, to: SubmissionStatus.Gold });
         await registerPeriodicTaskEvent(services, "week-5");
-        await recordPeriodicTierChange(services, "week-5", { userId: "overlap-user", points: 3, from: null, to: SubmissionStatus.Silver });
+        await recordPeriodicTierChange(services, "week-5", { userId: overlapMember, points: 3, from: null, to: SubmissionStatus.Silver });
 
         const finalising = await periodic(services);
-        expect(finalising?.points).toEqual({ "old-period-user": 6 });
+        expect(finalising?.points).toEqual({ [oldPeriodMember]: 6 });
         // The leaderboard starts at its first period
         const firstPeriod = 1;
         expect(finalising?.period?.index).toBe(firstPeriod);
 
         const finalised = await finalizePeriodicLeaderboard(services, firstPeriod);
 
-        expect(finalised?.placements.first).toEqual([{ userId: "old-period-user", points: 6 }]);
+        expect(finalised?.placements.first).toEqual([{ userId: oldPeriodMember, points: 6 }]);
         const stored = await periodic(services);
-        expect(stored?.completedPeriod?.topThree).toEqual([{ userId: "old-period-user", points: 6 }]);
-        expect(stored?.completedPeriod?.topTen).toEqual([{ userId: "old-period-user", points: 6 }]);
+        expect(stored?.completedPeriod?.topThree).toEqual([{ userId: oldPeriodMember, points: 6 }]);
+        expect(stored?.completedPeriod?.topTen).toEqual([{ userId: oldPeriodMember, points: 6 }]);
         expect(stored?.period?.eventIds).toEqual(["week-5"]);
-        expect(stored?.points).toEqual({ "overlap-user": 3 });
-        expect(stored?.tierCounts).toEqual({ "overlap-user": { silver: 1 } });
+        expect(stored?.points).toEqual({ [overlapMember]: 3 });
+        expect(stored?.tierCounts).toEqual({ [overlapMember]: { silver: 1 } });
         expect(await finalizePeriodicLeaderboard(services, firstPeriod)).toBeNull();
     });
 
@@ -121,13 +124,13 @@ describe("TaskLeaderboards periodic submissions", () => {
         await registerPeriodicTaskEvent(services, "week-1");
         await registerPeriodicTaskEvent(services, "week-2");
         for (const eventId of ["week-1", "week-2"]) {
-            await recordPeriodicTierChange(services, eventId, { userId: "upgraded-user", points: 1, from: null, to: SubmissionStatus.Bronze });
-            await recordPeriodicTierChange(services, eventId, { userId: "upgraded-user", points: 2, from: SubmissionStatus.Bronze, to: SubmissionStatus.Silver });
-            await recordPeriodicTierChange(services, eventId, { userId: "upgraded-user", points: 3, from: SubmissionStatus.Silver, to: SubmissionStatus.Gold });
+            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 1, from: null, to: SubmissionStatus.Bronze });
+            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 2, from: SubmissionStatus.Bronze, to: SubmissionStatus.Silver });
+            await recordPeriodicTierChange(services, eventId, { userId: upgradedMember, points: 3, from: SubmissionStatus.Silver, to: SubmissionStatus.Gold });
         }
 
         const stored = await periodic(services);
-        expect(stored?.points).toEqual({ "upgraded-user": 12 });
-        expect(stored?.tierCounts).toEqual({ "upgraded-user": { bronze: 0, silver: 0, gold: 2 } });
+        expect(stored?.points).toEqual({ [upgradedMember]: 12 });
+        expect(stored?.tierCounts).toEqual({ [upgradedMember]: { bronze: 0, silver: 0, gold: 2 } });
     });
 });

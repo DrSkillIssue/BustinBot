@@ -1,10 +1,11 @@
+import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
-import { IDS, apiGuildMember, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildLeaderboardPeriod, buildPeriodicLeaderboard, buildUserStats } from "../../../tests/fakes/builders.js";
 import { applyTaskMilestoneRoles } from "../TaskMilestones.js";
 import { awardTaskChampionRoles } from "../TaskLeaderboards.js";
 
-const member = nextId();
+const member = SnowflakeUtil.generate().toString();
 const participant = apiRole({ name: "Task Participant" });
 const enthusiast = apiRole({ name: "Task Enthusiast" });
 const expert = apiRole({ name: "Task Expert" });
@@ -52,8 +53,8 @@ describe("champion roles", () => {
         const second = apiRole({ name: "Task Champion (2nd)" });
         for (const role of [first, second]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: first.id, taskChampionSecond: second.id } });
-        const previousChampion = nextId();
-        const runnerUp = nextId();
+        const previousChampion = SnowflakeUtil.generate().toString();
+        const runnerUp = SnowflakeUtil.generate().toString();
         // Champions are awarded once their period has ended and the next one has begun
         const endedPeriod = 3;
         await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({

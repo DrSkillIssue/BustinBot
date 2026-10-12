@@ -1,5 +1,6 @@
+import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
-import { IDS, nextId } from '../../../tests/discord/payloads.js';
+import { IDS } from '../../../tests/discord/payloads.js';
 import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus, type SubmissionTier } from '../../../models/TaskSubmission.js';
@@ -7,7 +8,8 @@ import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmula
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
 
 const test = base.extend('repo', ({ db }) => new TaskRepository(db, IDS.guild));
-const otherUser = nextId();
+const otherUser = SnowflakeUtil.generate().toString();
+const reviewer = SnowflakeUtil.generate().toString();
 
 describe('TaskRepository tasks', () => {
     test('creates, reads and lists tasks by category', async ({ repo }) => {
@@ -68,7 +70,7 @@ describe('TaskRepository polls', () => {
         await repo.createTaskPoll(buildTaskPoll());
 
         await Promise.all(
-            Array.from({ length: 5 }, (_, voter) => repo.voteInPollOnce('poll-1', `user-${voter}`, 'PVM001'))
+            Array.from({ length: 5 }, () => repo.voteInPollOnce('poll-1', SnowflakeUtil.generate().toString(), 'PVM001'))
         );
 
         expect(Object.keys((await repo.getTaskPollById('poll-1'))?.votes ?? {})).toHaveLength(5);
@@ -158,7 +160,7 @@ describe('TaskRepository submission drafts', () => {
 });
 
 describe('TaskRepository reviews', () => {
-    const approve = (submissionId: string, decision: SubmissionTier) => ({ submissionId, reviewedBy: 'admin-1', decision });
+    const approve = (submissionId: string, decision: SubmissionTier) => ({ submissionId, reviewedBy: reviewer, decision });
 
     test('approves a pending submission, moving the task\'s completion counts to the member\'s new tier', async ({ repo }) => {
         await repo.createTaskEvent(buildTaskEvent());
@@ -168,7 +170,7 @@ describe('TaskRepository reviews', () => {
         expect(await repo.reviewSubmission(approve('first', SubmissionStatus.Bronze))).toMatchObject({ result: 'reviewed', heldTier: null });
         expect(await repo.reviewSubmission(approve('upgrade', SubmissionStatus.Gold))).toMatchObject({ result: 'reviewed', heldTier: SubmissionStatus.Bronze });
 
-        expect(await repo.getSubmissionById('upgrade')).toMatchObject({ status: 'gold', reviewedBy: 'admin-1', reviewedAt: expect.any(Date), prizeRolls: 1 });
+        expect(await repo.getSubmissionById('upgrade')).toMatchObject({ status: 'gold', reviewedBy: reviewer, reviewedAt: expect.any(Date), prizeRolls: 1 });
         expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({
             completionCounts: { bronze: 0, silver: 0, gold: 1 },
             completedUserIds: [IDS.user],
@@ -191,9 +193,9 @@ describe('TaskRepository reviews', () => {
         await repo.createSubmission(buildTaskSubmission({ id: 'held', status: SubmissionStatus.Bronze }));
         await repo.createSubmission(buildTaskSubmission({ id: 'retry' }));
 
-        await repo.reviewSubmission({ submissionId: 'retry', reviewedBy: 'admin-1', decision: SubmissionStatus.Rejected, rejectionReason: 'No keyword' });
+        await repo.reviewSubmission({ submissionId: 'retry', reviewedBy: reviewer, decision: SubmissionStatus.Rejected, rejectionReason: 'No keyword' });
 
-        expect(await repo.getSubmissionById('retry')).toMatchObject({ status: 'rejected', rejectionReason: 'No keyword', reviewedBy: 'admin-1' });
+        expect(await repo.getSubmissionById('retry')).toMatchObject({ status: 'rejected', rejectionReason: 'No keyword', reviewedBy: reviewer });
         expect(await repo.getTaskEventById('PVM001-20260105')).toMatchObject({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] });
     });
 

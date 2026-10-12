@@ -1,13 +1,14 @@
+import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMessage, apiUser, nextId, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, apiUser, withRoles } from "../../../tests/discord/payloads.js";
 import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
 
 const movieAdmin = withRoles(IDS.roles.movieAdmin);
-const SUBMITTER = nextId();
-const ANNOUNCEMENT = nextId();
+const SUBMITTER = SnowflakeUtil.generate().toString();
+const ANNOUNCEMENT = SnowflakeUtil.generate().toString();
 
 async function storeTonight(services: ServiceContainer, overrides = {}) {
     const movie = buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, selectedAt: new Date() });
@@ -38,7 +39,7 @@ describe("/endmovie", () => {
 
 describe("/closemoviepoll", () => {
     test("closes the poll and announces the winner in the movie night channel", async ({ discord, slash, services }) => {
-        const poll = buildMoviePoll({ options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { a: "movie-2", b: "movie-2" } });
+        const poll = buildMoviePoll({ options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })], votes: { [SnowflakeUtil.generate().toString()]: "movie-2", [SnowflakeUtil.generate().toString()]: "movie-2" } });
         await services.repos.movieRepo.createPoll(poll);
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);

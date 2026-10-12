@@ -1,10 +1,11 @@
+import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { buildPrizeDraw } from '../../../tests/fakes/builders.js';
-import { IDS, nextId } from '../../../tests/discord/payloads.js';
+import { IDS } from '../../../tests/discord/payloads.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
 
 const test = base.extend('repo', ({ db }) => new PrizeDrawRepository(db, IDS.guild));
-const otherUser = nextId();
+const otherUser = SnowflakeUtil.generate().toString();
 
 describe('PrizeDrawRepository', () => {
     test('stores draws and lists them newest first', async ({ repo }) => {

@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import {
     ApplicationCommandType,
     ChannelType,
@@ -67,13 +68,7 @@ const EPOCH = "2026-01-01T00:00:00.000Z";
 // Discord flag fields are bitfields; zero means no flags are set
 const NO_ROLE_FLAGS = 0 as RoleFlags;
 const NO_MEMBER_FLAGS = 0 as GuildMemberFlags;
-let sequence = 0;
 
-// Unique, increasing snowflake-shaped ids so separate payloads never collide
-export function nextId(): string {
-    sequence += 1;
-    return (200000000000000000n + BigInt(sequence)).toString();
-}
 
 export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
     return {
@@ -88,7 +83,7 @@ export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
 
 export function apiRole(overrides: Partial<APIRole> = {}): APIRole {
     return {
-        id: nextId(),
+        id: SnowflakeUtil.generate().toString(),
         name: "role",
         color: 0,
         colors: { primary_color: 0, secondary_color: null, tertiary_color: null },
@@ -127,7 +122,7 @@ export function apiTextChannel(
 // A guild voice channel, as the gateway and REST API send one
 export function apiVoiceChannel(overrides: Partial<APIGuildVoiceChannel> = {}): APIGuildVoiceChannel & { guild_id: string } {
     return {
-        id: nextId(),
+        id: SnowflakeUtil.generate().toString(),
         type: ChannelType.GuildVoice,
         guild_id: IDS.guild,
         name: "Movie Night",
@@ -271,10 +266,10 @@ export function chatInputInteraction(
 ): APIChatInputApplicationCommandGuildInteraction {
     return {
         ...interactionBase,
-        id: nextId(),
-        token: `token-${nextId()}`,
+        id: SnowflakeUtil.generate().toString(),
+        token: `token-${SnowflakeUtil.generate().toString()}`,
         type: InteractionType.ApplicationCommand,
-        data: { id: nextId(), name, type: ApplicationCommandType.ChatInput, options, ...(resolved ? { resolved } : {}) },
+        data: { id: SnowflakeUtil.generate().toString(), name, type: ApplicationCommandType.ChatInput, options, ...(resolved ? { resolved } : {}) },
         channel: interactionChannel(),
         channel_id: IDS.channel,
         member: apiMember(),
@@ -290,8 +285,8 @@ export function buttonInteraction(
     const data: APIMessageButtonInteractionData = { custom_id: customId, component_type: ComponentType.Button };
     return {
         ...interactionBase,
-        id: nextId(),
-        token: `token-${nextId()}`,
+        id: SnowflakeUtil.generate().toString(),
+        token: `token-${SnowflakeUtil.generate().toString()}`,
         type: InteractionType.MessageComponent,
         data,
         message,
@@ -309,8 +304,8 @@ function selectInteraction(
 ): APIMessageComponentSelectMenuInteraction {
     return {
         ...interactionBase,
-        id: nextId(),
-        token: `token-${nextId()}`,
+        id: SnowflakeUtil.generate().toString(),
+        token: `token-${SnowflakeUtil.generate().toString()}`,
         type: InteractionType.MessageComponent,
         data,
         message,
@@ -357,8 +352,8 @@ export function modalSubmitInteraction(
 ): APIModalSubmitGuildInteraction {
     return {
         ...interactionBase,
-        id: nextId(),
-        token: `token-${nextId()}`,
+        id: SnowflakeUtil.generate().toString(),
+        token: `token-${SnowflakeUtil.generate().toString()}`,
         type: InteractionType.ModalSubmit,
         data: {
             custom_id: customId,
@@ -376,7 +371,7 @@ export function modalSubmitInteraction(
 
 export function apiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
     return {
-        id: nextId(),
+        id: SnowflakeUtil.generate().toString(),
         channel_id: IDS.channel,
         author: apiUser({ id: IDS.bot, username: "BustinBot", bot: true }),
         content: "",
@@ -408,7 +403,7 @@ export function messageCreate(content: string, overrides: Partial<GatewayMessage
 
 // A file attached to a message, stored on Discord's CDN
 export function apiAttachment(overrides: Partial<APIAttachment> = {}): APIAttachment {
-    const id = overrides.id ?? nextId();
+    const id = overrides.id ?? SnowflakeUtil.generate().toString();
     const filename = overrides.filename ?? "screenshot.png";
     const url = `https://cdn.discordapp.com/attachments/${IDS.channel}/${id}/${filename}`;
     return {

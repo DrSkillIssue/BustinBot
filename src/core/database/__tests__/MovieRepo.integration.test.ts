@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { buildMovie, buildMovieEvent, buildMoviePoll } from '../../../tests/fakes/builders.js';
 import { IDS } from '../../../tests/discord/payloads.js';
@@ -69,7 +70,7 @@ describe('MovieRepository polls', () => {
         await repo.createPoll(buildMoviePoll());
 
         await Promise.all(
-            Array.from({ length: 5 }, (_, voter) => repo.voteInPollOnce('poll-1', `user-${voter}`, 'movie-1'))
+            Array.from({ length: 5 }, () => repo.voteInPollOnce('poll-1', SnowflakeUtil.generate().toString(), 'movie-1'))
         );
 
         expect(Object.keys((await repo.getActivePoll())?.votes ?? {})).toHaveLength(5);

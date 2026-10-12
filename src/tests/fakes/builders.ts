@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { TaskCategory, TaskType, type Task } from "../../models/Task.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import { newUserStats, type UserStats } from "../../models/UserStats.js";
@@ -10,7 +11,7 @@ import type { MoviePoll } from "../../models/MoviePoll.js";
 import type { TaskLeaderboard, TaskLeaderboardPeriod } from "../../models/TaskLeaderboard.js";
 import type { PrizeDraw } from "../../models/PrizeDraw.js";
 import type { BotStats } from "../../models/BotStats.js";
-import { IDS, nextId } from "../discord/payloads.js";
+import { IDS } from "../discord/payloads.js";
 
 // Builders return complete, valid domain objects; tests override only the fields they care about.
 
@@ -69,7 +70,7 @@ export function buildTaskPoll(overrides: Partial<TaskPoll> = {}): TaskPoll {
         category: TaskCategory.PvM,
         options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" }), buildTask({ id: "PVM003" })],
         // Posted in the harness guild's channel, so flows that fetch the poll message reach the harness
-        messageId: nextId(),
+        messageId: SnowflakeUtil.generate().toString(),
         channelId: IDS.channel,
         createdAt: new Date("2026-01-04T00:00:00.000Z"),
         endsAt: new Date("2026-01-05T00:00:00.000Z"),
@@ -124,7 +125,7 @@ export function buildMoviePoll(overrides: Partial<MoviePoll> = {}): MoviePoll {
         id: "poll-1",
         type: "movie",
         options: [buildMovie({ id: "movie-1" }), buildMovie({ id: "movie-2", title: "Arrival" })],
-        messageId: nextId(),
+        messageId: SnowflakeUtil.generate().toString(),
         channelId: IDS.channel,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         endsAt: new Date("2026-01-02T00:00:00.000Z"),

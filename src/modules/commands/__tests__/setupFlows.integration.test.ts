@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { ComponentType, InteractionResponseType, MessageFlags, type RESTPatchAPIWebhookWithTokenMessageJSONBody } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
@@ -7,8 +8,16 @@ import { GuildRepository } from "../../../core/database/GuildRepo.js";
 import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild } from "../../../tests/fakes/builders.js";
 
-const CHANNELS = { announce: "100000000000000201", log: "100000000000000202", archive: "100000000000000203" };
+const CHANNELS = { announce: SnowflakeUtil.generate().toString(), log: SnowflakeUtil.generate().toString(), archive: SnowflakeUtil.generate().toString() };
 const admin = withRoles(IDS.roles.admin);
+const MOVIE_ADMIN_ROLE = SnowflakeUtil.generate().toString();
+const MOVIE_USER_ROLE = SnowflakeUtil.generate().toString();
+const MOVIE_CHANNEL = SnowflakeUtil.generate().toString();
+const MOVIE_VOICE_CHANNEL = SnowflakeUtil.generate().toString();
+const TASK_ADMIN_ROLE = SnowflakeUtil.generate().toString();
+const TASK_USER_ROLE = SnowflakeUtil.generate().toString();
+const TASK_CHANNEL = SnowflakeUtil.generate().toString();
+const TASK_VERIFICATION_CHANNEL = SnowflakeUtil.generate().toString();
 
 // The select menus' custom ids and placeholders in a reply, row by row
 function menuPlaceholders(edit: RESTPatchAPIWebhookWithTokenMessageJSONBody | undefined): Record<string, string> {
@@ -136,10 +145,10 @@ describe("/setup choices", () => {
 
 describe("/moviesetup choices", () => {
     test("saves the movie roles and channels without touching other settings", async ({ discord, interact, db }) => {
-        await interact(roleSelectInteraction("moviesetup_admin_role", ["100000000000000301"]));
-        await interact(roleSelectInteraction("moviesetup_user_role", ["100000000000000302"]));
-        await interact(channelSelectInteraction("moviesetup_channel", ["100000000000000303"]));
-        await interact(channelSelectInteraction("moviesetup_voice_channel", ["100000000000000304"]));
+        await interact(roleSelectInteraction("moviesetup_admin_role", [MOVIE_ADMIN_ROLE]));
+        await interact(roleSelectInteraction("moviesetup_user_role", [MOVIE_USER_ROLE]));
+        await interact(channelSelectInteraction("moviesetup_channel", [MOVIE_CHANNEL]));
+        await interact(channelSelectInteraction("moviesetup_voice_channel", [MOVIE_VOICE_CHANNEL]));
 
         const confirm = await interact(buttonInteraction("moviesetup_confirm"));
 
@@ -148,13 +157,13 @@ describe("/moviesetup choices", () => {
             data: expect.objectContaining({ content: expect.stringContaining("Movie module setup complete!"), components: [] }),
         }]);
         expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({
-            roles: { ...buildGuild().roles, movieAdmin: "100000000000000301", movieUser: "100000000000000302" },
-            channels: { ...buildGuild().channels, movieNight: "100000000000000303", movieVC: "100000000000000304" },
+            roles: { ...buildGuild().roles, movieAdmin: MOVIE_ADMIN_ROLE, movieUser: MOVIE_USER_ROLE },
+            channels: { ...buildGuild().channels, movieNight: MOVIE_CHANNEL, movieVC: MOVIE_VOICE_CHANNEL },
         });
     });
 
     test("lists what is still missing when confirmed too early", async ({ discord, interact }) => {
-        await interact(channelSelectInteraction("moviesetup_channel", ["100000000000000303"]));
+        await interact(channelSelectInteraction("moviesetup_channel", [MOVIE_CHANNEL]));
 
         const confirm = await interact(buttonInteraction("moviesetup_confirm"));
 
@@ -167,10 +176,10 @@ describe("/moviesetup choices", () => {
 
 describe("/tasksetup choices", () => {
     test("saves the task roles, channels and leaderboard period", async ({ discord, interact, db }) => {
-        await interact(roleSelectInteraction("tasksetup_admin_role", ["100000000000000401"]));
-        await interact(roleSelectInteraction("tasksetup_user_role", ["100000000000000402"]));
-        await interact(channelSelectInteraction("tasksetup_channel", ["100000000000000403"]));
-        await interact(channelSelectInteraction("tasksetup_verification_channel", ["100000000000000404"]));
+        await interact(roleSelectInteraction("tasksetup_admin_role", [TASK_ADMIN_ROLE]));
+        await interact(roleSelectInteraction("tasksetup_user_role", [TASK_USER_ROLE]));
+        await interact(channelSelectInteraction("tasksetup_channel", [TASK_CHANNEL]));
+        await interact(channelSelectInteraction("tasksetup_verification_channel", [TASK_VERIFICATION_CHANNEL]));
         await interact(stringSelectInteraction("tasksetup_period_events", ["6"]));
 
         const confirm = await interact(buttonInteraction("tasksetup_confirm"));
@@ -180,14 +189,14 @@ describe("/tasksetup choices", () => {
             data: expect.objectContaining({ content: expect.stringContaining("Task module setup complete!"), components: [] }),
         }]);
         expect(await new GuildRepository(db).getGuild(IDS.guild)).toMatchObject({
-            roles: { ...buildGuild().roles, taskAdmin: "100000000000000401", taskUser: "100000000000000402" },
-            channels: { ...buildGuild().channels, taskChannel: "100000000000000403", taskVerification: "100000000000000404" },
+            roles: { ...buildGuild().roles, taskAdmin: TASK_ADMIN_ROLE, taskUser: TASK_USER_ROLE },
+            channels: { ...buildGuild().channels, taskChannel: TASK_CHANNEL, taskVerification: TASK_VERIFICATION_CHANNEL },
             taskSettings: { periodEvents: 6 },
         });
     });
 
     test("cancels without saving anything", async ({ discord, interact, db }) => {
-        await interact(roleSelectInteraction("tasksetup_admin_role", ["100000000000000401"]));
+        await interact(roleSelectInteraction("tasksetup_admin_role", [TASK_ADMIN_ROLE]));
 
         const cancel = await interact(buttonInteraction("tasksetup_cancel"));
 

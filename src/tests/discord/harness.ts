@@ -1,6 +1,6 @@
 import { EventEmitter, once } from "node:events";
 import { Collection } from "@discordjs/collection";
-import { Client, Events, type Interaction, type Message, type VoiceState } from "discord.js";
+import { Client, Events, type Interaction, type Message, type VoiceState, SnowflakeUtil } from "discord.js";
 import {
     WebSocketShardEvents,
     WebSocketShardStatus,
@@ -41,7 +41,7 @@ import {
 import type { Interceptable, MockAgent } from "undici";
 import type { MockInterceptor } from "undici/types/mock-interceptor.js";
 import { clientOptions } from "../../clientOptions.js";
-import { IDS, apiGuild, apiMessage, apiUser, nextId } from "./payloads.js";
+import { IDS, apiGuild, apiMessage, apiUser } from "./payloads.js";
 
 const API = "/api/v10";
 // Discord's error responses: the HTTP status and the JSON error body it sends
@@ -361,7 +361,7 @@ export class DiscordHarness {
             .intercept({ path: `${API}/applications/${IDS.application}/guilds/${guildId}/commands`, method: "PUT" })
             .reply(this.answered(({ body }) => {
                 const commands: object[] = parseBody(body);
-                const stored = commands.map((command) => ({ ...command, id: nextId(), application_id: IDS.application, guild_id: guildId, version: nextId() }));
+                const stored = commands.map((command) => ({ ...command, id: SnowflakeUtil.generate().toString(), application_id: IDS.application, guild_id: guildId, version: SnowflakeUtil.generate().toString() }));
                 return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
             }))
             .persist();
@@ -369,7 +369,7 @@ export class DiscordHarness {
 
     // Discord opening a DM with a user and accepting messages in it; returns the DM channel's id
     acceptDirectMessages(userId: string): string {
-        const dmChannelId = nextId();
+        const dmChannelId = SnowflakeUtil.generate().toString();
         const dm: APIDMChannel = { id: dmChannelId, type: ChannelType.DM, name: null, last_message_id: null, recipients: [apiUser({ id: userId })] };
         this.api
             .intercept({
@@ -406,7 +406,7 @@ export class DiscordHarness {
 
     // A member who doesn't accept DMs: Discord opens the DM channel, then refuses messages in it
     refuseDirectMessages(userId: string): void {
-        const dmChannelId = nextId();
+        const dmChannelId = SnowflakeUtil.generate().toString();
         const dm: APIDMChannel = { id: dmChannelId, type: ChannelType.DM, name: null, last_message_id: null, recipients: [apiUser({ id: userId })] };
         this.api
             .intercept({

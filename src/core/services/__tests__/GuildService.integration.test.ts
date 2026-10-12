@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test as base } from "../../../tests/fixtures.js";
 import { GuildService } from "../GuildService.js";
 import { GuildRepository } from "../../database/GuildRepo.js";
@@ -9,6 +10,8 @@ const test = base
     .extend("guilds", ({ repo }) => new GuildService(repo));
 
 const guildId = IDS.guild;
+const admin = SnowflakeUtil.generate().toString();
+const newGuild = SnowflakeUtil.generate().toString();
 
 describe("GuildService", () => {
     test("serves a guild from its cache after the first read", async ({ repo, guilds, db }) => {
@@ -41,10 +44,10 @@ describe("GuildService", () => {
         }));
         await guilds.get(guildId);
 
-        await guilds.updateToggle(guildId, "toggles.taskScheduler", true, "admin-1");
+        await guilds.updateToggle(guildId, "toggles.taskScheduler", true, admin);
 
         const expected = { toggles: { taskScheduler: true, leaguesEnabled: true, taskLeaderboard: false }, timezone: "Australia/Melbourne" };
-        expect(await guilds.get(guildId)).toMatchObject({ ...expected, updatedBy: "admin-1" });
+        expect(await guilds.get(guildId)).toMatchObject({ ...expected, updatedBy: admin });
         expect(await repo.getGuild(guildId)).toMatchObject(expected);
     });
 
@@ -66,11 +69,11 @@ describe("GuildService", () => {
     });
 
     test("creates a guild record only when one does not exist", async ({ repo, guilds }) => {
-        await guilds.ensureExists("new-guild", "admin-1");
-        expect(await repo.getGuild("new-guild")).toMatchObject({ id: "new-guild", updatedBy: "admin-1", setupComplete: { core: false } });
+        await guilds.ensureExists(newGuild, admin);
+        expect(await repo.getGuild(newGuild)).toMatchObject({ id: newGuild, updatedBy: admin, setupComplete: { core: false } });
 
         await repo.initGuild(guildId, buildGuild({ timezone: "Australia/Melbourne" }));
-        await guilds.ensureExists(guildId, "someone-else");
+        await guilds.ensureExists(guildId, IDS.user);
         expect(await repo.getGuild(guildId)).toMatchObject({ timezone: "Australia/Melbourne", setupComplete: { core: true } });
     });
 });

@@ -1,16 +1,17 @@
+import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiMessage, modalSubmitInteraction, nextId } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
 
-const eventMessage = "100000000000000600";
-const pollMessage = "100000000000000601";
-const completer = nextId();
-const voter = nextId();
+const eventMessage = SnowflakeUtil.generate().toString();
+const pollMessage = SnowflakeUtil.generate().toString();
+const completer = SnowflakeUtil.generate().toString();
+const voter = SnowflakeUtil.generate().toString();
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
 async function storeRunningEvent(services: ServiceContainer, overrides = {}) {

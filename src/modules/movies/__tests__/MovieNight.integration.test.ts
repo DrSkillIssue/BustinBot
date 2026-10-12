@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import cron from "node-cron";
 import { DateTime } from "luxon";
 import { InteractionResponseType } from "discord-api-types/v10";
@@ -6,15 +7,15 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { GuildRepository } from "../../../core/database/GuildRepo.js";
-import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, nextId, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, stringSelectInteraction, withRoles } from "../../../tests/discord/payloads.js";
 import { buildGuild, buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
 import type { MovieEvent } from "../../../models/MovieEvent.js";
 import { startMovieScheduler, sweepMovieNight } from "../MovieScheduler.js";
 
-const VOICE = nextId();
-const SUBMITTER = nextId();
+const VOICE = SnowflakeUtil.generate().toString();
+const SUBMITTER = SnowflakeUtil.generate().toString();
 const movieUsers = apiRole({ name: "Movie Night" });
-const [present, joiner, leaver] = [nextId(), nextId(), nextId()];
+const [present, joiner, leaver] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
 // The guild's movie night set up as /moviesetup leaves it: the harness channel, a voice channel and a role to ping
 async function setUpMovieNight(discord: DiscordHarness, services: ServiceContainer): Promise<void> {
@@ -71,7 +72,7 @@ describe("scheduling a movie night", () => {
     test("points members at the running poll and stores a placeholder movie when none is chosen yet", async ({ discord, interact, services }) => {
         await setUpMovieNight(discord, services);
         const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
-        const pollChannel = nextId();
+        const pollChannel = SnowflakeUtil.generate().toString();
         await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), channelId: pollChannel }));
         discord.acceptMessages(IDS.channel);
 

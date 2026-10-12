@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags, type APIAttachment, type GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import type { Interaction } from "discord.js";
 import { DateTime } from "luxon";
@@ -6,17 +7,17 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
-import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction, nextId } from "../../../tests/discord/payloads.js";
+import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
 import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
 import { handleDirectMessage } from "../TaskInteractions.js";
 
 const EVENT = "PVM001-20260105-a1b2c3d4";
-const EVENT_POST = nextId();
-const REVIEW_POST = nextId();
-const SCREENSHOT_POST = nextId();
-const ARCHIVE = nextId();
-const reviewer = nextId();
+const EVENT_POST = SnowflakeUtil.generate().toString();
+const REVIEW_POST = SnowflakeUtil.generate().toString();
+const SCREENSHOT_POST = SnowflakeUtil.generate().toString();
+const ARCHIVE = SnowflakeUtil.generate().toString();
+const reviewer = SnowflakeUtil.generate().toString();
 const admin = { member: apiMember({ user: apiUser({ id: reviewer, username: "admin" }), roles: [IDS.roles.taskAdmin] }) };
 
 // The custom ids of the buttons the bot answered an interaction with

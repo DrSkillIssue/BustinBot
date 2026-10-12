@@ -1,12 +1,14 @@
+import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
-import { IDS, nextId } from '../../../tests/discord/payloads.js';
+import { IDS } from '../../../tests/discord/payloads.js';
 import { UserRepository } from '../UserRepo.js';
 import { buildUserStats } from '../../../tests/fakes/builders.js';
 import { newUserStats } from '../../../models/UserStats.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 
 const test = base.extend('repo', ({ db }) => new UserRepository(db, IDS.guild));
-const otherUser = nextId();
+const otherUser = SnowflakeUtil.generate().toString();
+const legacyUser = SnowflakeUtil.generate().toString();
 
 describe('UserRepository', () => {
     test('stores users under the guild and reads them back', async ({ repo, db }) => {
@@ -81,8 +83,8 @@ describe('UserRepository', () => {
     test('reads a member created by the legacy completion import as a full set of stats', async ({ repo, db }) => {
         // The shape src/scripts/importLegacySubmissions.ts wrote before it stored complete stats
         const importedAt = new Date('2025-10-29T00:00:00.000Z');
-        await db.doc(`guilds/${IDS.guild}/userStats/legacy-user`).set({ userId: 'legacy-user', legacyTasksCompleted: 12, createdAt: importedAt });
+        await db.doc(`guilds/${IDS.guild}/userStats/${legacyUser}`).set({ userId: legacyUser, legacyTasksCompleted: 12, createdAt: importedAt });
 
-        expect(await repo.getUserById('legacy-user')).toEqual({ ...newUserStats('legacy-user', importedAt), legacyTasksCompleted: 12 });
+        expect(await repo.getUserById(legacyUser)).toEqual({ ...newUserStats(legacyUser, importedAt), legacyTasksCompleted: 12 });
     });
 });

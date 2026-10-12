@@ -1,14 +1,15 @@
+import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { IDS, apiRole, apiUser, nextId } from "../../../tests/discord/payloads.js";
+import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
 import { buildPrizeDraw, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { PrizeDraw } from "../../../models/PrizeDraw.js";
 import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../HandlePrizeDraw.js";
 
-const [winner, second, third, fourth] = [nextId(), nextId(), nextId(), nextId()];
+const [winner, second, third, fourth] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
 // A finished task event and the submissions made for it
 async function storeEvent(services: ServiceContainer, id: string, endTime: DateTime, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
@@ -101,6 +102,7 @@ describe("a prize draw snapshot", () => {
     });
 
     test("carries over only from the most recent rolled draw", async ({ services }) => {
+        const members = { older: SnowflakeUtil.generate().toString(), latest: SnowflakeUtil.generate().toString() };
         for (const [id, endDaysAgo] of [["older", 42], ["latest", 21]] as const) {
             const end = DateTime.now().minus({ days: endDaysAgo });
             await services.repos.prizeRepo.createPrizeDraw(storedDraw({
@@ -112,12 +114,12 @@ describe("a prize draw snapshot", () => {
                 taskEventIds: [`${id}-event`],
             }));
             await storeEvent(services, `${id}-event`, end, [
-                { userId: `${id}-member`, status: SubmissionStatus.Bronze, submittedAt: end.minus({ days: 1 }).toJSDate(), reviewedAt: end.plus({ hours: 36 }).toJSDate() },
+                { userId: members[id], status: SubmissionStatus.Bronze, submittedAt: end.minus({ days: 1 }).toJSDate(), reviewedAt: end.plus({ hours: 36 }).toJSDate() },
             ]);
         }
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-        expect((await snapshot(services)).participants).toEqual({ "latest-member": 1 });
+        expect((await snapshot(services)).participants).toEqual({ [members.latest]: 1 });
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
     });
 });

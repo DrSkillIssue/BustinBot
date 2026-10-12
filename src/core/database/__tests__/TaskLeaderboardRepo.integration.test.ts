@@ -1,3 +1,4 @@
+import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard } from '../../../tests/fakes/builders.js';
 import { IDS } from '../../../tests/discord/payloads.js';
@@ -16,7 +17,7 @@ describe('TaskLeaderboardRepository', () => {
     });
 
     test('replaces whole score maps on update so stale scores are cleared', async ({ repo }) => {
-        await repo.createLeaderboard(buildPeriodicLeaderboard({ points: { 'old-user': 6, [IDS.user]: 1 } }));
+        await repo.createLeaderboard(buildPeriodicLeaderboard({ points: { [SnowflakeUtil.generate().toString()]: 6, [IDS.user]: 1 } }));
 
         await repo.updateLeaderboard('periodic', { points: { [IDS.user]: 3 }, pendingPeriod: null });
 

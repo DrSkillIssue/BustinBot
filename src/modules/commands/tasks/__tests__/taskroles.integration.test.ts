@@ -1,14 +1,15 @@
+import { SnowflakeUtil } from "discord.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { ApplicationCommandOptionType, type APIApplicationCommandInteractionDataOption, type APIRole } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
-import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, nextId, withRoles } from "../../../../tests/discord/payloads.js";
+import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, withRoles } from "../../../../tests/discord/payloads.js";
 import { buildPeriodicLeaderboard, buildUserStats } from "../../../../tests/fakes/builders.js";
 import { GuildRepository } from "../../../../core/database/GuildRepo.js";
 import type { TaskMilestoneRole } from "../../../../models/Guild.js";
 
 const taskAdmin = withRoles(IDS.roles.taskAdmin);
-const member = nextId();
+const member = SnowflakeUtil.generate().toString();
 const NEUTRAL = 0x95a5a6;
 
 function sub(name: string, options: APIApplicationCommandInteractionDataOption[] = []): APIApplicationCommandInteractionDataOption[] {
