@@ -95,6 +95,7 @@ export type Interact = (payload: APIInteraction) => Promise<Interaction>;
 // - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
 // - prefix: sends a channel message through the real prefix command handler
 // - scheduledJobs: the node-cron jobs scheduled for a guild, by job name, with their cron patterns
+// - runScheduledJob: runs one of a guild's scheduled task jobs now, through node-cron, as when it comes due
 // - voice: delivers a member's voice state change and hands it to the guild's movie attendance, as the bot does
 export const test = base
     .extend("http", ({}, { onCleanup }) => {
@@ -185,6 +186,12 @@ export const test = base
                 .filter((job) => job.name?.startsWith(prefix))
                 .map((job) => [job.name!.slice(prefix.length), job.getPattern()]),
         );
+    })
+    .extend("runScheduledJob", () => async (guildId: string, job: string): Promise<void> => {
+        const name = `taskScheduler:${guildId}:${job}`;
+        const scheduled = [...cron.getTasks().values()].find((task) => task.name === name);
+        if (!scheduled) throw new Error(`No ${name} job is scheduled`);
+        await scheduled.execute();
     })
     .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
         const [oldState, newState] = await discord.voiceStateUpdate(state);

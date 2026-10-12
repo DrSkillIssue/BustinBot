@@ -6,6 +6,7 @@ import { taskFactory } from "../../../factories.js";
 import { TaskCategory, type Task } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
+import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
@@ -84,6 +85,23 @@ describe("/taskstart", () => {
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
             expect(await services.repos.taskRepo.getActiveTaskPollByCategory(category)).toBeNull();
         }
+    });
+});
+
+describe("the scheduled task start job", () => {
+    test("starts the week's tasks from the polls", async ({ discord, services, factories, runScheduledJob }) => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        await services.repos.keywordRepo.addKeyword("Bustin");
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
+            [SnowflakeUtil.generate().toString()]: "PVM002",
+        });
+        discord.acceptMessages(IDS.channel);
+        await initTaskScheduler(discord.client, services);
+
+        await runScheduledJob(IDS.guild, "taskStart");
+
+        expect(discord.messagesSentTo(IDS.channel)[0]?.content).toContain("**The new tasks are live!**");
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM002");
     });
 });
 

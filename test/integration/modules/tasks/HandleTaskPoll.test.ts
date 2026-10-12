@@ -7,6 +7,7 @@ import { taskFactory } from "../../../factories.js";
 import { Skill, TaskCategory } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../../../src/modules/tasks/HandleTaskPoll.js";
+import { initTaskScheduler } from "../../../../src/modules/tasks/TaskScheduler.js";
 import { startTaskEventForCategory } from "../../../../src/modules/tasks/HandleTaskStart.js";
 
 // A poll that is open in the harness channel, as stored when it was posted
@@ -71,6 +72,41 @@ describe("posting the weekly task polls", () => {
                 Duration.fromObject({ hours: 24 }).toMillis(),
             );
         }
+    });
+});
+
+describe("the scheduled task poll job", () => {
+    test("posts the task polls in the task channel", async ({ discord, services, factories, runScheduledJob }) => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        for (const id of ["PVM001", "PVM002", "PVM003"])
+            await factories.task.create({ id, category: TaskCategory.PvM });
+        discord.acceptMessages(IDS.channel);
+        await initTaskScheduler(discord.client, services);
+
+        await runScheduledJob(IDS.guild, "poll");
+
+        const [announcement, ...polls] = discord.messagesSentTo(IDS.channel);
+        expect(announcement?.content).toContain("**New task polls are live!**");
+        expect(polls).toHaveLength(1);
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toMatchObject({
+            isActive: true,
+        });
+    });
+
+    test("posts nothing when no task channel is configured", async ({
+        discord,
+        services,
+        factories,
+        runScheduledJob,
+    }) => {
+        for (const id of ["PVM001", "PVM002", "PVM003"])
+            await factories.task.create({ id, category: TaskCategory.PvM });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
+        await initTaskScheduler(discord.client, services);
+
+        await runScheduledJob(IDS.guild, "poll");
+
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
     });
 });
 
