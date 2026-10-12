@@ -1,6 +1,5 @@
 import cron, { type Logger } from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
-import { DateTime } from 'luxon';
 import { Client, TextChannel } from 'discord.js';
 import { postAllTaskPolls } from './HandleTaskPoll.js';
 import { startAllTaskEvents } from './HandleTaskStart.js';
@@ -120,16 +119,15 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
     nextPrizeTime = prizeTime;
 }
 
-// A Tuesday the prize draw runs on, under the calendar-week rule it replaced. Draws run every prizeFrequencyWeeks weeks
-// counted from it, which keeps them evenly spaced across new years; calendar week numbers restart each January and put
-// three weeks between two draws.
-const PRIZE_DRAW_ANCHOR = DateTime.fromISO('2026-10-13T00:00:00Z', { zone: 'utc' });
+export function getWeekNumber(d: Date): number {
+    const oneJan = new Date(d.getUTCFullYear(), 0, 1);
+    const millisInDay = 86400000;
+    return Math.ceil(((d.getTime() - oneJan.getTime()) / millisInDay + oneJan.getUTCDay() + 1) / 7);
+}
 
 // Whether the prize draw runs in the week of this date
-export function isPrizeDrawWeek(date: Date): boolean {
-    const { prizeFrequencyWeeks, prizeWeekOffset } = defaultSchedule;
-    const weeks = Math.floor(DateTime.fromJSDate(date, { zone: 'utc' }).diff(PRIZE_DRAW_ANCHOR, 'weeks').weeks) + prizeWeekOffset;
-    return ((weeks % prizeFrequencyWeeks) + prizeFrequencyWeeks) % prizeFrequencyWeeks === 0;
+function isPrizeDrawWeek(date: Date): boolean {
+    return ((getWeekNumber(date) + defaultSchedule.prizeWeekOffset) % defaultSchedule.prizeFrequencyWeeks) === 0;
 }
 
 // Snapshots the draw's entries, rolls a winner and announces them
