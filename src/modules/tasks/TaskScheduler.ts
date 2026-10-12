@@ -108,10 +108,43 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
     nextPrizeTime = prizeTime;
 }
 
-export function getWeekNumber(d: Date): number {
-    const oneJan = new Date(d.getUTCFullYear(), 0, 1);
-    const millisInDay = 86400000;
-    return Math.ceil(((d.getTime() - oneJan.getTime()) / millisInDay + oneJan.getUTCDay() + 1) / 7);
+// A Tuesday the prize draw ran on. Draws run every prizeFrequencyWeeks weeks counted from it, which keeps them evenly
+// spaced across new years; calendar week numbers restart each January and put three weeks between two draws.
+const PRIZE_DRAW_ANCHOR_MS = Date.UTC(2026, 9, 13);
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Whether the prize draw runs in the week of this date
+export function isPrizeDrawWeek(date: Date): boolean {
+    const { prizeFrequencyWeeks, prizeWeekOffset } = defaultSchedule;
+    const weeks = Math.floor((date.getTime() - PRIZE_DRAW_ANCHOR_MS) / WEEK_MS) + prizeWeekOffset;
+    return ((weeks % prizeFrequencyWeeks) + prizeFrequencyWeeks) % prizeFrequencyWeeks === 0;
+}
+
+// Snapshots the draw's entries, rolls a winner and announces them
+async function drawPrize(client: Client, services: ServiceContainer): Promise<void> {
+    const { prizeRepo, taskRepo } = services.repos;
+    const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
+    const winner = await rollWinnerForSnapshot(prizeRepo, snapshot.id, services);
+    if (!winner) {
+        console.log('[PrizeDraw] No eligible entries - skipping announcement.');
+        return;
+    }
+    const announced = await announcePrizeDrawWinner(client, services, prizeRepo, snapshot.id);
+    if (!announced) {
+        console.warn(`[PrizeDraw] Winner rolled but announcement failed for ${snapshot.id}.`);
+    }
+}
+
+// The prize draw job, which runs every Tuesday and draws on prize draw weeks
+export async function runPrizeDrawJob(client: Client, services: ServiceContainer, now: Date): Promise<void> {
+    if (!isPrizeDrawWeek(now)) return;
+
+    console.log('[TaskScheduler] Running prize draw...');
+    try {
+        await drawPrize(client, services);
+    } catch (err) {
+        console.error('[TaskScheduler] Prize draw job failed:', err);
+    }
 }
 
 export async function getDefaultChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
@@ -132,14 +165,7 @@ export async function getDefaultChannel(client: Client, services: ServiceContain
 export async function initTaskScheduler(client: Client, services: ServiceContainer): Promise<void> {
     console.log('[TaskScheduler] Initialising default task schedule...');
 
-    const { repos } = services;
-
-    // Shortcuts for readability
-    const taskRepo = repos.taskRepo;
-    const prizeRepo = repos.prizeRepo;
     const prizeExpression = `0 ${defaultSchedule.prizeHourUTC} * * ${defaultSchedule.prizeDay}`;
-    const isPrizeWeek = (date: Date) =>
-        ((getWeekNumber(date) + defaultSchedule.prizeWeekOffset) % defaultSchedule.prizeFrequencyWeeks) === 0;
 
     const { guildId } = services;
     await stopTaskScheduler(guildId);
@@ -174,16 +200,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
 
             if ((minute - 1) % (2 * T) === 0) {
                 console.log('[TaskScheduler] [TEST] Running prize draw...');
-                const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
-                const winner = await rollWinnerForSnapshot(prizeRepo, snapshot.id, services);
-                if (winner) {
-                    const announced = await announcePrizeDrawWinner(client, services, prizeRepo, snapshot.id);
-                    if (!announced) {
-                        console.warn(`[PrizeDraw] Winner rolled but announcement failed for ${snapshot.id}.`);
-                    }
-                } else {
-                    console.log("[PrizeDraw] No winner - no eligible entries.");
-                }
+                await drawPrize(client, services);
                 if (nextPrizeTime) {
                     SchedulerStatusReporter.onNewTrigger('[TEST] Prize Draw', nextPrizeTime);
                 }
@@ -226,7 +243,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         );
 
         const scheduleNextPrize = (reference: Date) => {
-            nextPrizeTime = getNextMatchingRunDate(prizeExpression, isPrizeWeek, reference);
+            nextPrizeTime = getNextMatchingRunDate(prizeExpression, isPrizeDrawWeek, reference);
             if (nextPrizeTime) {
                 SchedulerStatusReporter.onNewTrigger('Prize Draw', nextPrizeTime);
             }
@@ -236,28 +253,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
             prizeExpression,
             async () => {
                 const now = new Date();
-                if (!isPrizeWeek(now)) {
-                    scheduleNextPrize(now);
-                    return;
-                }
-
-                console.log('[TaskScheduler] Running prize draw...');
-                try {
-                    const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
-                    const winner = await rollWinnerForSnapshot(prizeRepo, snapshot.id, services);
-
-                    if (!winner) {
-                        console.log('[PrizeDraw] No eligible entries - skipping announcement.');
-                    } else {
-                        const announced = await announcePrizeDrawWinner(client, services, prizeRepo, snapshot.id);
-                        if (!announced) {
-                            console.warn(`[PrizeDraw] Winner rolled but announcement failed for ${snapshot.id}.`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[TaskScheduler] Prize draw job failed:', err);
-                }
-
+                await runPrizeDrawJob(client, services, now);
                 scheduleNextPrize(now);
             },
             jobOptions(guildId, 'prizeDraw')

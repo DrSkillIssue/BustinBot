@@ -9,6 +9,7 @@ import {
     generatePrizeDrawSnapshot,
     rollWinnerForSnapshot,
 } from "../../../../src/modules/tasks/HandlePrizeDraw.js";
+import { runPrizeDrawJob } from "../../../../src/modules/tasks/TaskScheduler.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -273,5 +274,37 @@ describe("announcing a prize draw winner", () => {
 
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] Announcement channel not found.");
         expect(discord.requests().filter((request) => request.method === "POST")).toEqual([]);
+    });
+});
+
+describe("the scheduled prize draw job", () => {
+    test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
+        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+        const taskUser = apiRole({ name: "Task User" });
+        await discord.addRole(IDS.guild, taskUser);
+        await services.guilds.update(IDS.guild, { roles: { taskUser: taskUser.id } });
+        discord.acceptMessages(IDS.channel);
+        const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
+
+        // A Tuesday the draw runs on
+        await runPrizeDrawJob(discord.client, services, new Date("2026-10-13T00:00:00Z"));
+
+        const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
+        expect(draw).toMatchObject({ winnerId: winner, totalEntries: 1 });
+        expect(discord.messagesSentTo(IDS.channel)).toHaveLength(1);
+        expect(discord.messagesSentTo(dm)).toHaveLength(1);
+    });
+
+    test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
+        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+
+        // The Tuesday after a draw
+        await runPrizeDrawJob(discord.client, services, new Date("2026-10-20T00:00:00Z"));
+
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
     });
 });
