@@ -1,4 +1,4 @@
-import { SnowflakeUtil } from "discord.js";
+import { randomUUID } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { FIRESTORE_SETTINGS } from "../src/core/database/firestore.js";
@@ -29,13 +29,14 @@ function emulatorTarget(): { host: string; projectId: string } {
     return { host, projectId };
 }
 
-// A database of its own in the emulator, so a test sees only the data it stores. The emulator creates a named
-// database "in response to any SDK or REST API calls to the emulator that reference a specific database"
-// (https://firebase.google.com/docs/emulator-suite/connect_firestore), and drops them all when the run ends.
+// A database of its own in the emulator, so a test sees only the data it stores. It is named by a random UUID, so tests
+// in parallel workers never share one. The emulator creates a named database "in response to any SDK or REST API calls
+// to the emulator that reference a specific database" (https://firebase.google.com/docs/emulator-suite/connect_firestore),
+// and drops them all when the run ends.
 export function newEmulatorDatabase(): Firestore {
     const { projectId } = emulatorTarget();
     const app = getApps().find((existing) => existing.name === APP_NAME) ?? initializeApp({ projectId }, APP_NAME);
-    const db = getFirestore(app, `test-${SnowflakeUtil.generate()}`);
+    const db = getFirestore(app, `test-${randomUUID()}`);
     // Same settings as production so tests see the same write behaviour
     db.settings(FIRESTORE_SETTINGS);
     return db;
