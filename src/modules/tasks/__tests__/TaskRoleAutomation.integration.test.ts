@@ -1,7 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { IDS, apiGuildMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
-import { buildLeaderboardPeriod, buildPeriodicLeaderboard, buildUserStats } from "../../../tests/fakes/builders.js";
+import { leaderboardPeriodFactory, periodicLeaderboardFactory, userStatsFactory } from "../../../tests/factories.js";
 import { applyTaskMilestoneRoles } from "../TaskMilestones.js";
 import { awardTaskChampionRoles } from "../TaskLeaderboards.js";
 
@@ -19,7 +19,7 @@ describe("milestone roles", () => {
     test("give a member the highest milestone they have reached, take the lower one away and tell them", async ({ discord, services }) => {
         for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
-        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }), roles: [participant.id] }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
         const dm = discord.acceptDirectMessages(member);
@@ -34,7 +34,7 @@ describe("milestone roles", () => {
     test("still give the role to a member who doesn't accept DMs", async ({ discord, services }) => {
         for (const role of [participant, enthusiast, expert]) await discord.addRole(IDS.guild, role);
         await services.guilds.update(IDS.guild, { taskSettings: { milestoneRoles } });
-        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedGold: 6 }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: member, tasksCompletedGold: 6 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
         discord.refuseDirectMessages(member);
@@ -57,8 +57,8 @@ describe("champion roles", () => {
         const runnerUp = SnowflakeUtil.generate().toString();
         // Champions are awarded once their period has ended and the next one has begun
         const endedPeriod = 3;
-        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({
-            period: buildLeaderboardPeriod({ index: endedPeriod + 1 }),
+        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build({
+            period: leaderboardPeriodFactory.build({ index: endedPeriod + 1 }),
             champions: { first: [previousChampion] },
         }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));

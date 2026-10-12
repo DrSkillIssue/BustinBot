@@ -3,7 +3,7 @@ import { uniformFloat64 } from 'pure-rand/distribution/uniformFloat64';
 import { xoroshiro128plus } from 'pure-rand/generator/xoroshiro128plus';
 import { pickWeightedRandom, selectTasksForCategory } from '../TaskSelector.js';
 import { Skill, TaskCategory } from '../../../models/Task.js';
-import { buildTask } from '../../../tests/fakes/builders.js';
+import { taskFactory } from '../../../tests/factories.js';
 
 // Math.random replaced by pure-rand's seeded generator, so large samples are random-looking but identical every run
 function seedRandom(seed: number): void {
@@ -14,7 +14,7 @@ function seedRandom(seed: number): void {
 describe('pickWeightedRandom', () => {
     test('favours tasks in proportion to their weight', () => {
         seedRandom(7);
-        const tasks = [buildTask({ id: 'common', weight: 75 }), buildTask({ id: 'rare', weight: 25 })];
+        const tasks = [taskFactory.build({ id: 'common', weight: 75 }), taskFactory.build({ id: 'rare', weight: 25 })];
 
         const picks = Array.from({ length: 4000 }, () => pickWeightedRandom(tasks, 1)[0]?.id);
 
@@ -23,7 +23,7 @@ describe('pickWeightedRandom', () => {
 
     test('never picks a task weighted zero while another task is left', () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
-        const tasks = [buildTask({ id: 'voted-out', weight: 0 }), buildTask({ id: 'normal', weight: 50 })];
+        const tasks = [taskFactory.build({ id: 'voted-out', weight: 0 }), taskFactory.build({ id: 'normal', weight: 50 })];
 
         expect(pickWeightedRandom(tasks, 1).map((task) => task.id)).toEqual(['normal']);
         expect(pickWeightedRandom(tasks, 2).map((task) => task.id)).toEqual(['normal', 'voted-out']);
@@ -31,7 +31,7 @@ describe('pickWeightedRandom', () => {
 
     test('picks each task at most once', () => {
         seedRandom(3);
-        const tasks = Array.from({ length: 5 }, (_, index) => buildTask({ id: `PVM00${index}` }));
+        const tasks = Array.from({ length: 5 }, (_, index) => taskFactory.build({ id: `PVM00${index}` }));
 
         const picked = pickWeightedRandom(tasks, 3).map((task) => task.id);
 
@@ -45,16 +45,16 @@ describe('pickWeightedRandom', () => {
 
 describe('selectTasksForCategory', () => {
     const skilling = [
-        buildTask({ id: 'WC1', category: TaskCategory.Skilling, skill: Skill.Woodcutting }),
-        buildTask({ id: 'WC2', category: TaskCategory.Skilling, skill: Skill.Woodcutting }),
-        buildTask({ id: 'FSH', category: TaskCategory.Skilling, skill: Skill.Fishing }),
-        buildTask({ id: 'MIN', category: TaskCategory.Skilling, skill: Skill.Mining }),
-        buildTask({ id: 'COO', category: TaskCategory.Skilling, skill: Skill.Cooking }),
+        taskFactory.build({ id: 'WC1', category: TaskCategory.Skilling, skill: Skill.Woodcutting }),
+        taskFactory.build({ id: 'WC2', category: TaskCategory.Skilling, skill: Skill.Woodcutting }),
+        taskFactory.build({ id: 'FSH', category: TaskCategory.Skilling, skill: Skill.Fishing }),
+        taskFactory.build({ id: 'MIN', category: TaskCategory.Skilling, skill: Skill.Mining }),
+        taskFactory.build({ id: 'COO', category: TaskCategory.Skilling, skill: Skill.Cooking }),
     ];
 
     test('offers three PvM tasks from the PvM tasks only', () => {
         seedRandom(11);
-        const tasks = [...skilling, ...Array.from({ length: 5 }, (_, index) => buildTask({ id: `PVM00${index}`, category: TaskCategory.PvM }))];
+        const tasks = [...skilling, ...Array.from({ length: 5 }, (_, index) => taskFactory.build({ id: `PVM00${index}`, category: TaskCategory.PvM }))];
 
         const selected = selectTasksForCategory(TaskCategory.PvM, tasks);
 

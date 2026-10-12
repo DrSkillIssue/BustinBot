@@ -5,7 +5,7 @@ import { describe, expect, test } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, modalSubmitInteraction, stringSelectInteraction } from "../../../tests/discord/payloads.js";
-import { buildMovie, buildMovieEvent, buildMoviePoll } from "../../../tests/fakes/builders.js";
+import { movieFactory, movieEventFactory, moviePollFactory } from "../../../tests/factories.js";
 import type { Movie } from "../../../models/Movie.js";
 import { addMovieWithStats } from "../MovieService.js";
 
@@ -16,7 +16,7 @@ const pickMessage = apiMessage({ flags: MessageFlags.Ephemeral });
 
 // The movie list, oldest first, so list numbers are 1, 2, 3
 async function storeMovies(services: ServiceContainer, movies: Partial<Movie>[]): Promise<Movie[]> {
-    const stored = movies.map((movie, index) => buildMovie({ id: `movie-${index + 1}`, addedBy: SUBMITTER, addedAt: new Date(Date.UTC(2026, 0, index + 1)), ...movie }));
+    const stored = movies.map((movie, index) => movieFactory.build({ id: `movie-${index + 1}`, addedBy: SUBMITTER, addedAt: new Date(Date.UTC(2026, 0, index + 1)), ...movie }));
     for (const movie of stored) await services.repos.movieRepo.upsertMovie(movie);
     return stored;
 }
@@ -49,7 +49,7 @@ describe("a movie poll", () => {
     });
 
     test("counts a member's vote once, lets them change it, and shows the counts", async ({ discord, interact, services }) => {
-        const poll = buildMoviePoll();
+        const poll = moviePollFactory.build();
         await services.repos.movieRepo.createPoll(poll);
         const pollMessage = apiMessage({ id: poll.messageId, embeds: [{ title: "Inception", footer: { text: "🗳️ 0 votes" } }, { title: "Arrival", footer: { text: "🗳️ 0 votes" } }] });
         discord.acceptMessageEdits(IDS.channel);
@@ -73,7 +73,7 @@ describe("a movie poll", () => {
 describe("choosing the movie for movie night", () => {
     test("takes a list number or a close title, makes it the night's movie, posts it and tells who added it", async ({ discord, interact, services }) => {
         await storeMovies(services, [{ title: "Inception" }, { title: "Arrival" }]);
-        await services.repos.movieRepo.createMovieEvent(buildMovieEvent({ startTime: DateTime.now().plus({ days: 1 }).toJSDate(), movie: buildMovie({ id: "TBD", title: "TBD" }) }));
+        await services.repos.movieRepo.createMovieEvent(movieEventFactory.build({ startTime: DateTime.now().plus({ days: 1 }).toJSDate(), movie: movieFactory.build({ id: "TBD", title: "TBD" }) }));
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
@@ -200,7 +200,7 @@ describe("the movie list", () => {
     });
 
     test("counts each movie a member adds", async ({ services }) => {
-        await addMovieWithStats(buildMovie({ id: "movie-1", addedBy: SUBMITTER }), services);
+        await addMovieWithStats(movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }), services);
 
         expect(await services.repos.movieRepo.getMovieById("movie-1")).toMatchObject({ addedBy: SUBMITTER });
         expect(await services.repos.userRepo.getUserById(SUBMITTER)).toMatchObject({ moviesAdded: 1 });

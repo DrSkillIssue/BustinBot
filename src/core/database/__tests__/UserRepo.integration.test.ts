@@ -2,7 +2,7 @@ import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
 import { IDS } from '../../../tests/discord/payloads.js';
 import { UserRepository } from '../UserRepo.js';
-import { buildUserStats } from '../../../tests/fakes/builders.js';
+import { userStatsFactory } from '../../../tests/factories.js';
 import { newUserStats } from '../../../models/UserStats.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
 
@@ -12,7 +12,7 @@ const legacyUser = SnowflakeUtil.generate().toString();
 
 describe('UserRepository', () => {
     test('stores users under the guild and reads them back', async ({ repo, db }) => {
-        await repo.createUser(buildUserStats({ userId: IDS.user, commandsRun: 3 }));
+        await repo.createUser(userStatsFactory.build({ userId: IDS.user, commandsRun: 3 }));
 
         expect(await repo.getUserById(IDS.user)).toMatchObject({ userId: IDS.user, commandsRun: 3 });
         expect(await repo.getAllUsers()).toEqual([expect.objectContaining({ userId: IDS.user })]);
@@ -21,7 +21,7 @@ describe('UserRepository', () => {
     });
 
     test('updates and deletes a user', async ({ repo }) => {
-        await repo.createUser(buildUserStats({ userId: IDS.user, commandsRun: 3 }));
+        await repo.createUser(userStatsFactory.build({ userId: IDS.user, commandsRun: 3 }));
 
         await repo.updateUser(IDS.user, { commandsRun: 4 });
         expect(await repo.getUserById(IDS.user)).toMatchObject({ commandsRun: 4 });
@@ -65,8 +65,8 @@ describe('UserRepository', () => {
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('clears every user in the guild', async ({ repo }) => {
-        await repo.createUser(buildUserStats({ userId: IDS.user }));
-        await repo.createUser(buildUserStats({ userId: otherUser }));
+        await repo.createUser(userStatsFactory.build({ userId: IDS.user }));
+        await repo.createUser(userStatsFactory.build({ userId: otherUser }));
 
         await repo.clearAllUsers();
 
@@ -74,7 +74,7 @@ describe('UserRepository', () => {
     });
 
     test('reads a user back exactly as stored', async ({ repo }) => {
-        const user = buildUserStats({ userId: IDS.user, commandsRun: 3, lastActiveAt: new Date('2026-01-07T00:00:00.000Z') });
+        const user = userStatsFactory.build({ userId: IDS.user, commandsRun: 3, lastActiveAt: new Date('2026-01-07T00:00:00.000Z') });
         await repo.createUser(user);
 
         expect(await repo.getUserById(IDS.user)).toEqual(user);

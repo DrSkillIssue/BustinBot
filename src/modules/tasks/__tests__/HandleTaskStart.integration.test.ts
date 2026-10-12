@@ -3,7 +3,7 @@ import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
+import { taskFactory, taskPollFactory } from "../../../tests/factories.js";
 import { TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
@@ -11,13 +11,13 @@ import { startTaskEventForCategory } from "../HandleTaskStart.js";
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
-    [1, 2, 3].map((n) => buildTask({ id: `${prefix}00${n}`, category, taskName: `${prefix} task ${n}`, amtBronze: n, amtSilver: n * 2, amtGold: n * 3 }));
+    [1, 2, 3].map((n) => taskFactory.build({ id: `${prefix}00${n}`, category, taskName: `${prefix} task ${n}`, amtBronze: n, amtSilver: n * 2, amtGold: n * 3 }));
 
 // A poll for a category whose voting has just ended, with the given votes
 async function storePoll(services: ServiceContainer, category: TaskCategory, options: Task[], votes: Record<string, string>, overrides: Partial<TaskPoll> = {}): Promise<void> {
     const messageId = SnowflakeUtil.generate().toString();
     await services.repos.taskRepo.seedTasks(options);
-    await services.repos.taskRepo.createTaskPoll(buildTaskPoll({ id: messageId, messageId, category, options, votes, endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(), ...overrides }));
+    await services.repos.taskRepo.createTaskPoll(taskPollFactory.build({ id: messageId, messageId, category, options, votes, endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(), ...overrides }));
 }
 
 describe("/taskstart", () => {

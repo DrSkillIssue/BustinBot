@@ -7,7 +7,7 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, apiAttachment, apiGuildMember, apiMember, apiMessage, apiTextChannel, apiUser, buttonInteraction, directMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
-import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission, buildUserStats } from "../../../tests/fakes/builders.js";
+import { leaderboardPeriodFactory, lifetimeLeaderboardFactory, periodicLeaderboardFactory, taskFactory, taskEventFactory, taskSubmissionFactory, userStatsFactory } from "../../../tests/factories.js";
 import { SubmissionStatus, type TaskSubmission } from "../../../models/TaskSubmission.js";
 import { handleDirectMessage } from "../TaskInteractions.js";
 
@@ -27,9 +27,9 @@ function offeredButtons(discord: DiscordHarness, interaction: Interaction): stri
 
 // This week's task, posted in the task channel
 async function storeEvent(services: ServiceContainer) {
-    const event = buildTaskEvent({
+    const event = taskEventFactory.build({
         id: EVENT,
-        task: buildTask({ id: "PVM001", taskName: "Kill Zulrah" }),
+        task: taskFactory.build({ id: "PVM001", taskName: "Kill Zulrah" }),
         startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
         endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         channelId: IDS.channel,
@@ -41,7 +41,7 @@ async function storeEvent(services: ServiceContainer) {
 
 // A submission waiting in the verification channel for review
 async function storePendingSubmission(services: ServiceContainer, overrides: Partial<TaskSubmission> = {}): Promise<TaskSubmission> {
-    const submission = buildTaskSubmission({
+    const submission = taskSubmissionFactory.build({
         id: "submission-1",
         userId: IDS.user,
         taskEventId: EVENT,
@@ -57,14 +57,14 @@ async function storePendingSubmission(services: ServiceContainer, overrides: Par
 
 // A member's approval already counted, as it was stored when it was approved
 async function storeApproval(services: ServiceContainer, tier: SubmissionStatus.Bronze | SubmissionStatus.Silver) {
-    await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() }));
+    await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: `held-${tier}`, userId: IDS.user, taskEventId: EVENT, status: tier, reviewedAt: new Date() }));
     await services.repos.taskRepo.createTaskEvent({
         ...(await services.repos.taskRepo.getTaskEventById(EVENT))!,
         completionCounts: { bronze: tier === SubmissionStatus.Bronze ? 1 : 0, silver: tier === SubmissionStatus.Silver ? 1 : 0, gold: 0 },
         completedUserIds: [IDS.user],
     });
     const field = tier === SubmissionStatus.Bronze ? "tasksCompletedBronze" : "tasksCompletedSilver";
-    await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, [field]: 1 }));
+    await services.repos.userRepo.createUser(userStatsFactory.build({ userId: IDS.user, [field]: 1 }));
 }
 
 // Discord's side of what follows a review: the member's DM, the archive copy made from the review post's
@@ -300,11 +300,11 @@ describe("approving a submission", () => {
     test("moves the member's counts, stats and points up to a higher tier rather than adding to them", async ({ discord, interact, services }) => {
         await storeEvent(services);
         await storeApproval(services, SubmissionStatus.Bronze);
-        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({
+        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build({
             points: { [IDS.user]: 1 }, tierCounts: { [IDS.user]: { bronze: 1, silver: 0, gold: 0 } },
-            period: buildLeaderboardPeriod({ eventIds: [EVENT] }),
+            period: leaderboardPeriodFactory.build({ eventIds: [EVENT] }),
         }));
-        await services.repos.taskLeaderboardRepo.createLeaderboard(buildLifetimeLeaderboard({ points: { [IDS.user]: 1 } }));
+        await services.repos.taskLeaderboardRepo.createLeaderboard(lifetimeLeaderboardFactory.build({ points: { [IDS.user]: 1 } }));
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
 
@@ -320,7 +320,7 @@ describe("approving a submission", () => {
 
     test("starts the lifetime leaderboard from the member's stats before this approval", async ({ discord, interact, services }) => {
         await storeEvent(services);
-        await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedBronze: 2 }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: IDS.user, tasksCompletedBronze: 2 }));
         await storePendingSubmission(services);
         await acceptReviewEffects(discord, services);
 

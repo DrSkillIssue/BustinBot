@@ -7,7 +7,7 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import { createServiceContainer } from "../../../core/services/ServiceFactory.js";
 import { IDS, apiGuild, apiMessage, apiRole, apiTextChannel, apiUser, apiVoiceChannel, apiVoiceState, modalSubmitInteraction, stringSelectInteraction, apiMember } from "../../../tests/discord/payloads.js";
-import { buildMovie, buildMovieEvent, buildMoviePoll, buildUserStats } from "../../../tests/fakes/builders.js";
+import { movieFactory, movieEventFactory, moviePollFactory, userStatsFactory } from "../../../tests/factories.js";
 import type { MovieEvent } from "../../../models/MovieEvent.js";
 import { startMovieScheduler, sweepMovieNight } from "../MovieScheduler.js";
 
@@ -27,7 +27,7 @@ async function setUpMovieNight(discord: DiscordHarness, services: ServiceContain
 }
 
 async function storeNight(services: ServiceContainer, overrides: Partial<MovieEvent> = {}): Promise<MovieEvent> {
-    const event = buildMovieEvent({ movie: buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, runtime: 30 }), voiceChannelId: VOICE, ...overrides });
+    const event = movieEventFactory.build({ movie: movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER, runtime: 30 }), voiceChannelId: VOICE, ...overrides });
     await services.repos.movieRepo.createMovieEvent(event);
     return event;
 }
@@ -46,11 +46,11 @@ describe("scheduling a movie night", () => {
         const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
         const start = DateTime.fromISO(`${date}T20:30:00.000Z`);
         const movies = services.repos.movieRepo;
-        await movies.upsertMovie(buildMovie({ id: "old-pick", title: "Old Pick", selectedAt: DateTime.now().minus({ hours: 2 }).toJSDate() }));
-        await movies.upsertMovie(buildMovie({ id: "latest-pick", title: "Latest Pick", selectedAt: DateTime.now().minus({ hours: 1 }).toJSDate() }));
-        await movies.upsertMovie(buildMovie({ id: "watched", title: "Watched", watched: true, selectedAt: new Date() }));
+        await movies.upsertMovie(movieFactory.build({ id: "old-pick", title: "Old Pick", selectedAt: DateTime.now().minus({ hours: 2 }).toJSDate() }));
+        await movies.upsertMovie(movieFactory.build({ id: "latest-pick", title: "Latest Pick", selectedAt: DateTime.now().minus({ hours: 1 }).toJSDate() }));
+        await movies.upsertMovie(movieFactory.build({ id: "watched", title: "Watched", watched: true, selectedAt: new Date() }));
         await storeNight(services, { id: "previous" });
-        await movies.createPoll(buildMoviePoll({ endsAt: start.plus({ hours: 1 }).toJSDate() }));
+        await movies.createPoll(moviePollFactory.build({ endsAt: start.plus({ hours: 1 }).toJSDate() }));
         discord.acceptMessages(IDS.channel);
 
         const submit = await interact(modalSubmitInteraction(`movienight-time-${date}`, { "start-time": "20:30" }));
@@ -72,7 +72,7 @@ describe("scheduling a movie night", () => {
         await setUpMovieNight(discord, services);
         const date = DateTime.utc().plus({ days: 2 }).toISODate()!;
         const pollChannel = SnowflakeUtil.generate().toString();
-        await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), channelId: pollChannel }));
+        await services.repos.movieRepo.createPoll(moviePollFactory.build({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), channelId: pollChannel }));
         discord.acceptMessages(IDS.channel);
 
         await interact(modalSubmitInteraction(`movienight-time-${date}`, { "start-time": "21:00" }));
@@ -166,13 +166,13 @@ describe("the movie night sweep", () => {
 
     test("closes the poll once its time is up, picks the winner and announces it once", async ({ discord, services }) => {
         await setUpMovieNight(discord, services);
-        const poll = buildMoviePoll({
-            options: [buildMovie({ id: "movie-1", addedBy: SUBMITTER }), buildMovie({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })],
+        const poll = moviePollFactory.build({
+            options: [movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }), movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER })],
             endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(),
             votes: { [present]: "movie-2", [joiner]: "movie-2", [leaver]: "movie-1" },
         });
         await services.repos.movieRepo.createPoll(poll);
-        await storeNight(services, { startTime: DateTime.now().plus({ hours: 3 }).toJSDate(), movie: buildMovie({ id: "TBD", title: "TBD" }) });
+        await storeNight(services, { startTime: DateTime.now().plus({ hours: 3 }).toJSDate(), movie: movieFactory.build({ id: "TBD", title: "TBD" }) });
         discord.message(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
@@ -202,7 +202,7 @@ describe("the movie night sweep", () => {
         discord.acceptMessages(IDS.channel);
         discord.user(apiUser({ id: SUBMITTER }));
         const dm = discord.acceptDirectMessages(SUBMITTER);
-        await services.repos.userRepo.createUser(buildUserStats({ userId: present }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: present }));
 
         await sweepMovieNight(discord.client, services, start.minus({ minutes: 5 }).toJSDate());
         expect(services.movieAttendance.isTracking(night.id)).toBe(false);
@@ -243,9 +243,9 @@ describe("the movie night sweep", () => {
 
     test("keeps each guild's movie night to itself", async ({ discord, services, otherGuild }) => {
         await discord.addGuild(apiGuild({ id: IDS.otherGuild, channels: [apiTextChannel({ id: IDS.otherGuildChannel, guild_id: IDS.otherGuild })] }));
-        const duePoll = buildMoviePoll({ endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(), votes: { [present]: "movie-2" }, messageId: "", channelId: IDS.otherGuildChannel });
+        const duePoll = moviePollFactory.build({ endsAt: DateTime.now().minus({ minutes: 1 }).toJSDate(), votes: { [present]: "movie-2" }, messageId: "", channelId: IDS.otherGuildChannel });
         await otherGuild.repos.movieRepo.createPoll(duePoll);
-        await services.repos.movieRepo.createPoll(buildMoviePoll({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate() }));
+        await services.repos.movieRepo.createPoll(moviePollFactory.build({ endsAt: DateTime.now().plus({ hours: 1 }).toJSDate() }));
         discord.acceptMessages(IDS.otherGuildChannel);
         discord.user(apiUser());
         discord.acceptDirectMessages(IDS.user);

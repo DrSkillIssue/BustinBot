@@ -5,7 +5,7 @@ import { TaskRepository } from '../TaskRepo.js';
 import { TaskCategory } from '../../../models/Task.js';
 import { SubmissionStatus, type SubmissionTier } from '../../../models/TaskSubmission.js';
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from '../../../tests/firestoreEmulator.js';
-import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from '../../../tests/fakes/builders.js';
+import { taskFactory, taskEventFactory, taskPollFactory, taskSubmissionFactory } from '../../../tests/factories.js';
 
 const test = base.extend('repo', ({ db }) => new TaskRepository(db, IDS.guild));
 const otherUser = SnowflakeUtil.generate().toString();
@@ -13,8 +13,8 @@ const reviewer = SnowflakeUtil.generate().toString();
 
 describe('TaskRepository tasks', () => {
     test('creates, reads and lists tasks by category', async ({ repo }) => {
-        await repo.createTask(buildTask({ id: 'PVM001', category: TaskCategory.PvM }));
-        await repo.createTask(buildTask({ id: 'SKL001', category: TaskCategory.Skilling }));
+        await repo.createTask(taskFactory.build({ id: 'PVM001', category: TaskCategory.PvM }));
+        await repo.createTask(taskFactory.build({ id: 'SKL001', category: TaskCategory.Skilling }));
 
         expect(await repo.getTaskById('PVM001')).toMatchObject({ id: 'PVM001' });
         expect(await repo.getTaskById('missing')).toBeNull();
@@ -23,7 +23,7 @@ describe('TaskRepository tasks', () => {
     });
 
     test('seeds more tasks than fit in one Firestore batch and deletes them all', async ({ repo }) => {
-        const tasks = Array.from({ length: 501 }, (_, index) => buildTask({ id: `TASK${index}` }));
+        const tasks = Array.from({ length: 501 }, (_, index) => taskFactory.build({ id: `TASK${index}` }));
 
         await repo.seedTasks(tasks);
         expect(await repo.getAllTasks()).toHaveLength(501);
@@ -35,9 +35,9 @@ describe('TaskRepository tasks', () => {
 
 describe('TaskRepository polls', () => {
     test('finds the active poll and the latest poll for a category', async ({ repo }) => {
-        await repo.createTaskPoll(buildTaskPoll({ id: 'old', createdAt: new Date('2026-01-04T00:00:00.000Z'), isActive: false }));
-        await repo.createTaskPoll(buildTaskPoll({ id: 'new', createdAt: new Date('2026-01-11T00:00:00.000Z') }));
-        await repo.createTaskPoll(buildTaskPoll({ id: 'skilling', category: TaskCategory.Skilling }));
+        await repo.createTaskPoll(taskPollFactory.build({ id: 'old', createdAt: new Date('2026-01-04T00:00:00.000Z'), isActive: false }));
+        await repo.createTaskPoll(taskPollFactory.build({ id: 'new', createdAt: new Date('2026-01-11T00:00:00.000Z') }));
+        await repo.createTaskPoll(taskPollFactory.build({ id: 'skilling', category: TaskCategory.Skilling }));
 
         expect((await repo.getActiveTaskPollByCategory(TaskCategory.PvM))?.id).toBe('new');
         expect((await repo.getLatestTaskPollByCategory(TaskCategory.PvM))?.id).toBe('new');
@@ -46,7 +46,7 @@ describe('TaskRepository polls', () => {
     });
 
     test('closes polls and clears them all', async ({ repo }) => {
-        await repo.createTaskPoll(buildTaskPoll());
+        await repo.createTaskPoll(taskPollFactory.build());
 
         await repo.closeTaskPoll('poll-1');
         expect(await repo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
@@ -56,7 +56,7 @@ describe('TaskRepository polls', () => {
     });
 
     test('records votes and reports whether each was the voter\'s first', async ({ repo }) => {
-        await repo.createTaskPoll(buildTaskPoll());
+        await repo.createTaskPoll(taskPollFactory.build());
 
         const first = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM001');
         const changed = await repo.voteInPollOnce('poll-1', IDS.user, 'PVM002');
@@ -67,7 +67,7 @@ describe('TaskRepository polls', () => {
     });
 
     test('counts every vote when voters vote at the same time', async ({ repo }) => {
-        await repo.createTaskPoll(buildTaskPoll());
+        await repo.createTaskPoll(taskPollFactory.build());
 
         await Promise.all(
             Array.from({ length: 5 }, () => repo.voteInPollOnce('poll-1', SnowflakeUtil.generate().toString(), 'PVM001'))
@@ -79,10 +79,10 @@ describe('TaskRepository polls', () => {
 
 describe('TaskRepository events', () => {
     test('stores events and finds the latest and those ending in a range', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent({
+        await repo.createTaskEvent(taskEventFactory.build({
             id: 'week-1', createdAt: new Date('2026-01-05T00:00:00.000Z'), endTime: new Date('2026-01-12T00:00:00.000Z'),
         }));
-        await repo.createTaskEvent(buildTaskEvent({
+        await repo.createTaskEvent(taskEventFactory.build({
             id: 'week-2', createdAt: new Date('2026-01-12T00:00:00.000Z'), endTime: new Date('2026-01-19T00:00:00.000Z'),
         }));
 
@@ -95,9 +95,9 @@ describe('TaskRepository events', () => {
 
 describe('TaskRepository submissions', () => {
     test('finds submissions by id, event and user', async ({ repo }) => {
-        await repo.createSubmission(buildTaskSubmission({ id: 'a', userId: IDS.user, taskEventId: 'week-1' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'b', userId: otherUser, taskEventId: 'week-1' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'c', userId: IDS.user, taskEventId: 'week-2' }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'a', userId: IDS.user, taskEventId: 'week-1' }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'b', userId: otherUser, taskEventId: 'week-1' }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'c', userId: IDS.user, taskEventId: 'week-2' }));
 
         expect(await repo.getSubmissionById('a')).toMatchObject({ userId: IDS.user });
         expect(await repo.getSubmissionById('missing')).toBeNull();
@@ -112,9 +112,9 @@ describe('TaskRepository submissions', () => {
     });
 
     test('finds the highest tier a member holds for a task', async ({ repo }) => {
-        await repo.createSubmission(buildTaskSubmission({ id: 'silver', status: SubmissionStatus.Silver }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'bronze', status: SubmissionStatus.Bronze }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'rejected', status: SubmissionStatus.Rejected }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'silver', status: SubmissionStatus.Silver }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'bronze', status: SubmissionStatus.Bronze }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'rejected', status: SubmissionStatus.Rejected }));
 
         expect(await repo.getHeldTier(IDS.user, 'PVM001-20260105')).toBe(SubmissionStatus.Silver);
         expect(await repo.getHeldTier(otherUser, 'PVM001-20260105')).toBeNull();
@@ -135,8 +135,8 @@ describe('TaskRepository submission drafts', () => {
     test('turns a draft into a submission once', async ({ repo }) => {
         await repo.saveSubmissionDraft(draft('PVM001-20260105'));
 
-        expect(await repo.submitDraft(buildTaskSubmission({ id: 'first' }))).toBe(true);
-        expect(await repo.submitDraft(buildTaskSubmission({ id: 'second' }))).toBe(false);
+        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'first' }))).toBe(true);
+        expect(await repo.submitDraft(taskSubmissionFactory.build({ id: 'second' }))).toBe(false);
 
         expect(await repo.getSubmissionDraft(IDS.user)).toBeNull();
         expect((await repo.getSubmissionsByUser(IDS.user)).map((s) => s.id)).toEqual(['first']);
@@ -145,7 +145,7 @@ describe('TaskRepository submission drafts', () => {
     test('turns a draft into one submission when two arrive at the same moment', async ({ repo }) => {
         await repo.saveSubmissionDraft(draft('PVM001-20260105'));
 
-        const outcomes = await Promise.all([repo.submitDraft(buildTaskSubmission({ id: 'a' })), repo.submitDraft(buildTaskSubmission({ id: 'b' }))]);
+        const outcomes = await Promise.all([repo.submitDraft(taskSubmissionFactory.build({ id: 'a' })), repo.submitDraft(taskSubmissionFactory.build({ id: 'b' }))]);
 
         expect(outcomes.sort()).toEqual([false, true]);
         expect(await repo.getSubmissionsByUser(IDS.user)).toHaveLength(1);
@@ -154,7 +154,7 @@ describe('TaskRepository submission drafts', () => {
     test('refuses a submission for another task than the draft is for', async ({ repo }) => {
         await repo.saveSubmissionDraft(draft('week-2'));
 
-        expect(await repo.submitDraft(buildTaskSubmission({ taskEventId: 'week-1' }))).toBe(false);
+        expect(await repo.submitDraft(taskSubmissionFactory.build({ taskEventId: 'week-1' }))).toBe(false);
         expect(await repo.getSubmissionDraft(IDS.user)).not.toBeNull();
     });
 });
@@ -163,9 +163,9 @@ describe('TaskRepository reviews', () => {
     const approve = (submissionId: string, decision: SubmissionTier) => ({ submissionId, reviewedBy: reviewer, decision });
 
     test('approves a pending submission, moving the task\'s completion counts to the member\'s new tier', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent());
-        await repo.createSubmission(buildTaskSubmission({ id: 'first' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'upgrade' }));
+        await repo.createTaskEvent(taskEventFactory.build());
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'first' }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'upgrade' }));
 
         expect(await repo.reviewSubmission(approve('first', SubmissionStatus.Bronze))).toMatchObject({ result: 'reviewed', heldTier: null });
         expect(await repo.reviewSubmission(approve('upgrade', SubmissionStatus.Gold))).toMatchObject({ result: 'reviewed', heldTier: SubmissionStatus.Bronze });
@@ -178,9 +178,9 @@ describe('TaskRepository reviews', () => {
     });
 
     test('resolves an approval at or below the member\'s tier without counting it', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'held', status: SubmissionStatus.Silver }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'lower' }));
+        await repo.createTaskEvent(taskEventFactory.build({ completionCounts: { bronze: 0, silver: 1, gold: 0 }, completedUserIds: [IDS.user] }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'held', status: SubmissionStatus.Silver }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'lower' }));
 
         expect(await repo.reviewSubmission(approve('lower', SubmissionStatus.Bronze))).toMatchObject({ result: 'reviewed', heldTier: SubmissionStatus.Silver });
 
@@ -189,9 +189,9 @@ describe('TaskRepository reviews', () => {
     });
 
     test('rejects a submission with its reason, leaving the tier the member holds', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'held', status: SubmissionStatus.Bronze }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'retry' }));
+        await repo.createTaskEvent(taskEventFactory.build({ completionCounts: { bronze: 1, silver: 0, gold: 0 }, completedUserIds: [IDS.user] }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'held', status: SubmissionStatus.Bronze }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'retry' }));
 
         await repo.reviewSubmission({ submissionId: 'retry', reviewedBy: reviewer, decision: SubmissionStatus.Rejected, rejectionReason: 'No keyword' });
 
@@ -200,8 +200,8 @@ describe('TaskRepository reviews', () => {
     });
 
     test('reviews a submission once', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent());
-        await repo.createSubmission(buildTaskSubmission({ id: 'a' }));
+        await repo.createTaskEvent(taskEventFactory.build());
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
         await repo.reviewSubmission(approve('a', SubmissionStatus.Bronze));
 
         expect(await repo.reviewSubmission(approve('a', SubmissionStatus.Gold))).toMatchObject({ result: 'alreadyReviewed', submission: { status: 'bronze' } });
@@ -210,8 +210,8 @@ describe('TaskRepository reviews', () => {
     });
 
     test('counts one review when two admins confirm at the same moment', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent());
-        await repo.createSubmission(buildTaskSubmission({ id: 'a' }));
+        await repo.createTaskEvent(taskEventFactory.build());
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
 
         const outcomes = await Promise.all([repo.reviewSubmission(approve('a', SubmissionStatus.Silver)), repo.reviewSubmission(approve('a', SubmissionStatus.Silver))]);
 
@@ -220,9 +220,9 @@ describe('TaskRepository reviews', () => {
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('counts one tier for a member when two of their submissions are approved at the same moment', async ({ repo }) => {
-        await repo.createTaskEvent(buildTaskEvent());
-        await repo.createSubmission(buildTaskSubmission({ id: 'a' }));
-        await repo.createSubmission(buildTaskSubmission({ id: 'b' }));
+        await repo.createTaskEvent(taskEventFactory.build());
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'a' }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: 'b' }));
 
         await Promise.all([repo.reviewSubmission(approve('a', SubmissionStatus.Bronze)), repo.reviewSubmission(approve('b', SubmissionStatus.Silver))]);
 
@@ -234,7 +234,7 @@ describe('TaskRepository feedback', () => {
     const vote = (userId: string, direction: 'up' | 'down') => ({ taskId: 'PVM001', eventId: 'week-1', userId, vote: direction });
 
     test('moves the task weight by a member\'s first vote, a changed vote and not a repeated one', async ({ repo }) => {
-        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
+        await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 50 }));
 
         expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('added');
         expect(await repo.recordFeedback(vote(IDS.user, 'up'))).toBe('unchanged');
@@ -245,7 +245,7 @@ describe('TaskRepository feedback', () => {
     });
 
     test('counts a member\'s votes at the same moment once', async ({ repo }) => {
-        await repo.createTask(buildTask({ id: 'PVM001', weight: 50 }));
+        await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 50 }));
 
         const outcomes = await Promise.all([repo.recordFeedback(vote(IDS.user, 'up')), repo.recordFeedback(vote(IDS.user, 'up'))]);
 
@@ -254,7 +254,7 @@ describe('TaskRepository feedback', () => {
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test('treats a vote stored under an older id as the member\'s previous vote and moves it', async ({ repo, db }) => {
-        await repo.createTask(buildTask({ id: 'PVM001', weight: 51 }));
+        await repo.createTask(taskFactory.build({ id: 'PVM001', weight: 51 }));
         await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({ id: '1730000000000', ...vote(IDS.user, 'up') });
 
         expect(await repo.recordFeedback(vote(IDS.user, 'down'))).toBe('changed');
@@ -270,9 +270,9 @@ describe('TaskRepository feedback', () => {
 
 describe('TaskRepository dates', () => {
     test('reads task events, polls, submissions and drafts back exactly as stored', async ({ repo }) => {
-        const event = buildTaskEvent();
-        const poll = buildTaskPoll();
-        const submission = buildTaskSubmission({
+        const event = taskEventFactory.build();
+        const poll = taskPollFactory.build();
+        const submission = taskSubmissionFactory.build({
             submittedAt: new Date('2026-01-06T01:00:00.000Z'),
             reviewedAt: new Date('2026-01-06T02:00:00.000Z'),
         });

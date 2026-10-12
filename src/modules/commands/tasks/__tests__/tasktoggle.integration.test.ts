@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../tests/fixtures.js";
 import { IDS, apiMember } from "../../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../../tests/fakes/builders.js";
+import { guildFactory } from "../../../../tests/factories.js";
 import { initTaskScheduler } from "../../../tasks/TaskScheduler.js";
 
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -37,7 +37,7 @@ describe("/tasktoggle schedule", () => {
     });
 
     test("works for a guild stored without any toggles", async ({ discord, slash, db }) => {
-        const { toggles: _toggles, ...withoutToggles } = buildGuild();
+        const { toggles: _toggles, ...withoutToggles } = guildFactory.build();
         await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
 
         const interaction = await slash("tasktoggle", [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }], admin);

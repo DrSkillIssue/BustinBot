@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../tests/discord/harness.js";
 import { IDS, apiGuildMember, apiMember, apiRole, apiUser } from "../../../tests/discord/payloads.js";
-import { buildLeaderboardPeriod, buildLifetimeLeaderboard, buildPeriodicLeaderboard, buildTask, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { leaderboardPeriodFactory, lifetimeLeaderboardFactory, periodicLeaderboardFactory, taskFactory, taskEventFactory, taskSubmissionFactory } from "../../../tests/factories.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import { postPeriodicLeaderboardUpdate, warnPendingLeaderboardFinalization } from "../HandleLeaderboardUpdate.js";
@@ -18,8 +18,8 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
     for (let week = 0; week < count; week++) {
         const id = `week-${week + 1}`;
         const endTime = DateTime.now().plus({ days: week < ended ? -(ended - week) : week + 1 });
-        await services.repos.taskRepo.createTaskEvent(buildTaskEvent({
-            id, task: buildTask({ id }), startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(),
+        await services.repos.taskRepo.createTaskEvent(taskEventFactory.build({
+            id, task: taskFactory.build({ id }), startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(),
         }));
         ids.push(id);
     }
@@ -27,8 +27,8 @@ async function storeWeeks(services: ServiceContainer, count: number, ended: numb
 }
 
 async function storePeriodic(services: ServiceContainer, overrides: Partial<TaskLeaderboard>): Promise<void> {
-    await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard(overrides));
-    await services.repos.taskLeaderboardRepo.createLeaderboard(buildLifetimeLeaderboard());
+    await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build(overrides));
+    await services.repos.taskLeaderboardRepo.createLeaderboard(lifetimeLeaderboardFactory.build());
 }
 
 // Champion roles set up in the guild, and the members who placed, as Discord knows them
@@ -50,7 +50,7 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services }) => {
         const events = await storeWeeks(services, 2, 1);
-        await storePeriodic(services, { points: { [winner]: 6 }, tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } }, period: buildLeaderboardPeriod({ eventIds: events }) });
+        await storePeriodic(services, { points: { [winner]: 6 }, tierCounts: { [winner]: { bronze: 0, silver: 0, gold: 1 } }, period: leaderboardPeriodFactory.build({ eventIds: events }) });
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: winner, username: "member1", global_name: "member1" }) }));
         discord.acceptMessages(IDS.channel);
 
@@ -67,7 +67,7 @@ describe("the weekly leaderboard update", () => {
     test("ends the period once however many runs see it finished: champions, final standings and congratulations", async ({ discord, services }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        const period = buildLeaderboardPeriod({ eventIds: events });
+        const period = leaderboardPeriodFactory.build({ eventIds: events });
         await storePeriodic(services, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
         const { roles, dms } = await setUpChampions(discord, services);
         discord.acceptMessages(IDS.channel);
@@ -94,7 +94,7 @@ describe("the weekly leaderboard update", () => {
     test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({ discord, services, slash }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { points: { [winner]: 9 }, period: buildLeaderboardPeriod({ eventIds: events }) });
+        await storePeriodic(services, { points: { [winner]: 9 }, period: leaderboardPeriodFactory.build({ eventIds: events }) });
         await setUpChampions(discord, services);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel, { persist: true });
@@ -133,11 +133,11 @@ describe("/taskboard", () => {
 describe("the warning before a period ends", () => {
     test("tells the task admins how many submissions still need reviewing", async ({ discord, services }) => {
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });
+        await storePeriodic(services, { period: leaderboardPeriodFactory.build({ eventIds: events }) });
         for (const [index, eventId] of ["week-1", "week-4", "week-4"].entries()) {
-            await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: `pending-${index}`, taskEventId: eventId, status: SubmissionStatus.Pending }));
+            await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: `pending-${index}`, taskEventId: eventId, status: SubmissionStatus.Pending }));
         }
-        await services.repos.taskRepo.createSubmission(buildTaskSubmission({ id: "reviewed", taskEventId: "week-4", status: SubmissionStatus.Gold }));
+        await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "reviewed", taskEventId: "week-4", status: SubmissionStatus.Gold }));
         discord.acceptMessages(IDS.channel);
 
         await warnPendingLeaderboardFinalization(discord.client, services);
@@ -150,8 +150,8 @@ describe("the warning before a period ends", () => {
     test("is skipped with a warning when the verification channel is gone", async ({ discord, services }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const events = await storeWeeks(services, 4, 4);
-        await storePeriodic(services, { period: buildLeaderboardPeriod({ eventIds: events }) });
-        await services.repos.taskRepo.createSubmission(buildTaskSubmission({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
+        await storePeriodic(services, { period: leaderboardPeriodFactory.build({ eventIds: events }) });
+        await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ taskEventId: "week-4", status: SubmissionStatus.Pending }));
         await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 

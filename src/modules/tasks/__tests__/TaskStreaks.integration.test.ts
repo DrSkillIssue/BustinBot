@@ -3,18 +3,18 @@ import { describe, expect, test } from "../../../tests/fixtures.js";
 import { IDS } from "../../../tests/discord/payloads.js";
 import type { ITaskRepository } from "../../../core/database/interfaces/ITaskRepo.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
-import { buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { taskEventFactory, taskSubmissionFactory } from "../../../tests/factories.js";
 import { calculateTaskStreakSummary } from "../TaskStreaks.js";
 
 // Weekly task events stored back to back from `start`, one per id
 async function storeWeeks(repo: ITaskRepository, start: DateTime, ids: string[]): Promise<void> {
     for (const [week, id] of ids.entries()) {
-        await repo.createTaskEvent(buildTaskEvent({ id, startTime: start.plus({ weeks: week }).toJSDate(), endTime: start.plus({ weeks: week + 1 }).toJSDate(), createdAt: start.plus({ weeks: week }).toJSDate() }));
+        await repo.createTaskEvent(taskEventFactory.build({ id, startTime: start.plus({ weeks: week }).toJSDate(), endTime: start.plus({ weeks: week + 1 }).toJSDate(), createdAt: start.plus({ weeks: week }).toJSDate() }));
     }
 }
 
-async function submit(repo: ITaskRepository, eventId: string, submittedAt: Date, overrides: Parameters<typeof buildTaskSubmission>[0] = {}): Promise<void> {
-    await repo.createSubmission(buildTaskSubmission({
+async function submit(repo: ITaskRepository, eventId: string, submittedAt: Date, overrides: Parameters<typeof taskSubmissionFactory.build>[0] = {}): Promise<void> {
+    await repo.createSubmission(taskSubmissionFactory.build({
         id: `${eventId}-submission`,
         userId: IDS.user,
         taskEventId: eventId,
@@ -70,8 +70,8 @@ describe("task streaks", () => {
         const repo = services.repos.taskRepo;
         const start = DateTime.fromISO("2026-04-06T00:00:00Z");
         const afterBreak = start.plus({ days: 35 });
-        await repo.createTaskEvent(buildTaskEvent({ id: "before-break", startTime: start.toJSDate(), endTime: start.plus({ days: 7 }).toJSDate(), createdAt: start.toJSDate() }));
-        await repo.createTaskEvent(buildTaskEvent({ id: "after-break", startTime: afterBreak.toJSDate(), endTime: afterBreak.plus({ days: 7 }).toJSDate(), createdAt: afterBreak.toJSDate() }));
+        await repo.createTaskEvent(taskEventFactory.build({ id: "before-break", startTime: start.toJSDate(), endTime: start.plus({ days: 7 }).toJSDate(), createdAt: start.toJSDate() }));
+        await repo.createTaskEvent(taskEventFactory.build({ id: "after-break", startTime: afterBreak.toJSDate(), endTime: afterBreak.plus({ days: 7 }).toJSDate(), createdAt: afterBreak.toJSDate() }));
         await submit(repo, "before-break", start.plus({ days: 1 }).toJSDate());
 
         expect(await calculateTaskStreakSummary(IDS.user, repo, afterBreak.plus({ days: 1 }).toJSDate())).toMatchObject({

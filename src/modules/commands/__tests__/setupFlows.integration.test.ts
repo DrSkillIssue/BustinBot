@@ -4,7 +4,7 @@ import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { routeInteraction } from "../../../core/events/routeInteraction.js";
 import { IDS, buttonInteraction, channelSelectInteraction, modalSubmitInteraction, roleSelectInteraction, stringSelectInteraction, apiMember } from "../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../tests/fakes/builders.js";
+import { guildFactory } from "../../../tests/factories.js";
 
 const CHANNELS = { announce: SnowflakeUtil.generate().toString(), log: SnowflakeUtil.generate().toString(), archive: SnowflakeUtil.generate().toString() };
 const admin = { member: apiMember({ roles: [IDS.roles.admin] }) };
@@ -125,7 +125,7 @@ describe("/setup choices", () => {
             type: InteractionResponseType.ChannelMessageWithSource,
             data: expect.objectContaining({ content: expect.stringContaining("Timezone set to **Australia/Melbourne**"), flags: MessageFlags.Ephemeral }),
         }]);
-        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({ timezone: "Australia/Melbourne", channels: buildGuild().channels });
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({ timezone: "Australia/Melbourne", channels: guildFactory.build().channels });
     });
 
     test("rejects a timezone it does not recognise", async ({ discord, interact, services }) => {
@@ -135,7 +135,7 @@ describe("/setup choices", () => {
             type: InteractionResponseType.ChannelMessageWithSource,
             data: expect.objectContaining({ content: expect.stringContaining("Could not recognise that timezone"), flags: MessageFlags.Ephemeral }),
         }]);
-        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.timezone).toBe(buildGuild().timezone);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.timezone).toBe(guildFactory.build().timezone);
     });
 });
 
@@ -153,8 +153,8 @@ describe("/moviesetup choices", () => {
             data: expect.objectContaining({ content: expect.stringContaining("Movie module setup complete!"), components: [] }),
         }]);
         expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
-            roles: { ...buildGuild().roles, movieAdmin: MOVIE_ADMIN_ROLE, movieUser: MOVIE_USER_ROLE },
-            channels: { ...buildGuild().channels, movieNight: MOVIE_CHANNEL, movieVC: MOVIE_VOICE_CHANNEL },
+            roles: guildFactory.build({ roles: { movieAdmin: MOVIE_ADMIN_ROLE, movieUser: MOVIE_USER_ROLE } }).roles,
+            channels: guildFactory.build({ channels: { movieNight: MOVIE_CHANNEL, movieVC: MOVIE_VOICE_CHANNEL } }).channels,
         });
     });
 
@@ -185,8 +185,8 @@ describe("/tasksetup choices", () => {
             data: expect.objectContaining({ content: expect.stringContaining("Task module setup complete!"), components: [] }),
         }]);
         expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
-            roles: { ...buildGuild().roles, taskAdmin: TASK_ADMIN_ROLE, taskUser: TASK_USER_ROLE },
-            channels: { ...buildGuild().channels, taskChannel: TASK_CHANNEL, taskVerification: TASK_VERIFICATION_CHANNEL },
+            roles: guildFactory.build({ roles: { taskAdmin: TASK_ADMIN_ROLE, taskUser: TASK_USER_ROLE } }).roles,
+            channels: guildFactory.build({ channels: { taskChannel: TASK_CHANNEL, taskVerification: TASK_VERIFICATION_CHANNEL } }).channels,
             taskSettings: { periodEvents: 6 },
         });
     });
@@ -200,6 +200,6 @@ describe("/tasksetup choices", () => {
             type: InteractionResponseType.UpdateMessage,
             data: expect.objectContaining({ content: "Task setup cancelled. No changes were made.", components: [] }),
         }]);
-        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.roles).toEqual(buildGuild().roles);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.roles).toEqual(guildFactory.build().roles);
     });
 });

@@ -3,7 +3,7 @@ import { describe, expect, test as base } from "../../../tests/fixtures.js";
 import { GuildService } from "../GuildService.js";
 import { GuildRepository } from "../../database/GuildRepo.js";
 import { IDS } from "../../../tests/discord/payloads.js";
-import { buildGuild } from "../../../tests/fakes/builders.js";
+import { guildFactory } from "../../../tests/factories.js";
 
 const test = base
     .extend("repo", ({ db }) => new GuildRepository(db))
@@ -15,7 +15,7 @@ const newGuild = SnowflakeUtil.generate().toString();
 
 describe("GuildService", () => {
     test("serves a guild from its cache after the first read", async ({ repo, guilds, db }) => {
-        await repo.initGuild(guildId, buildGuild({ timezone: "UTC" }));
+        await repo.initGuild(guildId, guildFactory.build({ timezone: "UTC" }));
         await guilds.get(guildId);
 
         await db.doc(`guilds/${guildId}`).update({ timezone: "Europe/London" });
@@ -25,20 +25,20 @@ describe("GuildService", () => {
     });
 
     test("merges an update onto the stored guild when it is not cached", async ({ repo, guilds }) => {
-        await repo.initGuild(guildId, buildGuild());
+        await repo.initGuild(guildId, guildFactory.build());
 
         await guilds.update(guildId, { timezone: "Australia/Melbourne" });
 
         expect(await repo.getGuild(guildId)).toMatchObject({
             timezone: "Australia/Melbourne",
-            roles: buildGuild().roles,
-            channels: buildGuild().channels,
-            setupComplete: buildGuild().setupComplete,
+            roles: guildFactory.build().roles,
+            channels: guildFactory.build().channels,
+            setupComplete: guildFactory.build().setupComplete,
         });
     });
 
     test("keeps every other toggle and setting when one toggle changes", async ({ repo, guilds }) => {
-        await repo.initGuild(guildId, buildGuild({
+        await repo.initGuild(guildId, guildFactory.build({
             toggles: { taskScheduler: false, leaguesEnabled: true, taskLeaderboard: false },
             timezone: "Australia/Melbourne",
         }));
@@ -52,7 +52,7 @@ describe("GuildService", () => {
     });
 
     test("keeps existing toggles when other settings are updated", async ({ repo, guilds }) => {
-        await repo.initGuild(guildId, buildGuild({ toggles: { taskScheduler: true, leaguesEnabled: false, taskLeaderboard: false } }));
+        await repo.initGuild(guildId, guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false, taskLeaderboard: false } }));
 
         await guilds.update(guildId, { timezone: "Europe/London" });
 
@@ -60,8 +60,8 @@ describe("GuildService", () => {
     });
 
     test("loads every guild into the cache", async ({ repo, guilds, db }) => {
-        await repo.initGuild(IDS.guild, buildGuild({ id: IDS.guild }));
-        await repo.initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild }));
+        await repo.initGuild(IDS.guild, guildFactory.build({ id: IDS.guild }));
+        await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));
 
         expect((await guilds.getAll()).map((guild) => guild.id).sort()).toEqual([IDS.guild, IDS.otherGuild]);
         await db.doc(`guilds/${IDS.guild}`).delete();
@@ -72,7 +72,7 @@ describe("GuildService", () => {
         await guilds.ensureExists(newGuild, admin);
         expect(await repo.getGuild(newGuild)).toMatchObject({ id: newGuild, updatedBy: admin, setupComplete: { core: false } });
 
-        await repo.initGuild(guildId, buildGuild({ timezone: "Australia/Melbourne" }));
+        await repo.initGuild(guildId, guildFactory.build({ timezone: "Australia/Melbourne" }));
         await guilds.ensureExists(guildId, IDS.user);
         expect(await repo.getGuild(guildId)).toMatchObject({ timezone: "Australia/Melbourne", setupComplete: { core: true } });
     });

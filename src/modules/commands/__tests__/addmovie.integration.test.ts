@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "../../../tests/fixtures.
 import type { MockAgent } from "undici";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction, chatInputInteraction } from "../../../tests/discord/payloads.js";
-import { buildMovie } from "../../../tests/fakes/builders.js";
+import { movieFactory } from "../../../tests/factories.js";
 
 const JSON_RESPONSE = { headers: { "content-type": "application/json" } };
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
@@ -29,7 +29,7 @@ function tmdbMovie(http: MockAgent, movie: typeof matrix, runtime: number, direc
 
 // The most movies a member may have in the list, added by them
 async function storeFullList(services: ServiceContainer, userId: string): Promise<void> {
-    for (let i = 0; i < 3; i++) await services.repos.movieRepo.upsertMovie(buildMovie({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId }));
+    for (let i = 0; i < 3; i++) await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: `${userId}-${i}`, tmdbId: 900 + i, addedBy: userId }));
 }
 
 beforeEach(() => {
@@ -56,8 +56,8 @@ describe("/addmovie", () => {
 
     test("refuses a movie already in the list, but not one already watched", async ({ discord, interact, services, http }) => {
         const lister = SnowflakeUtil.generate().toString();
-        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
-        await services.repos.movieRepo.upsertMovie(buildMovie({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
+        await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: "listed", tmdbId: 603, title: "The Matrix", addedBy: lister }));
+        await services.repos.movieRepo.upsertMovie(movieFactory.build({ id: "seen", tmdbId: 604, title: "The Matrix Reloaded", watched: true }));
         tmdbMovie(http, reloaded, 138, "Lana Wachowski");
 
         const duplicate = await interact(buttonInteraction("addmovie|select|603", resultsMessage));

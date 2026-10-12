@@ -7,7 +7,7 @@ import {
     registerPeriodicTaskEvent,
 } from "../TaskLeaderboards.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { buildTask, buildTaskEvent, buildUserStats } from "../../../tests/fakes/builders.js";
+import { taskFactory, taskEventFactory, userStatsFactory } from "../../../tests/factories.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 
@@ -15,14 +15,14 @@ const [oldPeriodMember, overlapMember, upgradedMember] = [SnowflakeUtil.generate
 
 async function storeEvent(services: ServiceContainer, id: string, start: string, end: string): Promise<string> {
     await services.repos.taskRepo.createTaskEvent(
-        buildTaskEvent({ id, task: buildTask({ id }), keyword: id, startTime: new Date(start), endTime: new Date(end) })
+        taskEventFactory.build({ id, task: taskFactory.build({ id }), keyword: id, startTime: new Date(start), endTime: new Date(end) })
     );
     return id;
 }
 
 describe("TaskLeaderboards initialisation", () => {
     test("builds the lifetime leaderboard from stored user stats", async ({ services }) => {
-        await services.repos.userRepo.createUser(buildUserStats({ userId: IDS.user, tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: IDS.user, tasksCompletedGold: 1, tasksCompletedBronze: 2 }));
 
         await ensureTaskLeaderboardsInitialized(services);
 

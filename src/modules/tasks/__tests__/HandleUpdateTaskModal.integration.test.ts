@@ -4,7 +4,7 @@ import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskEvent, buildTaskPoll, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { taskFactory, taskEventFactory, taskPollFactory, taskSubmissionFactory } from "../../../tests/factories.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
 
@@ -15,9 +15,9 @@ const voter = SnowflakeUtil.generate().toString();
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
 async function storeRunningEvent(services: ServiceContainer, overrides = {}) {
-    const task = buildTask({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
+    const task = taskFactory.build({ id: "PVM001", category: TaskCategory.PvM, taskName: "Kill {amount} Zulrah" });
     await services.repos.taskRepo.createTask(task);
-    const event = buildTaskEvent({
+    const event = taskEventFactory.build({
         id: "PVM001-week", task, startTime: DateTime.now().minus({ days: 1 }).toJSDate(), endTime: DateTime.now().plus({ days: 6 }).toJSDate(),
         messageId: eventMessage, channelId: IDS.channel, ...overrides,
     });
@@ -30,10 +30,10 @@ describe("the update task form", () => {
         const tasks = services.repos.taskRepo;
         await storeRunningEvent(services);
         // A completion approved after the event was posted
-        await tasks.createSubmission(buildTaskSubmission({ id: "approved", userId: completer, taskEventId: "PVM001-week" }));
+        await tasks.createSubmission(taskSubmissionFactory.build({ id: "approved", userId: completer, taskEventId: "PVM001-week" }));
         await tasks.reviewSubmission({ submissionId: "approved", reviewedBy: IDS.user, decision: SubmissionStatus.Bronze });
-        await tasks.createTaskPoll(buildTaskPoll({
-            id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [buildTask({ id: "PVM001" }), buildTask({ id: "PVM002" })],
+        await tasks.createTaskPoll(taskPollFactory.build({
+            id: pollMessage, messageId: pollMessage, category: TaskCategory.PvM, options: [taskFactory.build({ id: "PVM001" }), taskFactory.build({ id: "PVM002" })],
             votes: { [voter]: "PVM001" }, endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
         }));
         for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
@@ -79,7 +79,7 @@ describe("the update task form", () => {
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, silver: "lots", gold: "1.5" }));
 
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "The silver, gold amount must be a whole number. Nothing was changed." })]);
-        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ amtGold: buildTask().amtGold });
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ amtGold: taskFactory.build().amtGold });
     });
 
     test("answers when the task no longer exists", async ({ discord, interact }) => {

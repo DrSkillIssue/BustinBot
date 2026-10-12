@@ -4,18 +4,18 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { buttonsIn } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../tests/discord/payloads.js";
-import { buildTask, buildTaskPoll } from "../../../tests/fakes/builders.js";
+import { taskFactory, taskPollFactory } from "../../../tests/factories.js";
 import { Skill, TaskCategory, type Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import { postAllTaskPolls } from "../HandleTaskPoll.js";
 import { startTaskEventForCategory } from "../HandleTaskStart.js";
 
-const options: Task[] = [buildTask({ id: "PVM001", shortName: "Zulrah" }), buildTask({ id: "PVM002", shortName: "Vorkath" }), buildTask({ id: "PVM003", shortName: "Hydra" })];
+const options: Task[] = [taskFactory.build({ id: "PVM001", shortName: "Zulrah" }), taskFactory.build({ id: "PVM002", shortName: "Vorkath" }), taskFactory.build({ id: "PVM003", shortName: "Hydra" })];
 
 // A poll that is open in the harness channel, as stored when it was posted
 async function storeOpenPoll(services: ServiceContainer, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
     const messageId = overrides.messageId ?? SnowflakeUtil.generate().toString();
-    const poll = buildTaskPoll({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
+    const poll = taskPollFactory.build({ id: messageId, messageId, options, createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(), endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(), ...overrides });
     await services.repos.taskRepo.createTaskPoll(poll);
     return poll;
 }
@@ -29,12 +29,12 @@ describe("posting the weekly task polls", () => {
         vi.spyOn(console, "warn").mockImplementation(() => {});
         await services.repos.taskRepo.seedTasks([
             ...options,
-            buildTask({ id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining }),
-            buildTask({ id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing }),
-            buildTask({ id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking }),
-            buildTask({ id: "MIN001", category: TaskCategory.MinigameMisc }),
-            buildTask({ id: "MIN002", category: TaskCategory.MinigameMisc }),
-            buildTask({ id: "MIN003", category: TaskCategory.MinigameMisc }),
+            taskFactory.build({ id: "SKL001", category: TaskCategory.Skilling, skill: Skill.Mining }),
+            taskFactory.build({ id: "SKL002", category: TaskCategory.Skilling, skill: Skill.Fishing }),
+            taskFactory.build({ id: "SKL003", category: TaskCategory.Skilling, skill: Skill.Cooking }),
+            taskFactory.build({ id: "MIN001", category: TaskCategory.MinigameMisc }),
+            taskFactory.build({ id: "MIN002", category: TaskCategory.MinigameMisc }),
+            taskFactory.build({ id: "MIN003", category: TaskCategory.MinigameMisc }),
         ]);
         discord.acceptMessages(IDS.channel);
 

@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { test as base, describe, expect } from '../../../tests/fixtures.js';
-import { buildPrizeDraw } from '../../../tests/fakes/builders.js';
+import { prizeDrawFactory } from '../../../tests/factories.js';
 import { IDS } from '../../../tests/discord/payloads.js';
 import { PrizeDrawRepository } from '../PrizeDrawRepo.js';
 
@@ -9,8 +9,8 @@ const otherUser = SnowflakeUtil.generate().toString();
 
 describe('PrizeDrawRepository', () => {
     test('stores draws and lists them newest first', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw({ id: 'older', start: '2026-01-05T00:00:00.000Z' }));
-        await repo.createPrizeDraw(buildPrizeDraw({ id: 'newer', start: '2026-01-19T00:00:00.000Z' }));
+        await repo.createPrizeDraw(prizeDrawFactory.build({ id: 'older', start: '2026-01-05T00:00:00.000Z' }));
+        await repo.createPrizeDraw(prizeDrawFactory.build({ id: 'newer', start: '2026-01-19T00:00:00.000Z' }));
 
         expect((await repo.getAllPrizeDraws()).map((draw) => draw.id)).toEqual(['newer', 'older']);
         expect(await repo.getPrizeDrawById('older')).toMatchObject({ id: 'older' });
@@ -18,7 +18,7 @@ describe('PrizeDrawRepository', () => {
     });
 
     test('records participants and recomputes the entry total', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw());
+        await repo.createPrizeDraw(prizeDrawFactory.build());
 
         await repo.updateParticipants('2026-01-05_to_2026-01-18', { [IDS.user]: 2, [otherUser]: 1 });
 
@@ -29,7 +29,7 @@ describe('PrizeDrawRepository', () => {
     });
 
     test('adds each user as an entry at most once', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw());
+        await repo.createPrizeDraw(prizeDrawFactory.build());
 
         await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
         await repo.addEntry('2026-01-05_to_2026-01-18', IDS.user);
@@ -42,7 +42,7 @@ describe('PrizeDrawRepository', () => {
     });
 
     test('records the winner and when they were rolled', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw());
+        await repo.createPrizeDraw(prizeDrawFactory.build());
 
         await repo.setWinner('2026-01-05_to_2026-01-18', IDS.user);
 
@@ -52,9 +52,9 @@ describe('PrizeDrawRepository', () => {
     });
 
     test('deletes one draw or all draws', async ({ repo }) => {
-        await repo.createPrizeDraw(buildPrizeDraw({ id: 'a' }));
-        await repo.createPrizeDraw(buildPrizeDraw({ id: 'b' }));
-        await repo.createPrizeDraw(buildPrizeDraw({ id: 'c' }));
+        await repo.createPrizeDraw(prizeDrawFactory.build({ id: 'a' }));
+        await repo.createPrizeDraw(prizeDrawFactory.build({ id: 'b' }));
+        await repo.createPrizeDraw(prizeDrawFactory.build({ id: 'c' }));
 
         await repo.deletePrizeDraw('a');
         expect((await repo.getAllPrizeDraws()).map((draw) => draw.id).sort()).toEqual(['b', 'c']);

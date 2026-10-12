@@ -8,7 +8,7 @@ import { startBot } from "../bot.js";
 import { DiscordError, DiscordHarness } from "../tests/discord/harness.js";
 import { IDS, apiAttachment, apiGuild, apiTextChannel, chatInputInteraction, directMessage } from "../tests/discord/payloads.js";
 import { GuildRepository } from "../core/database/GuildRepo.js";
-import { buildGuild, buildTaskEvent } from "../tests/fakes/builders.js";
+import { guildFactory, taskEventFactory } from "../tests/factories.js";
 import { getNextPollDate } from "../modules/tasks/TaskScheduler.js";
 
 const commandsDir = path.join(import.meta.dirname, "../modules/commands");
@@ -75,7 +75,7 @@ describe("startBot", () => {
     });
 
     test("stops every scheduled job and disconnects when shut down", async ({ db, http }) => {
-        await new GuildRepository(db).initGuild(IDS.guild, buildGuild({ toggles: { taskScheduler: true, leaguesEnabled: false } }));
+        await new GuildRepository(db).initGuild(IDS.guild, guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false } }));
         const discord = DiscordHarness.create(http);
 
         const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
@@ -103,7 +103,7 @@ describe("startBot", () => {
 
     test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({ db, http, services, otherGuild }) => {
         const otherTasks = otherGuild.repos.taskRepo;
-        const event = buildTaskEvent({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
+        const event = taskEventFactory.build({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
         await otherTasks.createTaskEvent(event);
         // Clicked Submit in the primary guild, then later in the other one, before the bot restarted
         await services.repos.taskRepo.saveSubmissionDraft({ userId: IDS.user, taskEventId: "older", createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate() });

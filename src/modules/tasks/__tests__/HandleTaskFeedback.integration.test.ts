@@ -2,11 +2,11 @@ import { describe, expect, test } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../tests/firestoreEmulator.js";
 import { IDS, buttonInteraction } from "../../../tests/discord/payloads.js";
-import { buildTask } from "../../../tests/fakes/builders.js";
+import { taskFactory } from "../../../tests/factories.js";
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({ discord, interact, services }) => {
-        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
 
         const click = await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
@@ -16,7 +16,7 @@ describe("task feedback buttons", () => {
     });
 
     test("count two quick clicks of the same button once", async ({ discord, interact, services }) => {
-        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
 
         const [first, second] = await Promise.all([
             interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
@@ -29,7 +29,7 @@ describe("task feedback buttons", () => {
     }, CONCURRENT_TRANSACTION_TIMEOUT_MS);
 
     test("let a member change their vote", async ({ discord, interact, services }) => {
-        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
         await interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105"));
 
         const change = await interact(buttonInteraction("task-feedback|down|PVM001|PVM001-20260105"));
@@ -39,7 +39,7 @@ describe("task feedback buttons", () => {
     });
 
     test("still work on posts made before the button ids changed", async ({ discord, interact, services, db }) => {
-        await services.repos.taskRepo.createTask(buildTask({ id: "PVM001", weight: 50 }));
+        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", weight: 50 }));
 
         const click = await interact(buttonInteraction("task-feedback-down-PVM001-20251006"));
 

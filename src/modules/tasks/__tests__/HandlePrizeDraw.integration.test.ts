@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { DiscordError } from "../../../tests/discord/harness.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { IDS, apiRole, apiUser } from "../../../tests/discord/payloads.js";
-import { buildPrizeDraw, buildTaskEvent, buildTaskSubmission } from "../../../tests/fakes/builders.js";
+import { prizeDrawFactory, taskEventFactory, taskSubmissionFactory } from "../../../tests/factories.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { PrizeDraw } from "../../../models/PrizeDraw.js";
 import { announcePrizeDrawWinner, generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../HandlePrizeDraw.js";
@@ -14,15 +14,15 @@ const [winner, second, third, fourth] = [SnowflakeUtil.generate().toString(), Sn
 // A finished task event and the submissions made for it
 async function storeEvent(services: ServiceContainer, id: string, endTime: DateTime, submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>) {
     const repo = services.repos.taskRepo;
-    await repo.createTaskEvent(buildTaskEvent({ id, startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(), createdAt: endTime.minus({ days: 7 }).toJSDate() }));
+    await repo.createTaskEvent(taskEventFactory.build({ id, startTime: endTime.minus({ days: 7 }).toJSDate(), endTime: endTime.toJSDate(), createdAt: endTime.minus({ days: 7 }).toJSDate() }));
     for (const [index, submission] of submissions.entries()) {
-        await repo.createSubmission(buildTaskSubmission({ id: `${id}-${index}`, taskEventId: id, ...submission }));
+        await repo.createSubmission(taskSubmissionFactory.build({ id: `${id}-${index}`, taskEventId: id, ...submission }));
     }
 }
 
 // A draw whose snapshot was taken yesterday, the winner holding two of its three entries
 function storedDraw(overrides: Partial<PrizeDraw> = {}): PrizeDraw {
-    return buildPrizeDraw({
+    return prizeDrawFactory.build({
         id: "draw-1",
         start: DateTime.now().minus({ days: 14 }).toUTC().toISO(),
         end: DateTime.now().minus({ days: 1 }).toUTC().toISO(),

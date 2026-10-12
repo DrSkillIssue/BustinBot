@@ -13,7 +13,7 @@ import { GuildRepository } from "../core/database/GuildRepo.js";
 import { DiscordHarness } from "./discord/harness.js";
 import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
 import { clearEmulatorFirestore, getEmulatorFirestore } from "./firestoreEmulator.js";
-import { buildGuild } from "./fakes/builders.js";
+import { guildFactory } from "./factories.js";
 
 // The one test API for the suite. Fixtures are created only when a test asks for them:
 // - http: the test's own undici MockAgent, answering only the requests the test declares; one the test expected but
@@ -59,19 +59,19 @@ export const test = base
         return firestore;
     })
     .extend("services", async ({ db }) => {
-        await new GuildRepository(db).initGuild(buildGuild().id, buildGuild());
+        await new GuildRepository(db).initGuild(guildFactory.build().id, guildFactory.build());
         const botStats = new BotStatsService(new BotRepository(db));
         await botStats.init();
-        return createServiceContainer(db, buildGuild().id, botStats);
+        return createServiceContainer(db, guildFactory.build().id, botStats);
     })
     .extend("otherGuild", async ({ db, services }) => {
         const channel = IDS.otherGuildChannel;
         const channels = { announcements: channel, taskChannel: channel, taskVerification: channel, movieNight: channel };
-        await new GuildRepository(db).initGuild(IDS.otherGuild, buildGuild({ id: IDS.otherGuild, channels }));
+        await new GuildRepository(db).initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild, channels }));
         return createServiceContainer(db, IDS.otherGuild, services.botStats);
     })
     .extend("uncachedGuild", async ({ db, discord }) => {
-        await new GuildRepository(db).initGuild(IDS.uncachedGuild, buildGuild({ id: IDS.uncachedGuild }));
+        await new GuildRepository(db).initGuild(IDS.uncachedGuild, guildFactory.build({ id: IDS.uncachedGuild }));
         discord.guild(apiGuild({ id: IDS.uncachedGuild }));
         return { guild_id: IDS.uncachedGuild };
     })

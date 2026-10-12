@@ -3,7 +3,7 @@ import { ApplicationCommandOptionType, type APIRole } from "discord-api-types/v1
 import { describe, expect, test, vi } from "../../../../tests/fixtures.js";
 import { DiscordError, type DiscordHarness } from "../../../../tests/discord/harness.js";
 import { IDS, apiGuild, apiGuildMember, apiRole, apiUser, chatInputInteraction, apiMember } from "../../../../tests/discord/payloads.js";
-import { buildPeriodicLeaderboard, buildUserStats } from "../../../../tests/fakes/builders.js";
+import { periodicLeaderboardFactory, userStatsFactory } from "../../../../tests/factories.js";
 import type { TaskMilestoneRole } from "../../../../models/Guild.js";
 
 const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
@@ -156,7 +156,7 @@ describe("/taskroles toggle", () => {
         const gold = apiRole({ name: "Gold Champion" });
         serveRoles(discord, [gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
-        await services.repos.taskLeaderboardRepo.createLeaderboard(buildPeriodicLeaderboard({ champions: { first: [member] } }));
+        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build({ champions: { first: [member] } }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 
@@ -204,7 +204,7 @@ describe("/taskroles init", () => {
             apiRole({ name: "Task Champion (3rd)" }),
         ];
         for (const role of created) discord.roleCreated(IDS.guild, role);
-        await services.repos.userRepo.createUser(buildUserStats({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
+        await services.repos.userRepo.createUser(userStatsFactory.build({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 }));
         discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
         discord.acceptMemberRoleChanges(IDS.guild, member);
 
