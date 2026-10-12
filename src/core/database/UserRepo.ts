@@ -1,4 +1,4 @@
-import { GuildScopedRepository } from "./CoreRepo.js";
+import { GuildScopedRepository, isAlreadyExists } from "./CoreRepo.js";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { IUserRepository } from "./interfaces/IUserRepo.js";
 import { newUserStats, type UserStats } from "../../models/UserStats.js";
@@ -45,26 +45,21 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
     ): Promise<void> {
         const docRef = this.collection.doc(userId);
 
-        // Read and write in one transaction, so increments arriving together for a user with no stats yet
-        // can't each create the document and overwrite one another
-        await this.db.runTransaction(async (transaction) => {
-            const doc = await transaction.get(docRef);
-
-            if (!doc.exists) {
-                transaction.set(docRef, { ...newUserStats(userId, new Date()), [field]: amount });
-                return;
-            }
-
-            // If exists, increment the field
-            transaction.update(docRef, {
+        // create() fails atomically when the member already has stats, and the increment then adds to them, so
+        // increments arriving together for a member with no stats yet are all counted without a transaction
+        try {
+            await docRef.create({ ...newUserStats(userId, new Date()), [field]: amount });
+        } catch (err) {
+            if (!isAlreadyExists(err)) throw err;
+            await docRef.update({
                 [field]: FieldValue.increment(amount),
                 lastActiveAt: new Date(),
             });
-        });
+        }
     }
 
-    // Moves a member's task completion from one tier to the higher one they reached. In one transaction like
-    // incrementStat, so a member with no stats yet can't have their document created twice.
+    // Moves a member's task completion from one tier to the higher one they reached, creating their stats with it
+    // if they have none yet, the same way incrementStat does
     async updateTierStat(
         userId: string,
         fromField: keyof UserStats,
@@ -72,20 +67,16 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
     ): Promise<void> {
         const docRef = this.collection.doc(userId);
 
-        await this.db.runTransaction(async (transaction) => {
-            const doc = await transaction.get(docRef);
-
-            if (!doc.exists) {
-                transaction.set(docRef, { ...newUserStats(userId, new Date()), [toField]: 1 });
-                return;
-            }
-
-            transaction.update(docRef, {
+        try {
+            await docRef.create({ ...newUserStats(userId, new Date()), [toField]: 1 });
+        } catch (err) {
+            if (!isAlreadyExists(err)) throw err;
+            await docRef.update({
                 [fromField]: FieldValue.increment(-1),
                 [toField]: FieldValue.increment(1),
                 lastActiveAt: new Date(),
             });
-        });
+        }
     }
 
     async updateLastActive(userId: string): Promise<void> {

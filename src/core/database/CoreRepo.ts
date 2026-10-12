@@ -1,4 +1,9 @@
-import type { CollectionReference, DocumentData, Firestore, FirestoreDataConverter } from "firebase-admin/firestore";
+import { GrpcStatus, type CollectionReference, type DocumentData, type Firestore, type FirestoreDataConverter } from "firebase-admin/firestore";
+
+// Whether a write failed because create() found the document already there
+export function isAlreadyExists(err: unknown): boolean {
+    return err instanceof Error && "code" in err && err.code === GrpcStatus.ALREADY_EXISTS;
+}
 
 export abstract class GuildScopedRepository<T extends DocumentData> {
     protected readonly db: Firestore;
