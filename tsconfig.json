@@ -2,7 +2,9 @@
   // https://aka.ms/tsconfig
   "extends": "@tsconfig/node24/tsconfig.json",
   "compilerOptions": {
-    "noEmit": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true,
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -12,5 +14,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "test", "vitest.config.ts"]
+  "include": ["src"]
 }
