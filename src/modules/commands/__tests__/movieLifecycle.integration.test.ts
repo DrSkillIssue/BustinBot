@@ -94,13 +94,3 @@ describe("/cancelmovie", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([expect.objectContaining({ content: `❌ Movie night has been cancelled by <@${IDS.user}>.` })]);
     });
 });
-
-describe("/listmovies", () => {
-    test("says the queue is empty when every movie has been watched", async ({ discord, slash, factories }) => {
-        await factories.movie.create({ watched: true });
-
-        const command = await slash("listmovies");
-
-        expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "No unwatched movies are currently queued. Add a new one with `/addmovie`!" })]);
-    });
-});

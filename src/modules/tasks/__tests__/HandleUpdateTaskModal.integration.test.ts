@@ -1,8 +1,9 @@
+import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../tests/fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../tests/discord/harness.js";
-import { IDS, apiMessage, modalSubmitInteraction } from "../../../tests/discord/payloads.js";
+import { IDS, apiMessage, modalSubmitInteraction, apiMember } from "../../../tests/discord/payloads.js";
 import { taskFactory } from "../../../tests/factories.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../models/Task.js";
@@ -11,6 +12,7 @@ const eventMessage = SnowflakeUtil.generate().toString();
 const pollMessage = SnowflakeUtil.generate().toString();
 const completer = SnowflakeUtil.generate().toString();
 const voter = SnowflakeUtil.generate().toString();
+const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 const form = { taskName: "Kill {amount} Vorkath", type: "kc", bronze: "5", silver: "10", gold: "150,000" };
 
 async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
@@ -82,5 +84,28 @@ describe("the update task form", () => {
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM404", form));
 
         expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Could not find task with ID **PVM404**." })]);
+    });
+});
+
+describe("/updatetask", () => {
+    test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, slash, factories }) => {
+        await factories.task.create({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 });
+
+        const interaction = await slash("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }], taskAdmin);
+
+        expect(discord.callbacks(interaction)).toHaveLength(1);
+        const modal = discord.modal(interaction);
+        expect(modal?.custom_id).toBe("update_task_modal_PVM001");
+        const values = modal?.components.flatMap((row) => ("components" in row ? row.components : []))
+            .map((input) => ["custom_id" in input ? input.custom_id : "", "value" in input ? input.value : ""]);
+        expect(Object.fromEntries(values ?? [])).toEqual({ taskName: "Kill {amount} Zulrah", type: "KC", bronze: "10", silver: "25", gold: "50" });
+    });
+
+    test("replies privately when the task does not exist", async ({ discord, slash }) => {
+        const interaction = await slash("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }], taskAdmin);
+
+        expect(discord.callbacks(interaction)).toEqual([
+            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "No task found with ID **NOPE**.", flags: MessageFlags.Ephemeral }) },
+        ]);
     });
 });

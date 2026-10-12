@@ -1,16 +1,13 @@
-import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
+import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { SlashCommandBuilder } from "discord.js";
 import { describe, expect, test, vi } from "../../../tests/fixtures.js";
 import { handleInteraction } from "../onInteraction.js";
-import updatetask from "../../../modules/commands/tasks/updatetask.js";
 import { CommandModule, CommandRole, type Command } from "../../../models/Command.js";
 import { IDS, apiGuild, apiMember, apiRole, chatInputInteraction } from "../../../tests/discord/payloads.js";
 import type { DiscordHarness } from "../../../tests/discord/harness.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { GuildRepository } from "../../database/GuildRepo.js";
 import { guildFactory } from "../../../tests/factories.js";
-
-const taskAdmin = { member: apiMember({ roles: [IDS.roles.taskAdmin] }) };
 
 function command(execute: Command["execute"], allowedRoles = [CommandRole.Everyone]): Command {
     return {
@@ -122,35 +119,5 @@ describe("slash command routing", () => {
             { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "There was an error executing that command.", flags: MessageFlags.Ephemeral }) },
         ]);
         expect(error).toHaveBeenCalledWith("[Slash Command Error]: probe", expect.objectContaining({ message: "boom" }));
-    });
-});
-
-describe("/updatetask", () => {
-    test("opens the edit form pre-filled from the stored task as its first response", async ({ discord, services, factories }) => {
-        await factories.task.create({ id: "PVM001", taskName: "Kill {amount} Zulrah", amtBronze: 10, amtSilver: 25, amtGold: 50 });
-        const interaction = await discord.dispatch(
-            chatInputInteraction("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }], taskAdmin)
-        );
-
-        await handleInteraction(interaction, new Map([["updatetask", updatetask]]), services);
-
-        expect(discord.callbacks(interaction)).toHaveLength(1);
-        const modal = discord.modal(interaction);
-        expect(modal?.custom_id).toBe("update_task_modal_PVM001");
-        const values = modal?.components.flatMap((row) => ("components" in row ? row.components : []))
-            .map((input) => ["custom_id" in input ? input.custom_id : "", "value" in input ? input.value : ""]);
-        expect(Object.fromEntries(values ?? [])).toEqual({ taskName: "Kill {amount} Zulrah", type: "KC", bronze: "10", silver: "25", gold: "50" });
-    });
-
-    test("replies privately when the task does not exist", async ({ discord, services }) => {
-        const interaction = await discord.dispatch(
-            chatInputInteraction("updatetask", [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }], taskAdmin)
-        );
-
-        await handleInteraction(interaction, new Map([["updatetask", updatetask]]), services);
-
-        expect(discord.callbacks(interaction)).toEqual([
-            { type: InteractionResponseType.ChannelMessageWithSource, data: expect.objectContaining({ content: "No task found with ID **NOPE**.", flags: MessageFlags.Ephemeral }) },
-        ]);
     });
 });

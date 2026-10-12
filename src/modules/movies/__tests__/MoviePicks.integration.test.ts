@@ -180,6 +180,14 @@ describe("/listmovies", () => {
         expect(buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|end|1")).toMatchObject({ disabled: true });
         expect(buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|prev|0")).toMatchObject({ disabled: false });
     });
+
+    test("says the queue is empty when every movie has been watched", async ({ discord, slash, factories }) => {
+        await factories.movie.create({ watched: true });
+
+        const command = await slash("listmovies");
+
+        expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "No unwatched movies are currently queued. Add a new one with `/addmovie`!" })]);
+    });
 });
 
 describe("the movie list", () => {
