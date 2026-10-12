@@ -47,7 +47,7 @@ const taskdraw: Command = {
 
         try {
             if (action === 'snapshot') {
-                const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
+                const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo, interaction.createdAt);
                 await interaction.editReply({
                     content: `Snapshot created for period **${snapshot.id}** with **${snapshot.totalEntries}** entries.`
                 });
@@ -59,7 +59,7 @@ const taskdraw: Command = {
                     await interaction.editReply('You must provide a snapshot ID to roll a winner.');
                     return;
                 }
-                const winner = await rollWinnerForSnapshot(prizeRepo, snapshotId, services);
+                const winner = await rollWinnerForSnapshot(prizeRepo, snapshotId, services, interaction.createdAt);
                 if (winner) {
                     await interaction.editReply(withSuppressedMentions({ content: `Winner rolled for **${snapshotId}**: <@${winner}>` }, suppressMentions));
                 } else {

@@ -120,11 +120,11 @@ export function isPrizeDrawWeek(date: Date): boolean {
     return ((weeks % prizeFrequencyWeeks) + prizeFrequencyWeeks) % prizeFrequencyWeeks === 0;
 }
 
-// Snapshots the draw's entries, rolls a winner and announces them
-async function drawPrize(client: Client, services: ServiceContainer): Promise<void> {
+// Snapshots the draw's entries, rolls a winner and announces them, as of `now`, the time the draw runs at
+async function drawPrize(client: Client, services: ServiceContainer, now: Date): Promise<void> {
     const { prizeRepo, taskRepo } = services.repos;
-    const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
-    const winner = await rollWinnerForSnapshot(prizeRepo, snapshot.id, services);
+    const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo, now);
+    const winner = await rollWinnerForSnapshot(prizeRepo, snapshot.id, services, now);
     if (!winner) {
         console.log('[PrizeDraw] No eligible entries - skipping announcement.');
         return;
@@ -135,13 +135,13 @@ async function drawPrize(client: Client, services: ServiceContainer): Promise<vo
     }
 }
 
-// The prize draw job, which runs every Tuesday and draws on prize draw weeks
+// The prize draw job, which runs every Tuesday and draws on prize draw weeks; `now` is the time the job runs at
 export async function runPrizeDrawJob(client: Client, services: ServiceContainer, now: Date): Promise<void> {
     if (!isPrizeDrawWeek(now)) return;
 
     console.log('[TaskScheduler] Running prize draw...');
     try {
-        await drawPrize(client, services);
+        await drawPrize(client, services, now);
     } catch (err) {
         console.error('[TaskScheduler] Prize draw job failed:', err);
     }
@@ -177,8 +177,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         const T = testIntervalMinutes;
         updateTestModeNextTimes();
 
-        cron.schedule('* * * * *', async () => {
-            const now = new Date();
+        cron.schedule('* * * * *', async ({ date: now }) => {
             const minute = now.getMinutes();
             updateTestModeNextTimes(now);
 
@@ -200,7 +199,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
 
             if ((minute - 1) % (2 * T) === 0) {
                 console.log('[TaskScheduler] [TEST] Running prize draw...');
-                await drawPrize(client, services);
+                await drawPrize(client, services, now);
                 if (nextPrizeTime) {
                     SchedulerStatusReporter.onNewTrigger('[TEST] Prize Draw', nextPrizeTime);
                 }
@@ -251,10 +250,9 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
 
         cron.schedule(
             prizeExpression,
-            async () => {
-                const now = new Date();
-                await runPrizeDrawJob(client, services, now);
-                scheduleNextPrize(now);
+            async ({ date }) => {
+                await runPrizeDrawJob(client, services, date);
+                scheduleNextPrize(date);
             },
             jobOptions(guildId, 'prizeDraw')
         );

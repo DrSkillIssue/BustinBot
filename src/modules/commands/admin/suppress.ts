@@ -33,7 +33,8 @@ const suppress: Command = {
         }
 
         const minutes = interaction.options.getInteger("minutes", true);
-        const untilMs = Date.now() + minutes * 60_000;
+        // Counted from when the command was run
+        const untilMs = interaction.createdTimestamp + minutes * 60_000;
 
         await services.guilds.update(guildId, {
             mentionSuppressedUntilMs: untilMs,

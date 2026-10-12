@@ -53,17 +53,21 @@ async function storeNight(factories: StoringFactories, overrides: Partial<MovieE
 }
 
 describe("scheduling a movie night", () => {
-    test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, slash, services }) => {
-        // A timezone whose date isn't UTC's right now, so dates taken from the wrong clock show up
-        const timezone = DateTime.utc().hour >= 12 ? "Pacific/Kiritimati" : "Etc/GMT+12";
-        await services.guilds.update(IDS.guild, { timezone });
-        const todayBefore = DateTime.now().setZone(timezone).startOf("day");
+    test("/movienight offers the 14 days from when it was run, by the guild's calendar", async ({
+        discord,
+        slash,
+        services,
+    }) => {
+        await services.guilds.update(IDS.guild, { timezone: "Pacific/Kiritimati" });
 
-        const command = await slash("movienight", [], AS.movieAdmin);
+        // Run at noon UTC on 5 March, when it is already 6 March in Kiribati
+        const command = await slash("movienight", [], {
+            ...AS.movieAdmin,
+            id: SnowflakeUtil.generate({ timestamp: Date.parse("2026-03-05T12:00:00Z") }).toString(),
+        });
 
-        const todayAfter = DateTime.now().setZone(timezone).startOf("day");
-        const menuFrom = (today: DateTime) =>
-            expect.objectContaining({
+        expect(discord.callbacks(command)).toEqual([
+            {
                 type: InteractionResponseType.ChannelMessageWithSource,
                 data: expect.objectContaining({
                     content: "📆 Choose a date for the next movie night:",
@@ -72,18 +76,29 @@ describe("scheduling a movie night", () => {
                             components: [
                                 expect.objectContaining({
                                     custom_id: "movienight-select-date",
-                                    options: Array.from({ length: 14 }, (_, day) => {
-                                        const date = today.plus({ days: day });
-                                        return { label: date.toFormat("ccc, d LLL"), value: date.toISODate() };
-                                    }),
+                                    options: [
+                                        { label: "Fri, 6 Mar", value: "2026-03-06" },
+                                        { label: "Sat, 7 Mar", value: "2026-03-07" },
+                                        { label: "Sun, 8 Mar", value: "2026-03-08" },
+                                        { label: "Mon, 9 Mar", value: "2026-03-09" },
+                                        { label: "Tue, 10 Mar", value: "2026-03-10" },
+                                        { label: "Wed, 11 Mar", value: "2026-03-11" },
+                                        { label: "Thu, 12 Mar", value: "2026-03-12" },
+                                        { label: "Fri, 13 Mar", value: "2026-03-13" },
+                                        { label: "Sat, 14 Mar", value: "2026-03-14" },
+                                        { label: "Sun, 15 Mar", value: "2026-03-15" },
+                                        { label: "Mon, 16 Mar", value: "2026-03-16" },
+                                        { label: "Tue, 17 Mar", value: "2026-03-17" },
+                                        { label: "Wed, 18 Mar", value: "2026-03-18" },
+                                        { label: "Thu, 19 Mar", value: "2026-03-19" },
+                                    ],
                                 }),
                             ],
                         }),
                     ],
                 }),
-            });
-        // The guild's date can roll over while the command runs
-        expect(discord.callbacks(command)).toEqual([expect.toBeOneOf([menuFrom(todayBefore), menuFrom(todayAfter)])]);
+            },
+        ]);
     });
 
     test("asks for a start time in the guild's timezone once a date is picked", async ({ discord, interact }) => {
