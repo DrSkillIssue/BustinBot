@@ -1,17 +1,14 @@
 import { describe, expect, test, vi } from 'vitest';
+import { uniformFloat64 } from 'pure-rand/distribution/uniformFloat64';
+import { xoroshiro128plus } from 'pure-rand/generator/xoroshiro128plus';
 import { pickWeightedRandom, selectTasksForCategory } from '../TaskSelector.js';
 import { Skill, TaskCategory } from '../../../models/Task.js';
 import { buildTask } from '../../../tests/fakes/builders.js';
 
-// Math.random replaced by mulberry32 with a fixed seed, so large samples are random-looking but identical every run
+// Math.random replaced by pure-rand's seeded generator, so large samples are random-looking but identical every run
 function seedRandom(seed: number): void {
-    let state = seed;
-    vi.spyOn(Math, 'random').mockImplementation(() => {
-        state = (state + 0x6d2b79f5) | 0;
-        let t = Math.imul(state ^ (state >>> 15), 1 | state);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    });
+    const rng = xoroshiro128plus(seed);
+    vi.spyOn(Math, 'random').mockImplementation(() => uniformFloat64(rng));
 }
 
 describe('pickWeightedRandom', () => {
