@@ -12,7 +12,7 @@ import { resolveMovieChannel } from "./MovieChannel.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
-async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
+export async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
     if (!guildId) return "UTC";
     const config = await services.guilds.get(guildId);
     return config?.timezone || "UTC";

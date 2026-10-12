@@ -1,6 +1,9 @@
 import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { DateTime } from 'luxon';
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
+import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { resolveGuildTimezone } from '../../movies/MovieScheduler.js';
 
 const movienight: Command = {
     name: 'movienight',
@@ -12,16 +15,16 @@ const movienight: Command = {
         .setName('movienight')
         .setDescription('Schedule the next movie night.'),
 
-    async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
 
-        const today = new Date();
+        // The next 14 days by the guild's calendar, which the start time entered next is read in
+        const today = DateTime.now().setZone(await resolveGuildTimezone(services, interaction.guildId)).startOf('day');
         const options = Array.from({ length: 14 }, (_, i) => {
-            const date = new Date(today);
-            date.setDate(today.getDate() + i);
+            const date = today.plus({ days: i });
             return {
-                label: date.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' }),
-                value: date.toISOString().split("T")[0] as string,
+                label: date.toLocaleString({ weekday: 'short', month: 'short', day: 'numeric' }, { locale: 'en-AU' }),
+                value: date.toISODate()!,
             };
         });
 

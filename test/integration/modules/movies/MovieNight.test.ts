@@ -53,6 +53,39 @@ async function storeNight(factories: StoringFactories, overrides: Partial<MovieE
 }
 
 describe("scheduling a movie night", () => {
+    test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, slash, services }) => {
+        // A timezone whose date isn't UTC's right now, so dates taken from the wrong clock show up
+        const timezone = DateTime.utc().hour >= 12 ? "Pacific/Kiritimati" : "Etc/GMT+12";
+        await services.guilds.update(IDS.guild, { timezone });
+        const todayBefore = DateTime.now().setZone(timezone).startOf("day");
+
+        const command = await slash("movienight", [], { member: apiMember({ roles: [IDS.roles.movieAdmin] }) });
+
+        const todayAfter = DateTime.now().setZone(timezone).startOf("day");
+        const menuFrom = (today: DateTime) =>
+            expect.objectContaining({
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "📆 Choose a date for the next movie night:",
+                    components: [
+                        expect.objectContaining({
+                            components: [
+                                expect.objectContaining({
+                                    custom_id: "movienight-select-date",
+                                    options: Array.from({ length: 14 }, (_, day) => {
+                                        const date = today.plus({ days: day });
+                                        return { label: date.toFormat("ccc, d LLL"), value: date.toISODate() };
+                                    }),
+                                }),
+                            ],
+                        }),
+                    ],
+                }),
+            });
+        // The guild's date can roll over while the command runs
+        expect(discord.callbacks(command)).toEqual([expect.toBeOneOf([menuFrom(todayBefore), menuFrom(todayAfter)])]);
+    });
+
     test("asks for a start time in the guild's timezone once a date is picked", async ({ discord, interact }) => {
         const pick = await interact(stringSelectInteraction("movienight-select-date", ["2026-03-05"]));
 
