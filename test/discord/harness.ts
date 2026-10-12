@@ -93,6 +93,13 @@ export function buttonsIn(
         );
 }
 
+// The path of the application's slash commands in a guild, or of its global ones
+function commandsPath(guildId?: string): string {
+    return guildId
+        ? `/applications/${IDS.application}/guilds/${guildId}/commands`
+        : `/applications/${IDS.application}/commands`;
+}
+
 // The 8-byte signature that opens every PNG file
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JSON_RESPONSE: MockInterceptor.MockResponseOptions = { headers: { "content-type": "application/json" } };
@@ -445,10 +452,11 @@ export class DiscordHarness {
         return this.bodies("PATCH", `/channels/${channelId}/messages/${messageId}`);
     }
 
-    // Discord accepting a bulk overwrite of a guild's slash commands, answering with the stored commands
-    acceptCommandSync(guildId: string): void {
+    // Discord accepting a bulk overwrite of a guild's slash commands, or the global ones when no guild is given,
+    // answering with the stored commands
+    acceptCommandSync(guildId?: string): void {
         this.api
-            .intercept({ path: `${API}/applications/${IDS.application}/guilds/${guildId}/commands`, method: "PUT" })
+            .intercept({ path: `${API}${commandsPath(guildId)}`, method: "PUT" })
             .reply(
                 this.answered(({ body }) => {
                     const commands: object[] = parseBody(body);
@@ -456,7 +464,7 @@ export class DiscordHarness {
                         ...command,
                         id: SnowflakeUtil.generate().toString(),
                         application_id: IDS.application,
-                        guild_id: guildId,
+                        ...(guildId ? { guild_id: guildId } : {}),
                         version: SnowflakeUtil.generate().toString(),
                     }));
                     return { statusCode: 200, data: stored, responseOptions: JSON_RESPONSE };
@@ -637,9 +645,9 @@ export class DiscordHarness {
         return this.bodies("POST", `/webhooks/${IDS.application}/${interaction.token}`);
     }
 
-    // Slash command lists sent to Discord for a guild
-    guildCommandUpdates(guildId: string): RESTPutAPIApplicationGuildCommandsJSONBody[] {
-        return this.bodies("PUT", `/applications/${IDS.application}/guilds/${guildId}/commands`);
+    // Slash command lists sent to Discord for a guild, or globally when no guild is given
+    commandUpdates(guildId?: string): RESTPutAPIApplicationGuildCommandsJSONBody[] {
+        return this.bodies("PUT", commandsPath(guildId));
     }
 
     messagesSentTo(channelId: string): SentMessage[] {

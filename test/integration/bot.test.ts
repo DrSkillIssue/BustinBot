@@ -54,7 +54,7 @@ describe("startBot", () => {
             }),
         );
 
-        const [synced] = discord.guildCommandUpdates(IDS.guild);
+        const [synced] = discord.commandUpdates(IDS.guild);
         const names = synced!.map((command) => command.name);
         expect(new Set(names).size).toBe(names.length);
         expect(names.sort()).toEqual([...new Set([...commands.values()].map((command) => command.name))].sort());
