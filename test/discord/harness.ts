@@ -26,6 +26,7 @@ import {
     type APIUser,
     type APIInteraction,
     type APIMessage,
+    type APIInteractionResponseCallbackData,
     type APIModalInteractionResponseCallbackData,
     type GatewayChannelCreateDispatchData,
     type GatewayVoiceStateUpdateDispatchData,
@@ -66,10 +67,14 @@ export const PRIVATE_DEFERRAL = {
     data: { flags: MessageFlags.Ephemeral },
 };
 
-// The buttons and menus in a message's component rows, as Discord received them
-export function buttonsIn(
-    rows: readonly unknown[] | null | undefined,
-): { customId: string; label?: string; disabled: boolean }[] {
+// The buttons, menus and text inputs in a message's or modal's component rows, as Discord received them
+export function componentsIn(rows: readonly unknown[] | null | undefined): {
+    customId: string;
+    label?: string;
+    placeholder?: string;
+    options?: { label: string; value: string }[];
+    disabled: boolean;
+}[] {
     return (rows ?? [])
         .flatMap((row) =>
             typeof row === "object" && row !== null && "components" in row && Array.isArray(row.components)
@@ -86,6 +91,23 @@ export function buttonsIn(
                           customId: component.custom_id,
                           ...("label" in component && typeof component.label === "string"
                               ? { label: component.label }
+                              : {}),
+                          ...("placeholder" in component && typeof component.placeholder === "string"
+                              ? { placeholder: component.placeholder }
+                              : {}),
+                          ...("options" in component && Array.isArray(component.options)
+                              ? {
+                                    options: component.options.flatMap((option: unknown) =>
+                                        typeof option === "object" &&
+                                        option !== null &&
+                                        "label" in option &&
+                                        typeof option.label === "string" &&
+                                        "value" in option &&
+                                        typeof option.value === "string"
+                                            ? [{ label: option.label, value: option.value }]
+                                            : [],
+                                    ),
+                                }
                               : {}),
                           disabled: "disabled" in component && component.disabled === true,
                       },
@@ -627,6 +649,14 @@ export class DiscordHarness {
     // Initial responses Discord received for an interaction (reply, defer, modal, update)
     callbacks(interaction: Interaction): RESTPostAPIInteractionCallbackJSONBody[] {
         return this.bodies("POST", `/interactions/${interaction.id}/${interaction.token}/callback`);
+    }
+
+    // The message the bot replied to an interaction with, if it replied with one
+    reply(interaction: Interaction): APIInteractionResponseCallbackData | undefined {
+        const response = this.callbacks(interaction).find(
+            (callback) => callback.type === InteractionResponseType.ChannelMessageWithSource,
+        );
+        return response?.type === InteractionResponseType.ChannelMessageWithSource ? response.data : undefined;
     }
 
     // The form Discord was asked to open for an interaction, if any

@@ -8,7 +8,7 @@ import {
 } from "discord-api-types/v10";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
-import { buttonsIn } from "../../../discord/harness.js";
+import { componentsIn } from "../../../discord/harness.js";
 import {
     AS,
     IDS,
@@ -70,7 +70,7 @@ describe("a movie poll", () => {
         const posted = discord
             .messagesSentTo(IDS.channel)
             .find((message) => message.content?.startsWith("📊 **Vote for the next movie night pick!**"));
-        expect(buttonsIn(posted?.components).map((button) => button.customId)).toEqual([
+        expect(componentsIn(posted?.components).map((button) => button.customId)).toEqual([
             "movie_vote_0",
             "movie_vote_1",
         ]);
@@ -195,7 +195,11 @@ describe("choosing the movie for movie night", () => {
         const lockWatched = await interact(buttonInteraction("confirm_random_movie_movie-1", randomPick));
         const lock = await interact(buttonInteraction("confirm_random_movie_movie-2", randomPick));
 
-        expect(JSON.stringify(discord.callbacks(reroll))).toContain('"title":"🎲 Arrival"');
+        expect(discord.callbacks(reroll)).toEqual([
+            expect.objectContaining({
+                data: expect.objectContaining({ embeds: [expect.objectContaining({ title: "🎲 Arrival" })] }),
+            }),
+        ]);
         expect(discord.originalEdits(lockWatched)).toEqual([
             expect.objectContaining({ content: "Could not find the selected movie in the active movie list." }),
         ]);
@@ -218,7 +222,7 @@ describe("/pickmovie", () => {
     }) => {
         await storeMovies(factories, [{ title: "Inception" }]);
         const command = await interact(chatInputInteraction("pickmovie", [], AS.movieAdmin));
-        const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
+        const offered = componentsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
 
         const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, AS.movieAdmin));
         const random = await interact(buttonInteraction("movie_pick_random", pickMessage, AS.movieAdmin));
@@ -232,7 +236,12 @@ describe("/pickmovie", () => {
                 embeds: [expect.objectContaining({ title: "🎲 Inception" })],
             }),
         ]);
-        expect(JSON.stringify(discord.callbacks(pollRandom))).toContain('"custom_id":"movie_poll_random_count"');
+        expect(componentsIn(discord.reply(pollRandom)?.components)).toMatchObject([
+            {
+                customId: "movie_poll_random_count",
+                options: [{ value: "2" }, { value: "3" }, { value: "4" }, { value: "5" }],
+            },
+        ]);
     });
 
     test("builds a poll from the movies picked in the manual menu", async ({
@@ -250,16 +259,16 @@ describe("/pickmovie", () => {
         );
         const confirm = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, AS.movieAdmin));
 
-        const menu = JSON.stringify(discord.originalEdits(open)[0]?.components);
-        expect(menu).toContain('"label":"1. Inception"');
-        expect(menu).not.toContain("Heat");
         expect(
-            buttonsIn(discord.originalEdits(open)[0]?.components).find(
+            componentsIn(discord.originalEdits(open)[0]?.components)[0]?.options?.map((option) => option.label),
+        ).toEqual(["1. Inception", "2. Arrival"]);
+        expect(
+            componentsIn(discord.originalEdits(open)[0]?.components).find(
                 (button) => button.customId === "movie_poll_manual_confirm",
             ),
         ).toMatchObject({ disabled: true });
         expect(
-            buttonsIn(discord.originalEdits(choose)[0]?.components).find(
+            componentsIn(discord.originalEdits(choose)[0]?.components).find(
                 (button) => button.customId === "movie_poll_manual_confirm",
             ),
         ).toMatchObject({ disabled: false });
@@ -310,7 +319,7 @@ describe("/listmovies", () => {
         );
 
         expect(firstPage?.embeds?.map((embed) => embed.title)).toEqual(["1. Inception", "2. Arrival", "3. Heat"]);
-        expect(buttonsIn(firstPage?.components).map((button) => button.customId)).toEqual([
+        expect(componentsIn(firstPage?.components).map((button) => button.customId)).toEqual([
             "listmovies|start|0",
             "listmovies|prev|-1",
             "listmovies|next|1",
@@ -320,10 +329,10 @@ describe("/listmovies", () => {
         const [secondPage] = discord.originalEdits(next);
         expect(secondPage?.embeds?.map((embed) => embed.title)).toEqual(["4. Alien"]);
         expect(
-            buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|end|1"),
+            componentsIn(secondPage?.components).find((button) => button.customId === "listmovies|end|1"),
         ).toMatchObject({ disabled: true });
         expect(
-            buttonsIn(secondPage?.components).find((button) => button.customId === "listmovies|prev|0"),
+            componentsIn(secondPage?.components).find((button) => button.customId === "listmovies|prev|0"),
         ).toMatchObject({ disabled: false });
     });
 

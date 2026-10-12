@@ -7,10 +7,9 @@ import {
     type APIAttachment,
     type GatewayMessageCreateDispatchData,
 } from "discord-api-types/v10";
-import type { Interaction } from "discord.js";
 import { describe, expect, test, vi, type StoringFactories, type Interact } from "../../../fixtures.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
-import { PRIVATE_DEFERRAL, DiscordError, buttonsIn, type DiscordHarness } from "../../../discord/harness.js";
+import { PRIVATE_DEFERRAL, DiscordError, componentsIn, type DiscordHarness } from "../../../discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import {
     IDS,
@@ -37,14 +36,6 @@ const reviewer = SnowflakeUtil.generate().toString();
 const admin = {
     member: apiMember({ user: apiUser({ id: reviewer, username: "admin" }), roles: [IDS.roles.taskAdmin] }),
 };
-
-// The custom ids of the buttons the bot answered an interaction with
-function offeredButtons(discord: DiscordHarness, interaction: Interaction): string[] {
-    const [callback] = discord.callbacks(interaction);
-    return callback?.type === InteractionResponseType.ChannelMessageWithSource
-        ? buttonsIn(callback.data?.components).map((button) => button.customId)
-        : [];
-}
 
 // This week's task, posted in the task channel
 async function storeEvent(factories: StoringFactories) {
@@ -176,7 +167,7 @@ describe("submitting a task", () => {
             screenshotMessage: expect.any(String),
         });
         const [details, posted] = discord.messagesSentTo(IDS.channel);
-        expect(buttonsIn(details?.components).map((button) => button.customId)).toEqual(
+        expect(componentsIn(details?.components).map((button) => button.customId)).toEqual(
             ["bronze", "silver", "gold"]
                 .map((tier) => `approve_${tier}_${submission.id}`)
                 .concat(`reject_${submission.id}`),
@@ -377,7 +368,7 @@ describe("approving a submission", () => {
         const prompt = await interact(
             buttonInteraction(`approve_${tier}_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
         );
-        const [confirm] = offeredButtons(discord, prompt);
+        const [confirm] = componentsIn(discord.reply(prompt)?.components).map((component) => component.customId);
         assert(confirm);
         return interact(buttonInteraction(confirm, apiMessage({ flags: MessageFlags.Ephemeral }), admin));
     }
@@ -409,7 +400,7 @@ describe("approving a submission", () => {
             status: SubmissionStatus.Pending,
         });
 
-        const [confirmButton] = offeredButtons(discord, prompt);
+        const [confirmButton] = componentsIn(discord.reply(prompt)?.components).map((component) => component.customId);
 
         assert(confirmButton);
         const confirm = await interact(
@@ -526,7 +517,9 @@ describe("approving a submission", () => {
             const prompt = await interact(
                 buttonInteraction(`approve_bronze_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
             );
-            const [confirmButton] = offeredButtons(discord, prompt);
+            const [confirmButton] = componentsIn(discord.reply(prompt)?.components).map(
+                (component) => component.customId,
+            );
             assert(confirmButton);
 
             const confirms = await Promise.all([
@@ -711,7 +704,7 @@ describe("approving a submission", () => {
         const prompt = await interact(
             buttonInteraction(`approve_gold_${submission.id}`, apiMessage({ id: REVIEW_POST }), admin),
         );
-        const [, cancelButton] = offeredButtons(discord, prompt);
+        const [, cancelButton] = componentsIn(discord.reply(prompt)?.components).map((component) => component.customId);
         assert(cancelButton);
 
         const cancel = await interact(
@@ -751,7 +744,7 @@ describe("rejecting a submission", () => {
                 }),
             },
         ]);
-        const [confirmButton] = offeredButtons(discord, prompt);
+        const [confirmButton] = componentsIn(discord.reply(prompt)?.components).map((component) => component.customId);
         assert(confirmButton);
         const confirm = await interact(
             buttonInteraction(confirmButton, apiMessage({ flags: MessageFlags.Ephemeral }), admin),

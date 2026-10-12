@@ -1,12 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
-import {
-    ComponentType,
-    InteractionResponseType,
-    MessageFlags,
-    type RESTPatchAPIWebhookWithTokenMessageJSONBody,
-} from "discord-api-types/v10";
+import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../fixtures.js";
-import { PRIVATE_DEFERRAL } from "../../../discord/harness.js";
+import { PRIVATE_DEFERRAL, componentsIn } from "../../../discord/harness.js";
 import { routeInteraction } from "../../../../src/core/events/routeInteraction.js";
 import {
     AS,
@@ -36,17 +31,6 @@ const TASK_CHANNEL = SnowflakeUtil.generate().toString();
 const TASK_VERIFICATION_CHANNEL = SnowflakeUtil.generate().toString();
 
 // The select menus' custom ids and placeholders in a reply, row by row
-function menuPlaceholders(edit: RESTPatchAPIWebhookWithTokenMessageJSONBody | undefined): Record<string, string> {
-    const components = (edit?.components ?? []).flatMap((row) =>
-        row.type === ComponentType.ActionRow ? row.components : [],
-    );
-    return Object.fromEntries(
-        components.flatMap((menu) =>
-            "placeholder" in menu && menu.placeholder ? [[menu.custom_id, menu.placeholder]] : [],
-        ),
-    );
-}
-
 describe("the setup commands", () => {
     test("/setup acknowledges privately first, then offers the channel pickers showing the current channels", async ({
         discord,
@@ -55,11 +39,14 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("setup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            setup_announce: `Channel for bot announcements (Current: #${NAMES.channel})`,
-            setup_log: "Channel for errors and logs (Current: None)",
-            setup_archive: "Channel for archived posts (Current: None)",
-        });
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            { customId: "setup_announce", placeholder: `Channel for bot announcements (Current: #${NAMES.channel})` },
+            { customId: "setup_log", placeholder: "Channel for errors and logs (Current: None)" },
+            { customId: "setup_archive", placeholder: "Channel for archived posts (Current: None)" },
+            { customId: "setup_timezone" },
+            { customId: "setup_confirm" },
+            { customId: "setup_cancel" },
+        ]);
     });
 
     test("/moviesetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
@@ -69,12 +56,20 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("moviesetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            moviesetup_admin_role: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
-            moviesetup_user_role: "Role notified for movie nights (Current: None)",
-            moviesetup_channel: `Channel for movie night announcements (Current: #${NAMES.channel})`,
-            moviesetup_voice_channel: "Voice channel for movie nights (Current: None)",
-        });
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            {
+                customId: "moviesetup_admin_role",
+                placeholder: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
+            },
+            { customId: "moviesetup_user_role", placeholder: "Role notified for movie nights (Current: None)" },
+            {
+                customId: "moviesetup_channel",
+                placeholder: `Channel for movie night announcements (Current: #${NAMES.channel})`,
+            },
+            { customId: "moviesetup_voice_channel", placeholder: "Voice channel for movie nights (Current: None)" },
+            { customId: "moviesetup_confirm" },
+            { customId: "moviesetup_cancel" },
+        ]);
     });
 
     test("/tasksetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
@@ -84,12 +79,23 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("tasksetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
-            tasksetup_admin_role: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
-            tasksetup_user_role: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
-            tasksetup_channel: `Channel for task posts (Current: #${NAMES.channel})`,
-            tasksetup_verification_channel: `Channel for managing submissions (Current: #${NAMES.channel})`,
-        });
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            {
+                customId: "tasksetup_admin_role",
+                placeholder: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
+            },
+            {
+                customId: "tasksetup_user_role",
+                placeholder: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
+            },
+            { customId: "tasksetup_channel", placeholder: `Channel for task posts (Current: #${NAMES.channel})` },
+            {
+                customId: "tasksetup_verification_channel",
+                placeholder: `Channel for managing submissions (Current: #${NAMES.channel})`,
+            },
+            { customId: "tasksetup_confirm" },
+            { customId: "tasksetup_cancel" },
+        ]);
     });
 });
 

@@ -1,6 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, type StoringFactories } from "../../../../fixtures.js";
+import { componentsIn } from "../../../../discord/harness.js";
 import {
     AS,
     IDS,
@@ -39,7 +40,11 @@ describe("/addmovie", () => {
             "The Matrix (1999)",
             "The Matrix Reloaded (2003)",
         ]);
-        expect(JSON.stringify(results?.components)).toContain('"custom_id":"addmovie|select|604"');
+        expect(componentsIn(results?.components).map((component) => component.customId)).toEqual([
+            "addmovie|select|603",
+            "addmovie|select|604",
+            "addmovie|cancel",
+        ]);
         expect(discord.callbacks(pick)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         expect(discord.originalEdits(pick)).toEqual([
             expect.objectContaining({

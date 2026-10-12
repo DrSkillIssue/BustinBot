@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { describe, expect, test, type StoringFactories, storePollableTasks } from "../../../fixtures.js";
-import { buttonsIn } from "../../../discord/harness.js";
+import { componentsIn } from "../../../discord/harness.js";
 import { IDS, apiMember, apiMessage, apiUser, buttonInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { TaskCategory } from "../../../../src/models/Task.js";
@@ -43,7 +43,7 @@ describe("posting the weekly task polls", () => {
         expect(announcement?.content).toContain("**New task polls are live!**");
         expect(polls).toHaveLength(3);
         for (const poll of polls) {
-            expect(buttonsIn(poll.components)).toHaveLength(3);
+            expect(componentsIn(poll.components)).toHaveLength(3);
             expect(poll.files).toEqual(["category_icon.png"]);
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
@@ -208,6 +208,6 @@ describe("closing a task poll", () => {
 
         expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.isActive).toBe(false);
         const [closedMessage] = discord.messageEdits(IDS.channel, poll.messageId);
-        expect(buttonsIn(closedMessage?.components)).toEqual([]);
+        expect(componentsIn(closedMessage?.components)).toEqual([]);
     });
 });

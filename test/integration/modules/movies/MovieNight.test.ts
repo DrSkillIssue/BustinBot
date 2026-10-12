@@ -5,6 +5,7 @@ import { DateTime } from "luxon";
 import type { APIRole } from "discord-api-types/v10";
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
+import { componentsIn } from "../../../discord/harness.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import type { DiscordHarness } from "../../../discord/harness.js";
 import { createServiceContainer } from "../../../../src/core/services/ServiceFactory.js";
@@ -61,37 +62,26 @@ describe("scheduling a movie night", () => {
 
         const command = await interact(chatInputInteraction("movienight", [], AS.movieAdmin));
 
-        expect(discord.callbacks(command)).toEqual([
+        expect(discord.reply(command)?.content).toBe("📆 Choose a date for the next movie night:");
+        expect(componentsIn(discord.reply(command)?.components)).toMatchObject([
             {
-                type: InteractionResponseType.ChannelMessageWithSource,
-                data: expect.objectContaining({
-                    content: "📆 Choose a date for the next movie night:",
-                    components: [
-                        expect.objectContaining({
-                            components: [
-                                expect.objectContaining({
-                                    custom_id: "movienight-select-date",
-                                    options: [
-                                        { label: "Fri, 6 Mar", value: "2026-03-06" },
-                                        { label: "Sat, 7 Mar", value: "2026-03-07" },
-                                        { label: "Sun, 8 Mar", value: "2026-03-08" },
-                                        { label: "Mon, 9 Mar", value: "2026-03-09" },
-                                        { label: "Tue, 10 Mar", value: "2026-03-10" },
-                                        { label: "Wed, 11 Mar", value: "2026-03-11" },
-                                        { label: "Thu, 12 Mar", value: "2026-03-12" },
-                                        { label: "Fri, 13 Mar", value: "2026-03-13" },
-                                        { label: "Sat, 14 Mar", value: "2026-03-14" },
-                                        { label: "Sun, 15 Mar", value: "2026-03-15" },
-                                        { label: "Mon, 16 Mar", value: "2026-03-16" },
-                                        { label: "Tue, 17 Mar", value: "2026-03-17" },
-                                        { label: "Wed, 18 Mar", value: "2026-03-18" },
-                                        { label: "Thu, 19 Mar", value: "2026-03-19" },
-                                    ],
-                                }),
-                            ],
-                        }),
-                    ],
-                }),
+                customId: "movienight-select-date",
+                options: [
+                    { label: "Fri, 6 Mar", value: "2026-03-06" },
+                    { label: "Sat, 7 Mar", value: "2026-03-07" },
+                    { label: "Sun, 8 Mar", value: "2026-03-08" },
+                    { label: "Mon, 9 Mar", value: "2026-03-09" },
+                    { label: "Tue, 10 Mar", value: "2026-03-10" },
+                    { label: "Wed, 11 Mar", value: "2026-03-11" },
+                    { label: "Thu, 12 Mar", value: "2026-03-12" },
+                    { label: "Fri, 13 Mar", value: "2026-03-13" },
+                    { label: "Sat, 14 Mar", value: "2026-03-14" },
+                    { label: "Sun, 15 Mar", value: "2026-03-15" },
+                    { label: "Mon, 16 Mar", value: "2026-03-16" },
+                    { label: "Tue, 17 Mar", value: "2026-03-17" },
+                    { label: "Wed, 18 Mar", value: "2026-03-18" },
+                    { label: "Thu, 19 Mar", value: "2026-03-19" },
+                ],
             },
         ]);
     });
@@ -101,7 +91,7 @@ describe("scheduling a movie night", () => {
 
         const form = discord.modal(pick);
         expect(form).toMatchObject({ custom_id: "movienight-time-2026-03-05", title: "Enter movie night time" });
-        expect(JSON.stringify(form?.components)).toContain('"label":"Start time (UTC+0)"');
+        expect(componentsIn(form?.components)).toMatchObject([{ customId: "start-time", label: "Start time (UTC+0)" }]);
     });
 
     test("announces it, stores it in place of the previous night, and ends the open poll an hour before", async ({
@@ -143,7 +133,12 @@ describe("scheduling a movie night", () => {
             content: `<@&${movieUsers.id}>`,
             embeds: [expect.objectContaining({ title: "Now showing: Latest Pick" })],
         });
-        expect(JSON.stringify(announcement?.embeds)).toContain("Reminders will be sent at");
+        expect(announcement?.embeds?.[0]?.fields).toContainEqual(
+            expect.objectContaining({
+                name: "🎥 Start Time",
+                value: expect.stringContaining("Reminders will be sent at"),
+            }),
+        );
         const events = await movies.getAllEvents();
         expect(events.find((event) => event.id === "previous")).toMatchObject({ completed: true });
         const night = await movies.getActiveEvent();
@@ -179,7 +174,7 @@ describe("scheduling a movie night", () => {
 
         await interact(modalSubmitInteraction(`movienight-time-${date}`, { "start-time": "21:00" }));
 
-        expect(JSON.stringify(discord.messagesSentTo(IDS.channel)[0]?.embeds)).toContain(
+        expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]?.description).toContain(
             `A poll is currently running in <#${pollChannel}>`,
         );
         expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({ movie: { id: "TBD", title: "TBD" } });

@@ -1,6 +1,6 @@
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { buttonsIn } from "../../../../discord/harness.js";
+import { componentsIn } from "../../../../discord/harness.js";
 import { apiMessage, buttonInteraction, chatInputInteraction } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 
@@ -31,7 +31,7 @@ describe("/listtasks", () => {
         });
         expect(firstPage?.embeds?.[0]?.description).toContain("MIN008");
         expect(firstPage?.embeds?.[0]?.description).not.toContain("MIN009");
-        expect(buttonsIn(firstPage?.components).map((button) => button.customId)).toEqual([
+        expect(componentsIn(firstPage?.components).map((button) => button.customId)).toEqual([
             "listtasks|Minigame/Misc|start|0",
             "listtasks|Minigame/Misc|prev|-1",
             "listtasks|Minigame/Misc|next|1",
@@ -43,7 +43,7 @@ describe("/listtasks", () => {
         expect(secondPage?.embeds?.[0]?.description).toContain("MIN009");
         expect(secondPage?.embeds?.[0]?.description).not.toContain("MIN008");
         expect(
-            buttonsIn(secondPage?.components).find((button) => button.customId === "listtasks|Minigame/Misc|end|1"),
+            componentsIn(secondPage?.components).find((button) => button.customId === "listtasks|Minigame/Misc|end|1"),
         ).toMatchObject({ disabled: true });
     });
 
