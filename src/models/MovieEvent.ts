@@ -1,5 +1,8 @@
 import type { Movie } from "./Movie.js";
 
+// The id of the placeholder movie a night is stored with until a movie is picked for it
+export const UNPICKED_MOVIE_ID = "TBD";
+
 export interface MovieEvent {
     // Unique identifier for the event
     id: string;

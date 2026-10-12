@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import type { Client } from 'discord.js';
 import type { Reminder } from "../../models/Reminder.js";
-import type { MovieEvent } from "../../models/MovieEvent.js";
+import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 import { resolveMovieChannel } from "./MovieChannel.js";
@@ -60,7 +60,7 @@ export async function sendDueReminders(client: Client, services: ServiceContaine
     const voiceMention = voiceChannelId ? `<#${voiceChannelId}>` : "the movie voice channel";
 
     const activePoll = await movieRepo.getActivePoll();
-    const title = event.movie.id !== 'TBD' ? event.movie.title : null;
+    const title = event.movie.id !== UNPICKED_MOVIE_ID ? event.movie.title : null;
     const stateLine = activePoll?.isActive
         ? `A movie poll is currently running! Go cast your vote before it closes.`
         : title

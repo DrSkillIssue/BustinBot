@@ -3,6 +3,7 @@ import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 import { createMovieNightEmbed } from '../../movies/MovieEmbeds.js';
 import type { Movie } from '../../../models/Movie.js';
+import { UNPICKED_MOVIE_ID } from '../../../models/MovieEvent.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
 import { DateTime } from 'luxon';
 
@@ -34,8 +35,8 @@ const currentmovie: Command = {
         const startTime = DateTime.fromJSDate(startDate);
         const unixTimestamp = Math.floor(startTime.toSeconds());
 
-        // Fetch current movie (if any)
-        const currentMovie: Movie | null = movieEvent.movie ?? null;
+        // The night's movie, unless none has been picked yet
+        const currentMovie: Movie | null = movieEvent.movie.id !== UNPICKED_MOVIE_ID ? movieEvent.movie : null;
 
         // Determine state message
         let stateMessage = "";

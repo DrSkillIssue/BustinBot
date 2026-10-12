@@ -3,7 +3,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { DateTime } from 'luxon';
 import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
 import type { Movie } from "../../models/Movie.js";
-import type { MovieEvent } from "../../models/MovieEvent.js";
+import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
 import { getPendingReminders, sendDueReminders } from "./MovieReminders.js";
 import { finishMovieNight, movieNightEndsAt } from "./MovieLifecycle.js";
 import { closeActiveMoviePoll } from "./MoviePolls.js";
@@ -235,7 +235,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         id: eventId,
         createdAt: new Date(),
         startTime: utcDateTime.toJSDate(),
-        movie: movie ?? { id: "TBD", title: "TBD", addedBy: interaction.user.id, addedAt: new Date(), watched: false },
+        movie: movie ?? { id: UNPICKED_MOVIE_ID, title: "TBD", addedBy: interaction.user.id, addedAt: new Date(), watched: false },
         channelId: pollChannelId || interaction.channelId || "",
         voiceChannelId,
         hostedBy: interaction.user.id,
