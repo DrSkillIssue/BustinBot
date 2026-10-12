@@ -7,8 +7,8 @@ describe("TaskInstructions mapping", () => {
     test("provides instructions for every task type", () => {
         const types = Object.values(TaskType);
         for (const type of types) {
-            expect(TaskInstructions[type as TaskType]).toBeTruthy();
-            expect(typeof TaskInstructions[type as TaskType]).toBe("string");
+            expect(TaskInstructions[type]).toBeTruthy();
+            expect(typeof TaskInstructions[type]).toBe("string");
         }
     });
 });
