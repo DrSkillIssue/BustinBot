@@ -1,19 +1,21 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/taskperiod", () => {
-    test("set saves the number of task events per period", async ({ discord, slash, services }) => {
-        const command = await slash(
-            "taskperiod",
-            [
-                {
-                    type: ApplicationCommandOptionType.Subcommand,
-                    name: "set",
-                    options: [{ type: ApplicationCommandOptionType.Integer, name: "events", value: 8 }],
-                },
-            ],
-            AS.taskAdmin,
+    test("set saves the number of task events per period", async ({ discord, interact, services }) => {
+        const command = await interact(
+            chatInputInteraction(
+                "taskperiod",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "set",
+                        options: [{ type: ApplicationCommandOptionType.Integer, name: "events", value: 8 }],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -27,7 +29,7 @@ describe("/taskperiod", () => {
 
     test("start begins a fresh period without points, keeping the period number", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -37,10 +39,12 @@ describe("/taskperiod", () => {
             period: { eventIds: ["week-1", "week-2"], index: 3 },
         });
 
-        const command = await slash(
-            "taskperiod",
-            [{ type: ApplicationCommandOptionType.Subcommand, name: "start" }],
-            AS.taskAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "taskperiod",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "start" }],
+                AS.taskAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([

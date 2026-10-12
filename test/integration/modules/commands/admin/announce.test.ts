@@ -3,7 +3,7 @@ import path from "node:path";
 import { ComponentType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../../../../discord/harness.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { packageVersion } from "../../../../../src/utils/version.js";
 
 const announcements = JSON.parse(
@@ -13,11 +13,11 @@ const announcements = JSON.parse(
 describe("/announce", () => {
     test("posts this version's announcement in the announcement channel and confirms privately", async ({
         discord,
-        slash,
+        interact,
     }) => {
         discord.acceptMessages(IDS.channel);
 
-        const interaction = await slash("announce", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
@@ -38,8 +38,8 @@ describe("/announce", () => {
         ]);
     });
 
-    test("is refused to members who are not bot admins", async ({ discord, slash }) => {
-        const interaction = await slash("announce");
+    test("is refused to members who are not bot admins", async ({ discord, interact }) => {
+        const interaction = await interact(chatInputInteraction("announce"));
 
         expect(discord.callbacks(interaction)).toEqual([
             {
@@ -53,21 +53,21 @@ describe("/announce", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
     });
 
-    test("tells the admin when no announcement channel is configured", async ({ discord, services, slash }) => {
+    test("tells the admin when no announcement channel is configured", async ({ discord, interact, services }) => {
         await services.guilds.update(IDS.guild, { channels: { announcements: "" } });
 
-        const interaction = await slash("announce", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Announcement channel not configured. Please run `/setup` first." }),
         ]);
     });
 
-    test("tells the admin when the configured channel can't be reached", async ({ discord, services, slash }) => {
+    test("tells the admin when the configured channel can't be reached", async ({ discord, interact, services }) => {
         await services.guilds.update(IDS.guild, { channels: { announcements: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
-        const interaction = await slash("announce", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({

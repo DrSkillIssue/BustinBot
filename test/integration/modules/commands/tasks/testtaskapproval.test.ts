@@ -1,13 +1,13 @@
 import assert from "node:assert";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
 describe("/testtaskapproval", () => {
     test("posts a test submission for the latest task event for review, with the chosen tier as a hint", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -17,10 +17,12 @@ describe("/testtaskapproval", () => {
         });
         discord.acceptMessages(IDS.channel);
 
-        const command = await slash(
-            "testtaskapproval",
-            [{ type: ApplicationCommandOptionType.String, name: "tier", value: SubmissionStatus.Silver }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "testtaskapproval",
+                [{ type: ApplicationCommandOptionType.String, name: "tier", value: SubmissionStatus.Silver }],
+                AS.botAdmin,
+            ),
         );
 
         const [submission, ...others] = await services.repos.taskRepo.getSubmissionsByUser(IDS.user);
@@ -46,11 +48,13 @@ describe("/testtaskapproval", () => {
         ]);
     });
 
-    test("says so when the given task event doesn't exist", async ({ discord, slash }) => {
-        const command = await slash(
-            "testtaskapproval",
-            [{ type: ApplicationCommandOptionType.String, name: "taskid", value: "PVM001" }],
-            AS.botAdmin,
+    test("says so when the given task event doesn't exist", async ({ discord, interact }) => {
+        const command = await interact(
+            chatInputInteraction(
+                "testtaskapproval",
+                [{ type: ApplicationCommandOptionType.String, name: "taskid", value: "PVM001" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -61,8 +65,8 @@ describe("/testtaskapproval", () => {
         ]);
     });
 
-    test("says so when there are no task events", async ({ discord, slash }) => {
-        const command = await slash("testtaskapproval", [], AS.botAdmin);
+    test("says so when there are no task events", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("testtaskapproval", [], AS.botAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "❌ No task events found. Run `/testtask` first to create one." }),

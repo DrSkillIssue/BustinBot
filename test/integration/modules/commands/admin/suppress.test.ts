@@ -1,19 +1,21 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi, storePollableTasks } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/suppress", () => {
-    test("stops the bot pinging roles for the given minutes", async ({ discord, slash, factories }) => {
+    test("stops the bot pinging roles for the given minutes", async ({ discord, interact, factories }) => {
         await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
         vi.setSystemTime(new Date("2026-03-05T12:00:00Z"));
 
-        const command = await slash(
-            "suppress",
-            [{ type: ApplicationCommandOptionType.Integer, name: "minutes", value: 30 }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "suppress",
+                [{ type: ApplicationCommandOptionType.Integer, name: "minutes", value: 30 }],
+                AS.botAdmin,
+            ),
         );
-        await slash("taskpoll", [], AS.botAdmin);
+        await interact(chatInputInteraction("taskpoll", [], AS.botAdmin));
 
         // 12:30 UTC on 5 March
         expect(discord.originalEdits(command)).toEqual([

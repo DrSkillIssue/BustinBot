@@ -23,19 +23,15 @@ async function storeFullList(factories: StoringFactories, userId: string): Promi
 }
 
 describe("/addmovie", () => {
-    test("shows TMDb's results and adds the one the member picks", async ({
-        discord,
-        slash,
-        interact,
-        services,
-        http,
-    }) => {
+    test("shows TMDb's results and adds the one the member picks", async ({ discord, interact, services, http }) => {
         tmdbSearch(http, "The Matrix", [matrix, reloaded]);
         tmdbMovie(http, matrix, 136, "Lana Wachowski");
 
-        const command = await slash("addmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
-        ]);
+        const command = await interact(
+            chatInputInteraction("addmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
+            ]),
+        );
         const [results] = discord.originalEdits(command);
         const pick = await interact(buttonInteraction("addmovie|select|603", resultsMessage));
 
@@ -91,7 +87,7 @@ describe("/addmovie", () => {
 
     test("stops a member at three movies in the list, unless they are a movie admin or the server owner", async ({
         discord,
-        slash,
+        interact,
         http,
         factories,
     }) => {
@@ -100,18 +96,24 @@ describe("/addmovie", () => {
         tmdbSearch(http, "The Matrix", [matrix]);
         tmdbSearch(http, "The Matrix", [matrix]);
 
-        const member = await slash("addmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
-        ]);
-        const admin = await slash(
-            "addmovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
-            AS.movieAdmin,
+        const member = await interact(
+            chatInputInteraction("addmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
+            ]),
         );
-        const owner = await slash(
-            "addmovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
-            { member: apiMember({ user: apiUser({ id: IDS.owner }) }) },
+        const admin = await interact(
+            chatInputInteraction(
+                "addmovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
+                AS.movieAdmin,
+            ),
+        );
+        const owner = await interact(
+            chatInputInteraction(
+                "addmovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
+                { member: apiMember({ user: apiUser({ id: IDS.owner }) }) },
+            ),
         );
 
         expect(discord.originalEdits(member)).toEqual([
@@ -157,12 +159,14 @@ describe("/addmovie", () => {
         ]);
     });
 
-    test("is refused until the bot is set up", async ({ discord, slash, db }) => {
+    test("is refused until the bot is set up", async ({ discord, interact, db }) => {
         await db.doc(`guilds/${IDS.guild}`).delete();
 
-        const command = await slash("addmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
-        ]);
+        const command = await interact(
+            chatInputInteraction("addmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
+            ]),
+        );
 
         expect(discord.callbacks(command)).toEqual([
             {

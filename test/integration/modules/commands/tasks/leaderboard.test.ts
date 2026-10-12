@@ -1,13 +1,18 @@
 import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { apiMember, apiMessage, apiUser, buttonInteraction } from "../../../../discord/payloads.js";
+import {
+    apiMember,
+    apiMessage,
+    apiUser,
+    buttonInteraction,
+    chatInputInteraction,
+} from "../../../../discord/payloads.js";
 
 describe("/leaderboard", () => {
     test("shows the all-time leaderboard with the member's rank, and switches to the period's", async ({
         discord,
         interact,
-        slash,
         factories,
     }) => {
         const ann = {
@@ -21,7 +26,7 @@ describe("/leaderboard", () => {
             longestTaskStreak: 3,
         });
 
-        const command = await slash("leaderboard", [], ann);
+        const command = await interact(chatInputInteraction("leaderboard", [], ann));
         const periodic = await interact(buttonInteraction("task-leaderboard|periodic", apiMessage(), ann));
 
         expect(discord.originalEdits(command)).toEqual([

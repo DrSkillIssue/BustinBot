@@ -20,6 +20,7 @@ import {
     apiVoiceState,
     modalSubmitInteraction,
     stringSelectInteraction,
+    chatInputInteraction,
 } from "../../../discord/payloads.js";
 import { movieFactory, moviePollFactory } from "../../../factories.js";
 import type { MovieEvent } from "../../../../src/models/MovieEvent.js";
@@ -54,12 +55,12 @@ async function storeNight(factories: StoringFactories, overrides: Partial<MovieE
 }
 
 describe("scheduling a movie night", () => {
-    test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, slash, services }) => {
+    test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, interact, services }) => {
         await services.guilds.update(IDS.guild, { timezone: "Pacific/Kiritimati" });
         // Noon UTC on 5 March, when it is already 6 March in Kiribati
         vi.setSystemTime(new Date("2026-03-05T12:00:00Z"));
 
-        const command = await slash("movienight", [], AS.movieAdmin);
+        const command = await interact(chatInputInteraction("movienight", [], AS.movieAdmin));
 
         expect(discord.callbacks(command)).toEqual([
             {
@@ -404,14 +405,14 @@ describe("the movie night sweep", () => {
         ]);
     });
 
-    test("sends nothing more for a night that was cancelled", async ({ discord, services, slash, factories }) => {
+    test("sends nothing more for a night that was cancelled", async ({ discord, interact, services, factories }) => {
         const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
         vi.setSystemTime(start.minus({ hours: 1 }).toJSDate());
         await setUpMovieNight(discord, services);
         await storeNight(factories, { startTime: start.toJSDate() });
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], AS.movieAdmin);
+        await interact(chatInputInteraction("cancelmovie", [], AS.movieAdmin));
         vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());
         await sweepMovieNight(discord.client, services);
         vi.setSystemTime(start.toJSDate());

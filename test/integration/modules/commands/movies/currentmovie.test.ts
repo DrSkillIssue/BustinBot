@@ -1,9 +1,9 @@
 import { SnowflakeUtil } from "discord.js";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { apiUser } from "../../../../discord/payloads.js";
+import { apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/currentmovie", () => {
-    test("shows the scheduled night's movie, start time and host", async ({ discord, slash, factories }) => {
+    test("shows the scheduled night's movie, start time and host", async ({ discord, interact, factories }) => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
         discord.user(host);
         const night = await factories.movieEvent.create({
@@ -12,7 +12,7 @@ describe("/currentmovie", () => {
         });
         const start = night.startTime.getTime() / 1000;
 
-        const command = await slash("currentmovie");
+        const command = await interact(chatInputInteraction("currentmovie"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -35,7 +35,7 @@ describe("/currentmovie", () => {
 
     test("says no movie is picked yet when the night was scheduled before one was", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
@@ -44,7 +44,7 @@ describe("/currentmovie", () => {
         const night = await factories.movieEvent.create({ movie: { id: "TBD", title: "TBD" }, hostedBy: host.id });
         const start = night.startTime.getTime() / 1000;
 
-        const command = await slash("currentmovie");
+        const command = await interact(chatInputInteraction("currentmovie"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -59,10 +59,10 @@ describe("/currentmovie", () => {
         ]);
     });
 
-    test("says so when no night is scheduled", async ({ discord, slash, factories }) => {
+    test("says so when no night is scheduled", async ({ discord, interact, factories }) => {
         await factories.movieEvent.create({ completed: true });
 
-        const command = await slash("currentmovie");
+        const command = await interact(chatInputInteraction("currentmovie"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No movie night is currently scheduled." }),

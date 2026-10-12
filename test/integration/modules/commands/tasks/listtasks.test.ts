@@ -1,14 +1,13 @@
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
 import { buttonsIn } from "../../../../discord/harness.js";
-import { apiMessage, buttonInteraction } from "../../../../discord/payloads.js";
+import { apiMessage, buttonInteraction, chatInputInteraction } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 
 describe("/listtasks", () => {
     test("pages through a category's tasks with buttons that keep working", async ({
         discord,
         interact,
-        slash,
         factories,
     }) => {
         for (let number = 1; number <= 9; number++) {
@@ -16,9 +15,11 @@ describe("/listtasks", () => {
         }
         await factories.task.create({ id: "PVM001", category: TaskCategory.PvM });
 
-        const command = await slash("listtasks", [
-            { type: ApplicationCommandOptionType.String, name: "category", value: TaskCategory.MinigameMisc },
-        ]);
+        const command = await interact(
+            chatInputInteraction("listtasks", [
+                { type: ApplicationCommandOptionType.String, name: "category", value: TaskCategory.MinigameMisc },
+            ]),
+        );
         const [firstPage] = discord.originalEdits(command);
         const next = await interact(
             buttonInteraction("listtasks|Minigame/Misc|next|1", apiMessage({ flags: MessageFlags.Ephemeral })),
@@ -48,13 +49,13 @@ describe("/listtasks", () => {
 
     test("shows every category on one page without buttons when the tasks fit", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         await factories.task.create({ id: "PVM001", category: TaskCategory.PvM });
         await factories.task.create({ id: "SKL001", category: TaskCategory.Skilling });
 
-        const command = await slash("listtasks");
+        const command = await interact(chatInputInteraction("listtasks"));
 
         const [page] = discord.originalEdits(command);
         expect(page).toMatchObject({
@@ -63,12 +64,14 @@ describe("/listtasks", () => {
         });
     });
 
-    test("says so when a category has no tasks", async ({ discord, slash, factories }) => {
+    test("says so when a category has no tasks", async ({ discord, interact, factories }) => {
         await factories.task.create({ id: "PVM001", category: TaskCategory.PvM });
 
-        const command = await slash("listtasks", [
-            { type: ApplicationCommandOptionType.String, name: "category", value: TaskCategory.Leagues },
-        ]);
+        const command = await interact(
+            chatInputInteraction("listtasks", [
+                { type: ApplicationCommandOptionType.String, name: "category", value: TaskCategory.Leagues },
+            ]),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No tasks were found for **Leagues**." }),

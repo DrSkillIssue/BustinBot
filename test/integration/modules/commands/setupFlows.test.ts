@@ -17,6 +17,7 @@ import {
     modalSubmitInteraction,
     roleSelectInteraction,
     stringSelectInteraction,
+    chatInputInteraction,
 } from "../../../discord/payloads.js";
 import { guildFactory } from "../../../factories.js";
 
@@ -49,9 +50,9 @@ function menuPlaceholders(edit: RESTPatchAPIWebhookWithTokenMessageJSONBody | un
 describe("the setup commands", () => {
     test("/setup acknowledges privately first, then offers the channel pickers showing the current channels", async ({
         discord,
-        slash,
+        interact,
     }) => {
-        const interaction = await slash("setup", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("setup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
@@ -63,9 +64,9 @@ describe("the setup commands", () => {
 
     test("/moviesetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
         discord,
-        slash,
+        interact,
     }) => {
-        const interaction = await slash("moviesetup", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("moviesetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({
@@ -78,9 +79,9 @@ describe("the setup commands", () => {
 
     test("/tasksetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
         discord,
-        slash,
+        interact,
     }) => {
-        const interaction = await slash("tasksetup", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("tasksetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
         expect(menuPlaceholders(discord.originalEdits(interaction)[0])).toEqual({

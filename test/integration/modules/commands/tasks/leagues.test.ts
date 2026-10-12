@@ -1,12 +1,12 @@
 import { describe, expect, test, storePollableTasks } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 import { postAllTaskPolls } from "../../../../../src/modules/tasks/HandleTaskPoll.js";
 
 describe("/leagues", () => {
     test("switching Leagues on adds a Leagues poll to the next task polls", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -14,7 +14,7 @@ describe("/leagues", () => {
         await storePollableTasks(factories, Object.values(TaskCategory));
         discord.acceptMessages(IDS.channel);
 
-        const command = await slash("leagues", [], AS.taskAdmin);
+        const command = await interact(chatInputInteraction("leagues", [], AS.taskAdmin));
         await postAllTaskPolls(discord.client, services);
 
         expect(discord.originalEdits(command)).toEqual([
@@ -25,10 +25,10 @@ describe("/leagues", () => {
         });
     });
 
-    test("switches Leagues back off", async ({ discord, slash, services }) => {
+    test("switches Leagues back off", async ({ discord, interact, services }) => {
         await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", true, IDS.user);
 
-        const command = await slash("leagues", [], AS.taskAdmin);
+        const command = await interact(chatInputInteraction("leagues", [], AS.taskAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Leagues tasks have been **disabled**." }),

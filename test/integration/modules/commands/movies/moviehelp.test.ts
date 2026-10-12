@@ -8,10 +8,10 @@ function listedCommands(description: string | undefined): string[] {
 describe("/moviehelp", () => {
     test("lists the member commands for members, and the admin commands too for movie admins", async ({
         discord,
-        slash,
+        interact,
     }) => {
-        const member = await slash("moviehelp");
-        const admin = await slash("moviehelp", [], AS.movieAdmin);
+        const member = await interact(chatInputInteraction("moviehelp"));
+        const admin = await interact(chatInputInteraction("moviehelp", [], AS.movieAdmin));
 
         const commandsFor = (interaction: typeof member) =>
             listedCommands(discord.originalEdits(interaction)[0]?.embeds?.[0]?.fields?.at(-1)?.value);

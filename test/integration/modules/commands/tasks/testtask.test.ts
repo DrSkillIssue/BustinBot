@@ -1,12 +1,12 @@
 import assert from "node:assert";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/testtask", () => {
-    test("posts a week-long test task event in the channel and stores it", async ({ discord, slash, services }) => {
+    test("posts a week-long test task event in the channel and stores it", async ({ discord, interact, services }) => {
         discord.acceptMessages(IDS.channel);
 
-        const command = await slash("testtask", [], AS.botAdmin);
+        const command = await interact(chatInputInteraction("testtask", [], AS.botAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Test task event posted!" }),

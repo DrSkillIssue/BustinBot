@@ -28,12 +28,6 @@ async function storeOpenPoll(factories: StoringFactories, overrides: Partial<Tas
     });
 }
 
-function vote(poll: TaskPoll, optionId: string, userId: string = IDS.user) {
-    return buttonInteraction(`vote_${poll.category}_${optionId}`, apiMessage({ id: poll.messageId }), {
-        member: apiMember({ user: apiUser({ id: userId }) }),
-    });
-}
-
 describe("posting the weekly task polls", () => {
     test("announces them and posts one open poll per category, each stored with its options", async ({
         discord,
@@ -97,7 +91,9 @@ describe("voting in a task poll", () => {
         const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
-        const click = await interact(vote(poll, "PVM002"));
+        const click = await interact(
+            buttonInteraction(`vote_${poll.category}_PVM002`, apiMessage({ id: poll.messageId })),
+        );
 
         expect(discord.originalEdits(click)).toEqual([
             expect.objectContaining({ content: "Thank you for your vote!" }),
@@ -117,8 +113,8 @@ describe("voting in a task poll", () => {
         const poll = await storeOpenPoll(factories);
         discord.acceptMessageEdits(IDS.channel);
 
-        await interact(vote(poll, "PVM001"));
-        await interact(vote(poll, "PVM003"));
+        await interact(buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId })));
+        await interact(buttonInteraction(`vote_${poll.category}_PVM003`, apiMessage({ id: poll.messageId })));
 
         expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM003" });
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
@@ -139,7 +135,11 @@ describe("voting in a task poll", () => {
         ];
 
         for (const voter of voters) {
-            const click = await interact(vote(poll, "PVM001", voter));
+            const click = await interact(
+                buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId }), {
+                    member: apiMember({ user: apiUser({ id: voter }) }),
+                }),
+            );
             expect(discord.originalEdits(click)).toEqual([
                 expect.objectContaining({ content: "Thank you for your vote!" }),
             ]);
@@ -161,7 +161,9 @@ describe("voting in a task poll", () => {
         });
 
         for (const poll of [closed, expired]) {
-            const click = await interact(vote(poll, "PVM001"));
+            const click = await interact(
+                buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId })),
+            );
             expect(discord.originalEdits(click)).toEqual([
                 expect.objectContaining({ content: "This poll has closed." }),
             ]);
@@ -176,8 +178,12 @@ describe("voting in a task poll", () => {
     }) => {
         const poll = await storeOpenPoll(factories);
 
-        const outdated = await interact(vote({ ...poll, category: TaskCategory.Skilling }, "PVM001"));
-        const unknown = await interact(vote(poll, "PVM999"));
+        const outdated = await interact(
+            buttonInteraction(`vote_${TaskCategory.Skilling}_PVM001`, apiMessage({ id: poll.messageId })),
+        );
+        const unknown = await interact(
+            buttonInteraction(`vote_${poll.category}_PVM999`, apiMessage({ id: poll.messageId })),
+        );
 
         expect(discord.originalEdits(outdated)).toEqual([
             expect.objectContaining({ content: "This poll message is outdated." }),

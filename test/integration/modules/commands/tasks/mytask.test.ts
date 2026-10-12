@@ -2,14 +2,14 @@ import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS } from "../../../../discord/payloads.js";
+import { IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
 describe("/mytask", () => {
     test("lists the member's submissions for the running task events, newest first", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         const pvm = await factories.taskEvent.running().create({
@@ -42,7 +42,7 @@ describe("/mytask", () => {
             userId: SnowflakeUtil.generate().toString(),
         });
 
-        const command = await slash("mytask");
+        const command = await interact(chatInputInteraction("mytask"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -58,7 +58,7 @@ describe("/mytask", () => {
 
     test("says so when the member has nothing for the chosen category's running task", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         await factories.taskEvent.running().create({
@@ -66,19 +66,21 @@ describe("/mytask", () => {
             task: { category: TaskCategory.PvM },
         });
 
-        const command = await slash("mytask", [
-            { type: ApplicationCommandOptionType.String, name: "task_event", value: "current_pvm" },
-        ]);
+        const command = await interact(
+            chatInputInteraction("mytask", [
+                { type: ApplicationCommandOptionType.String, name: "task_event", value: "current_pvm" },
+            ]),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "You have no submissions for the current PvM task event." }),
         ]);
     });
 
-    test("says so when no task event is running", async ({ discord, slash, factories }) => {
+    test("says so when no task event is running", async ({ discord, interact, factories }) => {
         await factories.taskEvent.create({ endTime: DateTime.now().minus({ days: 1 }).toJSDate() });
 
-        const command = await slash("mytask");
+        const command = await interact(chatInputInteraction("mytask"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "There are no active task events at the moment." }),

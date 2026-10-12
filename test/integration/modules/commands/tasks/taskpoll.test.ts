@@ -1,13 +1,13 @@
 import { describe, expect, test, storePollableTasks } from "../../../../fixtures.js";
-import { AS, IDS } from "../../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { TaskCategory } from "../../../../../src/models/Task.js";
 
 describe("/taskpoll", () => {
-    test("posts the task polls now", async ({ discord, slash, services, factories }) => {
+    test("posts the task polls now", async ({ discord, interact, services, factories }) => {
         await storePollableTasks(factories);
         discord.acceptMessages(IDS.channel);
 
-        const command = await slash("taskpoll", [], AS.botAdmin);
+        const command = await interact(chatInputInteraction("taskpoll", [], AS.botAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "Task poll posted successfully." }),

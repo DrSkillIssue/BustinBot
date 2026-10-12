@@ -1,7 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { describe, expect, test, vi, type StoringFactories } from "../../../fixtures.js";
-import { AS, IDS } from "../../../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { TaskCategory, type Task } from "../../../../src/models/Task.js";
 import type { TaskPoll } from "../../../../src/models/TaskPoll.js";
@@ -44,7 +44,7 @@ async function storePoll(
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({
         discord,
-        slash,
+        interact,
         services,
         db,
         factories,
@@ -63,7 +63,7 @@ describe("/taskstart", () => {
         });
         discord.acceptMessages(IDS.channel);
 
-        const interaction = await slash("taskstart", [], AS.botAdmin);
+        const interaction = await interact(chatInputInteraction("taskstart", [], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Task event started successfully." }),

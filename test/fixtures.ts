@@ -2,8 +2,6 @@ import path from "node:path";
 import cron from "node-cron";
 import type { Interaction, Message } from "discord.js";
 import type {
-    APIApplicationCommandInteractionDataOption,
-    APIChatInputApplicationCommandGuildInteraction,
     APIInteraction,
     GatewayMessageCreateDispatchData,
     GatewayVoiceStateUpdateDispatchData,
@@ -21,7 +19,7 @@ import type { ServiceContainer } from "../src/core/services/ServiceContainer.js"
 import { Skill, TaskCategory } from "../src/models/Task.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
-import { IDS, apiGuild, chatInputInteraction, messageCreate } from "./discord/payloads.js";
+import { IDS, apiGuild, messageCreate } from "./discord/payloads.js";
 import { newEmulatorDatabase } from "./firestoreEmulator.js";
 import {
     guildFactory,
@@ -118,7 +116,6 @@ export type Interact = (payload: APIInteraction) => Promise<Interaction>;
 // - uncachedGuild: a set-up guild discord.js hasn't cached; returns the interaction fields that place an interaction in it
 // - commands: the bot's real slash command registry
 // - interact: delivers any interaction (button, select, form) and routes it exactly as the running bot does
-// - slash: runs a slash command through the bot's interaction routing, the way a member invoking it would
 // - prefix: sends a channel message through the real prefix command handler
 // - scheduledJobs: the node-cron jobs scheduled for a guild, by job name, with their cron patterns
 // - voice: delivers a member's voice state change and hands it to the guild's movie attendance, as the bot does
@@ -194,16 +191,6 @@ export const test = base
         await routeInteraction(interaction, discord.client, commands, services);
         return interaction;
     })
-    .extend(
-        "slash",
-        ({ interact }) =>
-            (
-                name: string,
-                options: APIApplicationCommandInteractionDataOption[] = [],
-                overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {},
-            ): Promise<Interaction> =>
-                interact(chatInputInteraction(name, options, overrides)),
-    )
     .extend("scheduledJobs", () => (guildId: string): Record<string, string> => {
         const prefix = `taskScheduler:${guildId}:`;
         return Object.fromEntries(

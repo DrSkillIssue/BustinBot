@@ -1,9 +1,10 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
+import { chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/faq", () => {
-    test("links the FAQ privately", async ({ discord, slash }) => {
-        const command = await slash("faq");
+    test("links the FAQ privately", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("faq"));
 
         expect(discord.callbacks(command)).toEqual([
             {

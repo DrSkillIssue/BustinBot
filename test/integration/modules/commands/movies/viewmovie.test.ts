@@ -1,9 +1,10 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
+import { chatInputInteraction } from "../../../../discord/payloads.js";
 
 describe("/viewmovie", () => {
-    test("shows the closest match to a misspelt title, with who added it", async ({ discord, slash, factories }) => {
+    test("shows the closest match to a misspelt title, with who added it", async ({ discord, interact, factories }) => {
         const submitter = SnowflakeUtil.generate().toString();
         await factories.movie.create({ id: "movie-1", title: "Inception" });
         await factories.movie.create({
@@ -13,9 +14,11 @@ describe("/viewmovie", () => {
             addedBy: submitter,
         });
 
-        const command = await slash("viewmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "arival" },
-        ]);
+        const command = await interact(
+            chatInputInteraction("viewmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "arival" },
+            ]),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -29,22 +32,26 @@ describe("/viewmovie", () => {
         ]);
     });
 
-    test("says so when nothing matches", async ({ discord, slash, factories }) => {
+    test("says so when nothing matches", async ({ discord, interact, factories }) => {
         await factories.movie.create({ title: "Inception" });
 
-        const command = await slash("viewmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "Godfather" },
-        ]);
+        const command = await interact(
+            chatInputInteraction("viewmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "Godfather" },
+            ]),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No matching movie found for **Godfather**." }),
         ]);
     });
 
-    test("says so when the list is empty", async ({ discord, slash }) => {
-        const command = await slash("viewmovie", [
-            { type: ApplicationCommandOptionType.String, name: "title", value: "Inception" },
-        ]);
+    test("says so when the list is empty", async ({ discord, interact }) => {
+        const command = await interact(
+            chatInputInteraction("viewmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "Inception" },
+            ]),
+        );
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No movies are currently in the watchlist." }),

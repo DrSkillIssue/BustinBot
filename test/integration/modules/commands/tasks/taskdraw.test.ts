@@ -3,18 +3,20 @@ import { DateTime } from "luxon";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../../discord/harness.js";
-import { AS, IDS, apiUser } from "../../../../discord/payloads.js";
+import { AS, IDS, apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
 describe("/taskdraw", () => {
     test("acknowledges privately before anything else, then asks for the snapshot to roll", async ({
         discord,
-        slash,
+        interact,
     }) => {
-        const interaction = await slash(
-            "taskdraw",
-            [{ type: ApplicationCommandOptionType.String, name: "action", value: "roll" }],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [{ type: ApplicationCommandOptionType.String, name: "action", value: "roll" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
@@ -25,7 +27,7 @@ describe("/taskdraw", () => {
 
     test("snapshots the entries of the last fortnight's finished tasks", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -39,10 +41,12 @@ describe("/taskdraw", () => {
             status: SubmissionStatus.Gold,
         });
 
-        const interaction = await slash(
-            "taskdraw",
-            [{ type: ApplicationCommandOptionType.String, name: "action", value: "snapshot" }],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [{ type: ApplicationCommandOptionType.String, name: "action", value: "snapshot" }],
+                AS.botAdmin,
+            ),
         );
 
         const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
@@ -53,20 +57,22 @@ describe("/taskdraw", () => {
         ]);
     });
 
-    test("rolls the winner of a snapshot", async ({ discord, slash, factories }) => {
+    test("rolls the winner of a snapshot", async ({ discord, interact, factories }) => {
         const draw = await factories.prizeDraw.create({
             participants: { [IDS.user]: 1 },
             entries: [IDS.user],
             totalEntries: 1,
         });
 
-        const interaction = await slash(
-            "taskdraw",
-            [
-                { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
-                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
-            ],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
+                    { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+                ],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -74,16 +80,18 @@ describe("/taskdraw", () => {
         ]);
     });
 
-    test("says so when a snapshot has no entries to roll", async ({ discord, slash, factories }) => {
+    test("says so when a snapshot has no entries to roll", async ({ discord, interact, factories }) => {
         const draw = await factories.prizeDraw.create({ participants: {}, entries: [], totalEntries: 0 });
 
-        const interaction = await slash(
-            "taskdraw",
-            [
-                { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
-                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
-            ],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "action", value: "roll" },
+                    { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+                ],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -91,18 +99,20 @@ describe("/taskdraw", () => {
         ]);
     });
 
-    test("announces a rolled winner", async ({ discord, slash, factories }) => {
+    test("announces a rolled winner", async ({ discord, interact, factories }) => {
         const draw = await factories.prizeDraw.create({ entries: [IDS.user], totalEntries: 1, winnerId: IDS.user });
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: IDS.user }));
 
-        const interaction = await slash(
-            "taskdraw",
-            [
-                { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
-                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
-            ],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
+                    { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+                ],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(interaction)).toEqual([
@@ -112,7 +122,7 @@ describe("/taskdraw", () => {
         expect(discord.messagesSentTo(dm)).toHaveLength(1);
     });
 
-    test("says so when the winner can't be announced", async ({ discord, slash, factories }) => {
+    test("says so when the winner can't be announced", async ({ discord, interact, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         // Entries were drawn up, but no winner has been rolled yet
         const draw = await factories.prizeDraw.create({
@@ -121,13 +131,15 @@ describe("/taskdraw", () => {
             totalEntries: 1,
         });
 
-        const interaction = await slash(
-            "taskdraw",
-            [
-                { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
-                { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
-            ],
-            AS.botAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
+                    { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+                ],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(interaction)).toEqual([

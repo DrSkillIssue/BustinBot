@@ -18,6 +18,7 @@ import {
     buttonInteraction,
     modalSubmitInteraction,
     stringSelectInteraction,
+    chatInputInteraction,
 } from "../../../discord/payloads.js";
 import { movieFactory } from "../../../factories.js";
 import type { Movie } from "../../../../src/models/Movie.js";
@@ -213,11 +214,10 @@ describe("/pickmovie", () => {
     test("offers its four ways to pick, each answered by the bot whenever it is pressed", async ({
         discord,
         interact,
-        slash,
         factories,
     }) => {
         await storeMovies(factories, [{ title: "Inception" }]);
-        const command = await slash("pickmovie", [], AS.movieAdmin);
+        const command = await interact(chatInputInteraction("pickmovie", [], AS.movieAdmin));
         const offered = buttonsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
 
         const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, AS.movieAdmin));
@@ -293,7 +293,6 @@ describe("/listmovies", () => {
     test("pages through the unwatched movies with buttons that keep working", async ({
         discord,
         interact,
-        slash,
         factories,
     }) => {
         await storeMovies(factories, [
@@ -304,7 +303,7 @@ describe("/listmovies", () => {
             { title: "Jaws", watched: true },
         ]);
 
-        const command = await slash("listmovies");
+        const command = await interact(chatInputInteraction("listmovies"));
         const [firstPage] = discord.originalEdits(command);
         const next = await interact(
             buttonInteraction("listmovies|next|1", apiMessage({ flags: MessageFlags.Ephemeral })),
@@ -328,10 +327,10 @@ describe("/listmovies", () => {
         ).toMatchObject({ disabled: false });
     });
 
-    test("says the queue is empty when every movie has been watched", async ({ discord, slash, factories }) => {
+    test("says the queue is empty when every movie has been watched", async ({ discord, interact, factories }) => {
         await factories.movie.create({ watched: true });
 
-        const command = await slash("listmovies");
+        const command = await interact(chatInputInteraction("listmovies"));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -344,7 +343,7 @@ describe("/listmovies", () => {
 describe("the movie list", () => {
     test("lets members remove their own movies and admins remove anyone's", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -357,20 +356,26 @@ describe("the movie list", () => {
             }),
         };
 
-        const refused = await slash(
-            "removemovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }],
-            someoneElse,
+        const refused = await interact(
+            chatInputInteraction(
+                "removemovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }],
+                someoneElse,
+            ),
         );
-        const byAdmin = await slash(
-            "removemovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }],
-            admin,
+        const byAdmin = await interact(
+            chatInputInteraction(
+                "removemovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "Inception" }],
+                admin,
+            ),
         );
-        const byOwner = await slash(
-            "removemovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "Arrival" }],
-            { member: apiMember({ user: apiUser({ id: SUBMITTER }) }) },
+        const byOwner = await interact(
+            chatInputInteraction(
+                "removemovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "Arrival" }],
+                { member: apiMember({ user: apiUser({ id: SUBMITTER }) }) },
+            ),
         );
 
         expect(discord.originalEdits(refused)).toEqual([

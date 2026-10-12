@@ -1,12 +1,12 @@
 import { DateTime } from "luxon";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { IDS } from "../../../../discord/payloads.js";
+import { IDS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { SubmissionStatus } from "../../../../../src/models/TaskSubmission.js";
 
 describe("/taskstreak", () => {
     test("shows a streak kept for this week once the week's task is approved", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         const event = await factories.taskEvent.running().create({
@@ -19,7 +19,7 @@ describe("/taskstreak", () => {
             submittedAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
         });
 
-        const command = await slash("taskstreak");
+        const command = await interact(chatInputInteraction("taskstreak"));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields).toEqual([
             { name: "🔥 Current Streak", value: "1", inline: true },
@@ -38,14 +38,14 @@ describe("/taskstreak", () => {
 
     test("tells a member who hasn't submitted this week when the period ends", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         const event = await factories.taskEvent.running().create({
             id: "week-1",
         });
 
-        const command = await slash("taskstreak");
+        const command = await interact(chatInputInteraction("taskstreak"));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields?.[2]?.value).toMatch(
             new RegExp(`^⏳ Submit before <t:${Math.floor(event.endTime.getTime() / 1000)}:F>`),
@@ -54,12 +54,12 @@ describe("/taskstreak", () => {
 
     test("shows the streak stored for the member, and no deadline outside a task period", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         await factories.userStats.create({ userId: IDS.user, taskStreak: 7, longestTaskStreak: 9 });
 
-        const command = await slash("taskstreak");
+        const command = await interact(chatInputInteraction("taskstreak"));
 
         expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields).toEqual([
             { name: "🔥 Current Streak", value: "7", inline: true },

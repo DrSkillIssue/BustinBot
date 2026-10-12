@@ -1,19 +1,21 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../../../../fixtures.js";
-import { AS } from "../../../../discord/payloads.js";
+import { AS, chatInputInteraction } from "../../../../discord/payloads.js";
 import { tmdbMovie, tmdbSearch } from "../../../../tmdb.js";
 
 const arrival = { id: 329865, title: "Arrival", release_date: "2016-11-10", overview: "Linguists meet visitors." };
 
 describe("/testmovie", () => {
-    test("previews what /addmovie would store for TMDb's top result", async ({ discord, slash, http }) => {
+    test("previews what /addmovie would store for TMDb's top result", async ({ discord, interact, http }) => {
         tmdbSearch(http, "arrival", [arrival]);
         tmdbMovie(http, arrival, 116, "Denis Villeneuve");
 
-        const command = await slash(
-            "testmovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "arrival" }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "testmovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "arrival" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -36,13 +38,15 @@ describe("/testmovie", () => {
         ]);
     });
 
-    test("says so when TMDb finds nothing", async ({ discord, slash, http }) => {
+    test("says so when TMDb finds nothing", async ({ discord, interact, http }) => {
         tmdbSearch(http, "zzzz", []);
 
-        const command = await slash(
-            "testmovie",
-            [{ type: ApplicationCommandOptionType.String, name: "title", value: "zzzz" }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "testmovie",
+                [{ type: ApplicationCommandOptionType.String, name: "title", value: "zzzz" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([

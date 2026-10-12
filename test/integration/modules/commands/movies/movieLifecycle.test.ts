@@ -2,7 +2,7 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../../fixtures.js";
 import { DiscordError } from "../../../../discord/harness.js";
-import { AS, IDS, apiMessage, apiUser } from "../../../../discord/payloads.js";
+import { AS, IDS, apiMessage, apiUser, chatInputInteraction } from "../../../../discord/payloads.js";
 import { movieFactory } from "../../../../factories.js";
 
 const SUBMITTER = SnowflakeUtil.generate().toString();
@@ -25,7 +25,7 @@ async function storeTonight(factories: StoringFactories, overrides = {}) {
 describe("/endmovie", () => {
     test("ends tonight's movie night, archives the movie and thanks everyone in the movie night channel", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -33,7 +33,7 @@ describe("/endmovie", () => {
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
-        const command = await slash("endmovie", [], AS.movieAdmin);
+        const command = await interact(chatInputInteraction("endmovie", [], AS.movieAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "The movie night for **Arrival** has ended and been archived." }),
@@ -44,8 +44,8 @@ describe("/endmovie", () => {
         expect(await services.repos.movieRepo.getMovieById("movie-2")).toMatchObject({ watched: true });
     });
 
-    test("says so when no movie night is on", async ({ discord, slash }) => {
-        const command = await slash("endmovie", [], AS.movieAdmin);
+    test("says so when no movie night is on", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("endmovie", [], AS.movieAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No active movie event found to end." }),
@@ -56,7 +56,7 @@ describe("/endmovie", () => {
 describe("/closemoviepoll", () => {
     test("closes the poll and announces the winner in the movie night channel", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         const poll = await factories.moviePoll.create({
@@ -74,7 +74,7 @@ describe("/closemoviepoll", () => {
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
-        const command = await slash("closemoviepoll", [], AS.movieAdmin);
+        const command = await interact(chatInputInteraction("closemoviepoll", [], AS.movieAdmin));
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
@@ -86,8 +86,8 @@ describe("/closemoviepoll", () => {
         ]);
     });
 
-    test("says so when no poll is open", async ({ discord, slash }) => {
-        const command = await slash("closemoviepoll", [], AS.movieAdmin);
+    test("says so when no poll is open", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("closemoviepoll", [], AS.movieAdmin));
 
         expect(discord.originalEdits(command)).toEqual([expect.objectContaining({ content: "No active poll found." })]);
     });
@@ -96,7 +96,7 @@ describe("/closemoviepoll", () => {
 describe("/cancelmovie", () => {
     test("closes the poll, ends the night, unpicks its movie and marks both posts cancelled", async ({
         discord,
-        slash,
+        interact,
         services,
         factories,
     }) => {
@@ -108,7 +108,7 @@ describe("/cancelmovie", () => {
         for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
-        const command = await slash("cancelmovie", [], AS.movieAdmin);
+        const command = await interact(chatInputInteraction("cancelmovie", [], AS.movieAdmin));
 
         expect(discord.originalEdits(command)[0]?.content).toBe(
             "Movie night cancelled successfully.\n\nActions taken:\n" +
@@ -133,7 +133,7 @@ describe("/cancelmovie", () => {
 
     test("posts the cancellation in the movie night channel when its announcement is gone", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         await storeTonight(factories, {
@@ -143,7 +143,7 @@ describe("/cancelmovie", () => {
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 
-        await slash("cancelmovie", [], AS.movieAdmin);
+        await interact(chatInputInteraction("cancelmovie", [], AS.movieAdmin));
 
         expect(
             discord

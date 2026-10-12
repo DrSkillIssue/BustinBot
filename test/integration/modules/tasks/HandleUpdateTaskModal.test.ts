@@ -3,7 +3,7 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, test, type StoringFactories } from "../../../fixtures.js";
 import { PRIVATE_DEFERRAL } from "../../../discord/harness.js";
-import { AS, IDS, apiMessage, modalSubmitInteraction } from "../../../discord/payloads.js";
+import { AS, IDS, apiMessage, modalSubmitInteraction, chatInputInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import { TaskCategory, TaskType } from "../../../../src/models/Task.js";
@@ -146,7 +146,7 @@ describe("the update task form", () => {
 describe("/updatetask", () => {
     test("opens the edit form pre-filled from the stored task as its first response", async ({
         discord,
-        slash,
+        interact,
         factories,
     }) => {
         await factories.task.create({
@@ -157,10 +157,12 @@ describe("/updatetask", () => {
             amtGold: 50,
         });
 
-        const interaction = await slash(
-            "updatetask",
-            [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }],
-            AS.taskAdmin,
+        const interaction = await interact(
+            chatInputInteraction(
+                "updatetask",
+                [{ type: ApplicationCommandOptionType.String, name: "id", value: "PVM001" }],
+                AS.taskAdmin,
+            ),
         );
 
         expect(discord.callbacks(interaction)).toHaveLength(1);
@@ -178,11 +180,13 @@ describe("/updatetask", () => {
         });
     });
 
-    test("replies privately when the task does not exist", async ({ discord, slash }) => {
-        const interaction = await slash(
-            "updatetask",
-            [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }],
-            AS.taskAdmin,
+    test("replies privately when the task does not exist", async ({ discord, interact }) => {
+        const interaction = await interact(
+            chatInputInteraction(
+                "updatetask",
+                [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }],
+                AS.taskAdmin,
+            ),
         );
 
         expect(discord.callbacks(interaction)).toEqual([

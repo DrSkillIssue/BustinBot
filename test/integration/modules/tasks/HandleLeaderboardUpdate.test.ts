@@ -5,7 +5,7 @@ import { describe, expect, test, vi, type StoringFactories } from "../../../fixt
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../../../firestoreEmulator.js";
 import type { ServiceContainer } from "../../../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../../../discord/harness.js";
-import { AS, IDS, NAMES, apiGuildMember, apiRole, apiUser } from "../../../discord/payloads.js";
+import { AS, IDS, NAMES, apiGuildMember, apiRole, apiUser, chatInputInteraction } from "../../../discord/payloads.js";
 import { taskFactory } from "../../../factories.js";
 import { SubmissionStatus } from "../../../../src/models/TaskSubmission.js";
 import {
@@ -146,8 +146,8 @@ describe("the weekly leaderboard update", () => {
 
     test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({
         discord,
+        interact,
         services,
-        slash,
         factories,
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -169,10 +169,12 @@ describe("the weekly leaderboard update", () => {
 
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.channel } });
         discord.acceptMessages(IDS.channel);
-        const command = await slash(
-            "taskboard",
-            [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "taskboard",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([
@@ -185,16 +187,18 @@ describe("the weekly leaderboard update", () => {
 });
 
 describe("/taskboard", () => {
-    test("says so when the task channel can't be reached", async ({ discord, services, slash, factories }) => {
+    test("says so when the task channel can't be reached", async ({ discord, interact, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(factories, {});
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
 
-        const command = await slash(
-            "taskboard",
-            [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }],
-            AS.botAdmin,
+        const command = await interact(
+            chatInputInteraction(
+                "taskboard",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }],
+                AS.botAdmin,
+            ),
         );
 
         expect(discord.originalEdits(command)).toEqual([
