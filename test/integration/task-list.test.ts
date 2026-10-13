@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { describe, expect, vi, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
 import { componentsIn, PRIVATE_DEFERRAL } from "../discord/harness.js";
 import {
     apiMessage,
@@ -15,7 +15,6 @@ import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { taskFactory } from "../factories.js";
 import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
-import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 
 const CSV = [
     "ID,Task Name,Category,Type,Skill,Bronze Amount,Silver Amount,Gold Amount,Weight,Short Name,Wilderness Required?",
@@ -43,8 +42,6 @@ async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
         ...overrides,
     });
 }
-
-const test = base.extend("repo", ({ db }) => new TaskRepository(db, IDS.guild));
 
 describe("/listtasks", () => {
     test("pages through a category's tasks with buttons that keep working", async ({
@@ -446,11 +443,11 @@ describe("/updatetask", () => {
 });
 
 describe("TaskRepository tasks", () => {
-    test("seeds more tasks than fit in one Firestore batch", async ({ repo }) => {
+    test("seeds more tasks than fit in one Firestore batch", async ({ services }) => {
         const tasks = Array.from({ length: 501 }, (_, index) => taskFactory.build({ id: `TASK${index}` }));
 
-        await repo.seedTasks(tasks);
+        await services.repos.taskRepo.seedTasks(tasks);
 
-        expect(await repo.getAllTasks()).toHaveLength(501);
+        expect(await services.repos.taskRepo.getAllTasks()).toHaveLength(501);
     });
 });

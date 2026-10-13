@@ -7,7 +7,7 @@ import { botStatsFactory } from "../factories.js";
 const test = base.extend("repo", ({ db }) => new BotRepository(db));
 
 describe("fun commands", () => {
-    test("/goodbot replies publicly with the updated praise count", async ({ discord, interact, db }) => {
+    test("/goodbot replies publicly with the updated praise count", async ({ discord, interact, repo }) => {
         await interact(chatInputInteraction("goodbot"));
         const interaction = await interact(chatInputInteraction("goodbot"));
 
@@ -18,10 +18,10 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "🥹 *BustinBot has been called a good bot 2 times!*" }),
         ]);
-        expect((await new BotRepository(db).getBotStats())?.funStats.goodbotCount).toBe(2);
+        expect((await repo.getBotStats())?.funStats.goodbotCount).toBe(2);
     });
 
-    test("/badbot replies publicly with the criticism count", async ({ discord, interact, db }) => {
+    test("/badbot replies publicly with the criticism count", async ({ discord, interact, repo }) => {
         const interaction = await interact(chatInputInteraction("badbot"));
 
         expect(discord.callbacks(interaction)).toEqual([
@@ -30,10 +30,10 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "😭 *BustinBot has been called a bad bot 1 time!*" }),
         ]);
-        expect((await new BotRepository(db).getBotStats())?.funStats.badbotCount).toBe(1);
+        expect((await repo.getBotStats())?.funStats.badbotCount).toBe(1);
     });
 
-    test("/bustin replies publicly and counts the ping", async ({ discord, interact, db }) => {
+    test("/bustin replies publicly and counts the ping", async ({ discord, interact, repo }) => {
         const interaction = await interact(chatInputInteraction("bustin"));
 
         expect(discord.callbacks(interaction)).toEqual([
@@ -42,7 +42,7 @@ describe("fun commands", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
         ]);
-        expect((await new BotRepository(db).getBotStats())?.funStats.bustinCount).toBe(1);
+        expect((await repo.getBotStats())?.funStats.bustinCount).toBe(1);
     });
 
     test("/bustincount says privately how many times /bustin was used", async ({ discord, interact }) => {

@@ -1,12 +1,10 @@
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { describe, expect, test as base } from "../fixtures.js";
+import { describe, expect, test } from "../fixtures.js";
 import { apiUser, chatInputInteraction, IDS } from "../discord/payloads.js";
 import assert from "node:assert";
-import { UserRepository } from "../../src/core/database/UserRepo.js";
 import { newUserStats } from "../../src/models/UserStats.js";
 
-const test = base.extend("repo", ({ db }) => new UserRepository(db, IDS.guild));
 const legacyUser = SnowflakeUtil.generate().toString();
 
 describe("/stats", () => {
@@ -77,25 +75,25 @@ describe("/stats", () => {
 });
 
 describe("UserRepository", () => {
-    test("counts every increment when several arrive at once for a user with no stats yet", async ({ repo }) => {
+    test("counts every increment when several arrive at once for a user with no stats yet", async ({ services }) => {
         await Promise.all([
-            repo.incrementStat(IDS.user, "commandsRun", 1),
-            repo.incrementStat(IDS.user, "commandsRun", 1),
-            repo.incrementStat(IDS.user, "commandsRun", 1),
+            services.repos.userRepo.incrementStat(IDS.user, "commandsRun", 1),
+            services.repos.userRepo.incrementStat(IDS.user, "commandsRun", 1),
+            services.repos.userRepo.incrementStat(IDS.user, "commandsRun", 1),
         ]);
 
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ commandsRun: 3 });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ commandsRun: 3 });
     });
 
     test("starts a member's stats with their first increment, joined when the stats were created", async ({
-        repo,
+        services,
         db,
     }) => {
-        await repo.incrementStat(IDS.user, "moviesAdded", 1);
+        await services.repos.userRepo.incrementStat(IDS.user, "moviesAdded", 1);
 
         const { createTime } = await db.doc(`guilds/${IDS.guild}/userStats/${IDS.user}`).get();
         assert(createTime);
-        expect(await repo.getUserById(IDS.user)).toEqual({
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toEqual({
             ...newUserStats(IDS.user, createTime.toDate()),
             moviesAdded: 1,
             lastActiveAt: expect.any(Date),
@@ -103,24 +101,27 @@ describe("UserRepository", () => {
     });
 
     test("keeps a tier move and an increment made at the same moment for a user with no stats yet", async ({
-        repo,
+        services,
     }) => {
         await Promise.all([
-            repo.updateTierStat(IDS.user, "tasksCompletedBronze", "tasksCompletedSilver"),
-            repo.incrementStat(IDS.user, "tasksCompletedGold", 1),
+            services.repos.userRepo.updateTierStat(IDS.user, "tasksCompletedBronze", "tasksCompletedSilver"),
+            services.repos.userRepo.incrementStat(IDS.user, "tasksCompletedGold", 1),
         ]);
 
-        expect(await repo.getUserById(IDS.user)).toMatchObject({ tasksCompletedSilver: 1, tasksCompletedGold: 1 });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({
+            tasksCompletedSilver: 1,
+            tasksCompletedGold: 1,
+        });
     });
 
-    test("reads a member created by the legacy completion import as a full set of stats", async ({ repo, db }) => {
+    test("reads a member created by the legacy completion import as a full set of stats", async ({ services, db }) => {
         // The shape src/scripts/importLegacySubmissions.ts wrote before it stored complete stats
         const importedAt = new Date("2025-10-29T00:00:00.000Z");
         await db
             .doc(`guilds/${IDS.guild}/userStats/${legacyUser}`)
             .set({ userId: legacyUser, legacyTasksCompleted: 12, createdAt: importedAt });
 
-        expect(await repo.getUserById(legacyUser)).toEqual({
+        expect(await services.repos.userRepo.getUserById(legacyUser)).toEqual({
             ...newUserStats(legacyUser, importedAt),
             legacyTasksCompleted: 12,
         });

@@ -1,7 +1,7 @@
 import { ApplicationCommandOptionType, InteractionResponseType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, vi, type StoringFactories, storeWeeks, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, storeWeeks, test } from "../fixtures.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { DiscordError, type DiscordHarness } from "../discord/harness.js";
@@ -29,7 +29,6 @@ import {
     registerPeriodicTaskEvent,
 } from "../../src/modules/tasks/TaskLeaderboards.js";
 import { periodicLeaderboardFactory } from "../factories.js";
-import { TaskLeaderboardRepository } from "../../src/core/database/TaskLeaderboardRepo.js";
 
 const [winner, runnerUp, third] = [
     SnowflakeUtil.generate().toString(),
@@ -75,8 +74,6 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
 }
 
 const [oldPeriodMember, overlapMember] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
-
-const test = base.extend("repo", ({ db }) => new TaskLeaderboardRepository(db, IDS.guild));
 
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services, factories }) => {
@@ -523,23 +520,30 @@ describe("/taskperiod", () => {
 });
 
 describe("TaskLeaderboardRepository", () => {
-    test("replaces whole score maps on update so stale scores are cleared", async ({ repo }) => {
-        await repo.createLeaderboard(
+    test("replaces whole score maps on update so stale scores are cleared", async ({ services }) => {
+        await services.repos.taskLeaderboardRepo.createLeaderboard(
             periodicLeaderboardFactory.build({ points: { [SnowflakeUtil.generate().toString()]: 6, [IDS.user]: 1 } }),
         );
 
-        await repo.updateLeaderboard("periodic", { points: { [IDS.user]: 3 }, pendingPeriod: null });
+        await services.repos.taskLeaderboardRepo.updateLeaderboard("periodic", {
+            points: { [IDS.user]: 3 },
+            pendingPeriod: null,
+        });
 
-        const stored = await repo.getLeaderboard("periodic");
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored?.points).toEqual({ [IDS.user]: 3 });
         expect(stored?.pendingPeriod).toBeNull();
     });
 
-    test("keeps a leaderboard that already exists when asked to create it", async ({ repo }) => {
-        await repo.createLeaderboard(periodicLeaderboardFactory.build({ points: { [IDS.user]: 3 } }));
+    test("keeps a leaderboard that already exists when asked to create it", async ({ services }) => {
+        await services.repos.taskLeaderboardRepo.createLeaderboard(
+            periodicLeaderboardFactory.build({ points: { [IDS.user]: 3 } }),
+        );
 
-        await repo.createLeaderboard(periodicLeaderboardFactory.build());
+        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build());
 
-        expect(await repo.getLeaderboard("periodic")).toMatchObject({ points: { [IDS.user]: 3 } });
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
+            points: { [IDS.user]: 3 },
+        });
     });
 });

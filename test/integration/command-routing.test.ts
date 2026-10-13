@@ -4,7 +4,6 @@ import { handleInteraction } from "../../src/core/events/onInteraction.js";
 import { CommandRole } from "../../src/models/Command.js";
 import { AS, IDS, NAMES, chatInputInteraction, apiUser, messageCreate } from "../discord/payloads.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../discord/harness.js";
-import { GuildRepository } from "../../src/core/database/GuildRepo.js";
 import { commandFactory } from "../factories.js";
 import { handleMessage } from "../../src/core/events/onMessage.js";
 
@@ -23,10 +22,9 @@ describe("slash command routing", () => {
     test("recognises a role configured by name for a member Discord sends as role ids", async ({
         discord,
         services,
-        db,
         uncachedGuild,
     }) => {
-        await new GuildRepository(db).updateGuild(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
+        await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
         const interaction = await discord.dispatch(
             chatInputInteraction("probe", [], { ...uncachedGuild, ...AS.botAdmin }),
         );
@@ -50,11 +48,10 @@ describe("slash command routing", () => {
     test("lets a BustinBot Admin Discord sends as role ids run /setup", async ({
         discord,
         services,
-        db,
         commands,
         uncachedGuild,
     }) => {
-        await new GuildRepository(db).updateGuild(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
+        await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
         const interaction = await discord.dispatch(
             chatInputInteraction("setup", [], { ...uncachedGuild, ...AS.botAdmin }),
         );
@@ -67,11 +64,10 @@ describe("slash command routing", () => {
     test("refuses /setup to a member without the BustinBot Admin role", async ({
         discord,
         services,
-        db,
         commands,
         uncachedGuild,
     }) => {
-        await new GuildRepository(db).updateGuild(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
+        await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
         // The member's only role is Task Admin
         const interaction = await discord.dispatch(
             chatInputInteraction("setup", [], { ...uncachedGuild, ...AS.taskAdmin }),

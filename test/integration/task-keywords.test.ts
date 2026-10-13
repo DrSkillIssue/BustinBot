@@ -1,11 +1,7 @@
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { describe, expect, test as base, vi, type StoringFactories } from "../fixtures.js";
-import { AS, chatInputInteraction, IDS } from "../discord/payloads.js";
+import { describe, expect, test, vi, type StoringFactories } from "../fixtures.js";
+import { AS, chatInputInteraction } from "../discord/payloads.js";
 import { DateTime } from "luxon";
-import { KeywordRepository } from "../../src/core/database/KeywordRepo.js";
-import { KeywordSelector } from "../../src/modules/tasks/KeywordSelector.js";
-
-const test = base.extend("repo", ({ db }) => new KeywordRepository(db, IDS.guild));
 
 // Stores keywords that were each used once, the first most recently
 async function storeKeywordsUsedInOrder(factories: StoringFactories, words: string[]): Promise<void> {
@@ -61,48 +57,51 @@ describe("/addkeyword", () => {
 });
 
 describe("KeywordSelector", () => {
-    test("falls back to a placeholder when no keywords are stored", async ({ repo }) => {
+    test("falls back to a placeholder when no keywords are stored", async ({ services }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-        expect(await new KeywordSelector(repo).selectKeyword("event-1")).toBe("keyword");
+        expect(await services.keywords.selectKeyword("event-1")).toBe("keyword");
         expect(warn).toHaveBeenCalledWith("[KeywordSelector] No keywords found in Firestore.");
     });
 
-    test("never picks one of the 26 most recently used keywords, and records the pick", async ({ repo, factories }) => {
+    test("never picks one of the 26 most recently used keywords, and records the pick", async ({
+        services,
+        factories,
+    }) => {
         const words = Array.from({ length: 30 }, (_, index) => `word${String(index).padStart(2, "0")}`);
 
         for (const random of [0, 0.5, 0.99]) {
             await storeKeywordsUsedInOrder(factories, words);
             vi.spyOn(Math, "random").mockReturnValue(random);
 
-            const picked = await new KeywordSelector(repo).selectKeyword(`event-${random}`);
+            const picked = await services.keywords.selectKeyword(`event-${random}`);
 
             expect(words.slice(26)).toContain(picked);
-            expect(await repo.getKeywordById(picked)).toMatchObject({
+            expect(await services.repos.keywordRepo.getKeywordById(picked)).toMatchObject({
                 lastUsedEventId: `event-${random}`,
                 timesUsed: 2,
             });
         }
     });
 
-    test("never repeats the keyword used last when there are only a few", async ({ repo, factories }) => {
+    test("never repeats the keyword used last when there are only a few", async ({ services, factories }) => {
         for (const random of [0, 0.5, 0.99]) {
             await storeKeywordsUsedInOrder(factories, ["alpha", "bravo", "charlie"]);
             vi.spyOn(Math, "random").mockReturnValue(random);
 
-            expect(await new KeywordSelector(repo).selectKeyword("event-next")).not.toBe("alpha");
+            expect(await services.keywords.selectKeyword("event-next")).not.toBe("alpha");
         }
     });
 });
 
 describe("KeywordRepository", () => {
-    test("records usage with the most recent event first, keeping the last 20", async ({ repo }) => {
-        await repo.addKeyword("rare");
+    test("records usage with the most recent event first, keeping the last 20", async ({ services }) => {
+        await services.repos.keywordRepo.addKeyword("rare");
         for (let event = 1; event <= 21; event++) {
-            await repo.markKeywordUsed("rare", `event-${event}`);
+            await services.repos.keywordRepo.markKeywordUsed("rare", `event-${event}`);
         }
 
-        const keyword = await repo.getKeywordById("rare");
+        const keyword = await services.repos.keywordRepo.getKeywordById("rare");
         expect(keyword?.timesUsed).toBe(21);
         expect(keyword?.lastUsedEventId).toBe("event-21");
         expect(keyword?.usageHistory).toHaveLength(20);

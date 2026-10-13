@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, vi, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
 import { AS, IDS, chatInputInteraction } from "../discord/payloads.js";
 import { taskFactory, taskEventFactory } from "../factories.js";
 import { TaskCategory, type Task } from "../../src/models/Task.js";
@@ -8,7 +8,6 @@ import { type TaskPoll } from "../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
 import { runTaskStartJob } from "../../src/modules/tasks/TaskScheduler.js";
 import assert from "node:assert";
-import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) =>
@@ -57,8 +56,6 @@ async function storeThisWeeksPolls(factories: StoringFactories): Promise<void> {
         [SnowflakeUtil.generate().toString()]: "MIN001",
     });
 }
-
-const test = base.extend("repo", ({ db }) => new TaskRepository(db, IDS.guild));
 
 describe("/taskstart", () => {
     test("announces the week's keyword and starts each category's most voted task", async ({
@@ -187,15 +184,15 @@ describe("/testtask", () => {
 });
 
 describe("TaskRepository events", () => {
-    test("stores events and finds the latest and those ending in a range", async ({ repo }) => {
-        await repo.createTaskEvent(
+    test("stores events and finds the latest and those ending in a range", async ({ services }) => {
+        await services.repos.taskRepo.createTaskEvent(
             taskEventFactory.build({
                 id: "week-1",
                 createdAt: new Date("2026-01-05T00:00:00.000Z"),
                 endTime: new Date("2026-01-12T00:00:00.000Z"),
             }),
         );
-        await repo.createTaskEvent(
+        await services.repos.taskRepo.createTaskEvent(
             taskEventFactory.build({
                 id: "week-2",
                 createdAt: new Date("2026-01-12T00:00:00.000Z"),
@@ -203,11 +200,11 @@ describe("TaskRepository events", () => {
             }),
         );
 
-        expect(await repo.getTaskEventById("week-1")).toMatchObject({ id: "week-1" });
-        expect((await repo.getLatestTaskEvent())?.id).toBe("week-2");
+        expect(await services.repos.taskRepo.getTaskEventById("week-1")).toMatchObject({ id: "week-1" });
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.id).toBe("week-2");
         expect(
             (
-                await repo.getTaskEventsBetween(
+                await services.repos.taskRepo.getTaskEventsBetween(
                     new Date("2026-01-13T00:00:00.000Z"),
                     new Date("2026-01-31T00:00:00.000Z"),
                 )

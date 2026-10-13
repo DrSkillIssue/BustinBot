@@ -8,7 +8,7 @@ import {
     type GatewayMessageCreateDispatchData,
     ApplicationCommandOptionType,
 } from "discord-api-types/v10";
-import { describe, expect, vi, type StoringFactories, type Interact, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, type Interact, test } from "../fixtures.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { PRIVATE_DEFERRAL, DiscordError, componentsIn, type DiscordHarness } from "../discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
@@ -31,7 +31,6 @@ import { SubmissionStatus, type TaskSubmission, type SubmissionTier } from "../.
 import { handleDirectMessage } from "../../src/modules/tasks/TaskInteractions.js";
 import { DateTime } from "luxon";
 import { TaskCategory } from "../../src/models/Task.js";
-import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 
 const EVENT = "PVM001-20260105-a1b2c3d4";
 const EVENT_POST = SnowflakeUtil.generate().toString();
@@ -118,7 +117,6 @@ async function acceptReviewEffects(
     return { dm, screenshot };
 }
 
-const test = base.extend("repo", ({ db }) => new TaskRepository(db, IDS.guild));
 const otherUser = SnowflakeUtil.generate().toString();
 
 describe("submitting a task", () => {
@@ -985,41 +983,43 @@ describe("/testtaskapproval", () => {
 });
 
 describe("TaskRepository submissions", () => {
-    test("finds the highest tier a member holds for a task", async ({ repo }) => {
+    test("finds the highest tier a member holds for a task", async ({ services }) => {
         const eventId = "week-1";
-        await repo.createSubmission(
+        await services.repos.taskRepo.createSubmission(
             taskSubmissionFactory.build({ id: "silver", taskEventId: eventId, status: SubmissionStatus.Silver }),
         );
-        await repo.createSubmission(
+        await services.repos.taskRepo.createSubmission(
             taskSubmissionFactory.build({ id: "bronze", taskEventId: eventId, status: SubmissionStatus.Bronze }),
         );
-        await repo.createSubmission(
+        await services.repos.taskRepo.createSubmission(
             taskSubmissionFactory.build({ id: "rejected", taskEventId: eventId, status: SubmissionStatus.Rejected }),
         );
 
-        expect(await repo.getHeldTier(IDS.user, eventId)).toBe(SubmissionStatus.Silver);
-        expect(await repo.getHeldTier(otherUser, eventId)).toBeNull();
+        expect(await services.repos.taskRepo.getHeldTier(IDS.user, eventId)).toBe(SubmissionStatus.Silver);
+        expect(await services.repos.taskRepo.getHeldTier(otherUser, eventId)).toBeNull();
     });
 });
 
 describe("TaskRepository submission drafts", () => {
-    test("keeps one draft per member, the latest replacing the one before", async ({ repo }) => {
-        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-1" }));
-        await repo.saveSubmissionDraft(
+    test("keeps one draft per member, the latest replacing the one before", async ({ services }) => {
+        await services.repos.taskRepo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-1" }));
+        await services.repos.taskRepo.saveSubmissionDraft(
             submissionDraftFactory.build({ taskEventId: "week-2", createdAt: new Date("2026-01-06T01:00:00.000Z") }),
         );
 
-        expect(await repo.getSubmissionDraft(IDS.user)).toEqual(
+        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toEqual(
             submissionDraftFactory.build({ taskEventId: "week-2", createdAt: new Date("2026-01-06T01:00:00.000Z") }),
         );
-        expect(await repo.getSubmissionDraft(otherUser)).toBeNull();
+        expect(await services.repos.taskRepo.getSubmissionDraft(otherUser)).toBeNull();
     });
 
-    test("refuses a submission for another task than the draft is for", async ({ repo }) => {
-        await repo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-2" }));
+    test("refuses a submission for another task than the draft is for", async ({ services }) => {
+        await services.repos.taskRepo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-2" }));
 
-        expect(await repo.submitDraft(taskSubmissionFactory.build({ taskEventId: "week-1" }))).toBe(false);
-        expect(await repo.getSubmissionDraft(IDS.user)).not.toBeNull();
+        expect(await services.repos.taskRepo.submitDraft(taskSubmissionFactory.build({ taskEventId: "week-1" }))).toBe(
+            false,
+        );
+        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).not.toBeNull();
     });
 });
 
@@ -1030,36 +1030,38 @@ describe("TaskRepository reviews", () => {
         decision,
     });
 
-    test("reviews a submission once", async ({ repo }) => {
+    test("reviews a submission once", async ({ services }) => {
         const event = taskEventFactory.build();
-        await repo.createTaskEvent(event);
-        await repo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
-        await repo.reviewSubmission(approve("a", SubmissionStatus.Bronze));
+        await services.repos.taskRepo.createTaskEvent(event);
+        await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
+        await services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Bronze));
 
-        expect(await repo.reviewSubmission(approve("a", SubmissionStatus.Gold))).toMatchObject({
+        expect(await services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Gold))).toMatchObject({
             result: "alreadyReviewed",
             submission: { status: "bronze" },
         });
-        expect(await repo.reviewSubmission(approve("missing", SubmissionStatus.Gold))).toEqual({ result: "notFound" });
-        expect(await repo.getTaskEventById(event.id)).toMatchObject({
+        expect(await services.repos.taskRepo.reviewSubmission(approve("missing", SubmissionStatus.Gold))).toEqual({
+            result: "notFound",
+        });
+        expect(await services.repos.taskRepo.getTaskEventById(event.id)).toMatchObject({
             completionCounts: { bronze: 1, silver: 0, gold: 0 },
         });
     });
 
     test(
         "counts one tier for a member when two of their submissions are approved at the same moment",
-        async ({ repo }) => {
+        async ({ services }) => {
             const event = taskEventFactory.build();
-            await repo.createTaskEvent(event);
-            await repo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
-            await repo.createSubmission(taskSubmissionFactory.build({ id: "b" }));
+            await services.repos.taskRepo.createTaskEvent(event);
+            await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
+            await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "b" }));
 
             await Promise.all([
-                repo.reviewSubmission(approve("a", SubmissionStatus.Bronze)),
-                repo.reviewSubmission(approve("b", SubmissionStatus.Silver)),
+                services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Bronze)),
+                services.repos.taskRepo.reviewSubmission(approve("b", SubmissionStatus.Silver)),
             ]);
 
-            expect(await repo.getTaskEventById(event.id)).toMatchObject({
+            expect(await services.repos.taskRepo.getTaskEventById(event.id)).toMatchObject({
                 completionCounts: { bronze: 0, silver: 1, gold: 0 },
             });
         },

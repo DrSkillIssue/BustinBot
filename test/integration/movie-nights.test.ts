@@ -3,7 +3,7 @@ import assert from "node:assert";
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { DateTime } from "luxon";
 import { type APIRole, InteractionResponseType } from "discord-api-types/v10";
-import { describe, expect, vi, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
 import { componentsIn, type DiscordHarness, DiscordError } from "../discord/harness.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { createServiceContainer } from "../../src/core/services/ServiceFactory.js";
@@ -22,7 +22,6 @@ import {
 } from "../discord/payloads.js";
 import { movieFactory, moviePollFactory, movieEventFactory } from "../factories.js";
 import { sweepMovieNight } from "../../src/modules/movies/MovieScheduler.js";
-import { MovieRepository } from "../../src/core/database/MovieRepo.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
 const VOICE = SnowflakeUtil.generate().toString();
@@ -68,8 +67,6 @@ async function storeTonight(factories: StoringFactories, overrides: Parameters<t
     });
     await storeNight(factories, { startTime: DateTime.now().minus({ hours: 1 }).toJSDate(), movie, ...overrides });
 }
-
-const test = base.extend("repo", ({ db }) => new MovieRepository(db, IDS.guild));
 
 describe("scheduling a movie night", () => {
     test("/movienight offers the next 14 days, by the guild's calendar", async ({ discord, interact, services }) => {
@@ -666,70 +663,81 @@ describe("/currentmovie", () => {
 });
 
 describe("MovieRepository events", () => {
-    test("returns the active event with the latest start time, as dates", async ({ repo }) => {
-        await repo.createMovieEvent(
+    test("returns the active event with the latest start time, as dates", async ({ services }) => {
+        await services.repos.movieRepo.createMovieEvent(
             movieEventFactory.build({ id: "early", startTime: new Date("2026-01-03T09:00:00.000Z") }),
         );
-        await repo.createMovieEvent(
+        await services.repos.movieRepo.createMovieEvent(
             movieEventFactory.build({ id: "late", startTime: new Date("2026-01-10T09:00:00.000Z") }),
         );
-        await repo.createMovieEvent(movieEventFactory.build({ id: "done", completed: true }));
+        await services.repos.movieRepo.createMovieEvent(movieEventFactory.build({ id: "done", completed: true }));
 
-        const active = await repo.getActiveEvent();
+        const active = await services.repos.movieRepo.getActiveEvent();
         expect(active?.id).toBe("late");
         expect(active?.startTime).toEqual(new Date("2026-01-10T09:00:00.000Z"));
     });
 
-    test("completes an event once, with the changes given", async ({ repo }) => {
+    test("completes an event once, with the changes given", async ({ services }) => {
         const event = movieEventFactory.build();
-        await repo.createMovieEvent(event);
+        await services.repos.movieRepo.createMovieEvent(event);
         const completedAt = new Date("2026-01-03T12:00:00.000Z");
 
         expect(
-            await repo.completeEvent(event.id, { completedAt, movie: movieFactory.build({ watched: true }) }),
+            await services.repos.movieRepo.completeEvent(event.id, {
+                completedAt,
+                movie: movieFactory.build({ watched: true }),
+            }),
         ).toMatchObject({
             completed: true,
             completedAt,
             movie: { watched: true },
         });
-        expect(await repo.completeEvent(event.id)).toBeNull();
-        expect(await repo.completeEvent("missing")).toBeNull();
-        expect(await repo.getActiveEvent()).toBeNull();
+        expect(await services.repos.movieRepo.completeEvent(event.id)).toBeNull();
+        expect(await services.repos.movieRepo.completeEvent("missing")).toBeNull();
+        expect(await services.repos.movieRepo.getActiveEvent()).toBeNull();
     });
 
     test(
         "completes an event completed twice at the same moment once",
-        async ({ repo }) => {
+        async ({ services }) => {
             const event = movieEventFactory.build();
-            await repo.createMovieEvent(event);
+            await services.repos.movieRepo.createMovieEvent(event);
 
-            const completed = await Promise.all([repo.completeEvent(event.id), repo.completeEvent(event.id)]);
+            const completed = await Promise.all([
+                services.repos.movieRepo.completeEvent(event.id),
+                services.repos.movieRepo.completeEvent(event.id),
+            ]);
 
             expect(completed.filter(Boolean)).toHaveLength(1);
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
 
-    test("claims each reminder once, and none for an event that has ended", async ({ repo }) => {
+    test("claims each reminder once, and none for an event that has ended", async ({ services }) => {
         const event = movieEventFactory.build();
-        await repo.createMovieEvent(event);
-        await repo.createMovieEvent(movieEventFactory.build({ id: "ended", completed: true }));
+        await services.repos.movieRepo.createMovieEvent(event);
+        await services.repos.movieRepo.createMovieEvent(movieEventFactory.build({ id: "ended", completed: true }));
 
-        expect(await repo.claimReminders(event.id, ["2 hours before"])).toEqual(["2 hours before"]);
-        expect(await repo.claimReminders(event.id, ["2 hours before", "30 mins before"])).toEqual(["30 mins before"]);
-        expect(await repo.claimReminders("ended", ["start time"])).toEqual([]);
-        expect((await repo.getActiveEvent())?.remindersSent).toEqual(["2 hours before", "30 mins before"]);
+        expect(await services.repos.movieRepo.claimReminders(event.id, ["2 hours before"])).toEqual(["2 hours before"]);
+        expect(await services.repos.movieRepo.claimReminders(event.id, ["2 hours before", "30 mins before"])).toEqual([
+            "30 mins before",
+        ]);
+        expect(await services.repos.movieRepo.claimReminders("ended", ["start time"])).toEqual([]);
+        expect((await services.repos.movieRepo.getActiveEvent())?.remindersSent).toEqual([
+            "2 hours before",
+            "30 mins before",
+        ]);
     });
 
     test(
         "claims a reminder claimed twice at the same moment once",
-        async ({ repo }) => {
+        async ({ services }) => {
             const event = movieEventFactory.build();
-            await repo.createMovieEvent(event);
+            await services.repos.movieRepo.createMovieEvent(event);
 
             const claims = await Promise.all([
-                repo.claimReminders(event.id, ["start time"]),
-                repo.claimReminders(event.id, ["start time"]),
+                services.repos.movieRepo.claimReminders(event.id, ["start time"]),
+                services.repos.movieRepo.claimReminders(event.id, ["start time"]),
             ]);
 
             expect(claims.flat()).toEqual(["start time"]);

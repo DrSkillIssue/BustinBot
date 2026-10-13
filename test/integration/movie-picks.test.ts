@@ -8,7 +8,7 @@ import {
     type APIEmbed,
 } from "discord-api-types/v10";
 import { DateTime } from "luxon";
-import { describe, expect, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, type StoringFactories, test } from "../fixtures.js";
 import { componentsIn } from "../discord/harness.js";
 import {
     AS,
@@ -23,7 +23,6 @@ import {
 } from "../discord/payloads.js";
 import { moviePollFactory } from "../factories.js";
 import { type Movie } from "../../src/models/Movie.js";
-import { MovieRepository } from "../../src/core/database/MovieRepo.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
 const SUBMITTER = SnowflakeUtil.generate().toString();
@@ -45,8 +44,6 @@ async function storeMovies(factories: StoringFactories, movies: Partial<Movie>[]
     }
     return stored;
 }
-
-const test = base.extend("repo", ({ db }) => new MovieRepository(db, IDS.guild));
 
 describe("a movie poll", () => {
     test("is posted with a button per movie, leaving out one watched since it was chosen, and stored", async ({
@@ -406,35 +403,45 @@ describe("the movie list", () => {
 });
 
 describe("MovieRepository polls", () => {
-    test("returns the most recently created active poll", async ({ repo }) => {
-        await repo.createPoll(moviePollFactory.build({ id: "older", createdAt: new Date("2026-01-01T00:00:00.000Z") }));
-        await repo.createPoll(moviePollFactory.build({ id: "newer", createdAt: new Date("2026-01-05T00:00:00.000Z") }));
-        await repo.createPoll(
+    test("returns the most recently created active poll", async ({ services }) => {
+        await services.repos.movieRepo.createPoll(
+            moviePollFactory.build({ id: "older", createdAt: new Date("2026-01-01T00:00:00.000Z") }),
+        );
+        await services.repos.movieRepo.createPoll(
+            moviePollFactory.build({ id: "newer", createdAt: new Date("2026-01-05T00:00:00.000Z") }),
+        );
+        await services.repos.movieRepo.createPoll(
             moviePollFactory.build({ id: "closed", createdAt: new Date("2026-01-09T00:00:00.000Z"), isActive: false }),
         );
 
-        const active = await repo.getActivePoll();
+        const active = await services.repos.movieRepo.getActivePoll();
         expect(active?.id).toBe("newer");
         expect(active?.createdAt).toEqual(new Date("2026-01-05T00:00:00.000Z"));
         expect(active?.endsAt).toEqual(new Date("2026-01-02T00:00:00.000Z"));
     });
 
-    test("closes a poll once, returning it with its votes as it closed", async ({ repo }) => {
+    test("closes a poll once, returning it with its votes as it closed", async ({ services }) => {
         const poll = moviePollFactory.build({ votes: { [IDS.user]: "movie-2" } });
-        await repo.createPoll(poll);
+        await services.repos.movieRepo.createPoll(poll);
 
-        expect(await repo.closePoll(poll.id)).toMatchObject({ id: poll.id, votes: { [IDS.user]: "movie-2" } });
-        expect(await repo.closePoll(poll.id)).toBeNull();
-        expect(await repo.getActivePoll()).toBeNull();
+        expect(await services.repos.movieRepo.closePoll(poll.id)).toMatchObject({
+            id: poll.id,
+            votes: { [IDS.user]: "movie-2" },
+        });
+        expect(await services.repos.movieRepo.closePoll(poll.id)).toBeNull();
+        expect(await services.repos.movieRepo.getActivePoll()).toBeNull();
     });
 
     test(
         "closes a poll closed twice at the same moment once",
-        async ({ repo }) => {
+        async ({ services }) => {
             const poll = moviePollFactory.build();
-            await repo.createPoll(poll);
+            await services.repos.movieRepo.createPoll(poll);
 
-            const closed = await Promise.all([repo.closePoll(poll.id), repo.closePoll(poll.id)]);
+            const closed = await Promise.all([
+                services.repos.movieRepo.closePoll(poll.id),
+                services.repos.movieRepo.closePoll(poll.id),
+            ]);
 
             expect(closed.filter(Boolean)).toHaveLength(1);
         },
@@ -443,17 +450,17 @@ describe("MovieRepository polls", () => {
 
     test(
         "counts every vote when voters vote at the same time",
-        async ({ repo }) => {
+        async ({ services }) => {
             const poll = moviePollFactory.build();
-            await repo.createPoll(poll);
+            await services.repos.movieRepo.createPoll(poll);
 
             await Promise.all(
                 Array.from({ length: 5 }, () =>
-                    repo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), "movie-1"),
+                    services.repos.movieRepo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), "movie-1"),
                 ),
             );
 
-            expect(Object.keys((await repo.getActivePoll())?.votes ?? {})).toHaveLength(5);
+            expect(Object.keys((await services.repos.movieRepo.getActivePoll())?.votes ?? {})).toHaveLength(5);
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );

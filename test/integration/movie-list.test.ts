@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
-import { describe, expect, type StoringFactories, test as base } from "../fixtures.js";
+import { describe, expect, type StoringFactories, test } from "../fixtures.js";
 import { componentsIn } from "../discord/harness.js";
 import {
     AS,
@@ -13,7 +13,6 @@ import {
 } from "../discord/payloads.js";
 import { tmdbMovie, tmdbSearch } from "../tmdb.js";
 import { movieFactory } from "../factories.js";
-import { MovieRepository } from "../../src/core/database/MovieRepo.js";
 
 const matrix = { id: 603, title: "The Matrix", release_date: "1999-03-31", overview: "A hacker learns the truth." };
 const reloaded = { id: 604, title: "The Matrix Reloaded", release_date: "2003-05-15", overview: "Neo returns." };
@@ -26,8 +25,6 @@ async function storeFullList(factories: StoringFactories, userId: string): Promi
 }
 
 const arrival = { id: 329865, title: "Arrival", release_date: "2016-11-10", overview: "Linguists meet visitors." };
-
-const test = base.extend("repo", ({ db }) => new MovieRepository(db, IDS.guild));
 
 describe("/addmovie", () => {
     test("shows TMDb's results and adds the one the member picks", async ({ discord, interact, services, http }) => {
@@ -345,8 +342,8 @@ describe("/testmovie", () => {
 });
 
 describe("MovieRepository movies", () => {
-    test("stores a movie whose optional TMDb details are missing", async ({ repo }) => {
-        await repo.upsertMovie(
+    test("stores a movie whose optional TMDb details are missing", async ({ services }) => {
+        await services.repos.movieRepo.upsertMovie(
             movieFactory.build({
                 id: "arrival",
                 title: "Arrival",
@@ -356,6 +353,6 @@ describe("MovieRepository movies", () => {
             }),
         );
 
-        expect(await repo.getMovieById("arrival")).toMatchObject({ title: "Arrival" });
+        expect(await services.repos.movieRepo.getMovieById("arrival")).toMatchObject({ title: "Arrival" });
     });
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, type StoringFactories, storePollableTasks, test as base } from "../fixtures.js";
+import { describe, expect, type StoringFactories, storePollableTasks, test } from "../fixtures.js";
 import { componentsIn } from "../discord/harness.js";
 import {
     IDS,
@@ -18,7 +18,6 @@ import { type TaskPoll } from "../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../src/modules/tasks/HandleTaskPoll.js";
 import { runTaskPollJob } from "../../src/modules/tasks/TaskScheduler.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
-import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
 // A poll that is open in the harness channel, as stored when it was posted
@@ -37,8 +36,6 @@ async function storeOpenPoll(factories: StoringFactories, overrides: Partial<Tas
         ...overrides,
     });
 }
-
-const test = base.extend("repo", ({ db }) => new TaskRepository(db, IDS.guild));
 
 describe("posting the weekly task polls", () => {
     test("announces them and posts one open poll per category, each stored with its options", async ({
@@ -265,34 +262,36 @@ describe("/leagues", () => {
 });
 
 describe("TaskRepository polls", () => {
-    test("finds the active poll and the latest poll for a category", async ({ repo }) => {
-        await repo.createTaskPoll(
+    test("finds the active poll and the latest poll for a category", async ({ services }) => {
+        await services.repos.taskRepo.createTaskPoll(
             taskPollFactory.build({ id: "old", createdAt: new Date("2026-01-04T00:00:00.000Z"), isActive: false }),
         );
-        await repo.createTaskPoll(
+        await services.repos.taskRepo.createTaskPoll(
             taskPollFactory.build({ id: "new", createdAt: new Date("2026-01-11T00:00:00.000Z") }),
         );
-        await repo.createTaskPoll(taskPollFactory.build({ id: "skilling", category: TaskCategory.Skilling }));
+        await services.repos.taskRepo.createTaskPoll(
+            taskPollFactory.build({ id: "skilling", category: TaskCategory.Skilling }),
+        );
 
-        expect((await repo.getActiveTaskPollByCategory(TaskCategory.PvM))?.id).toBe("new");
-        expect((await repo.getLatestTaskPollByCategory(TaskCategory.PvM))?.id).toBe("new");
-        expect(await repo.getTaskPollById("old")).toMatchObject({ id: "old", isActive: false });
-        expect(await repo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
+        expect((await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM))?.id).toBe("new");
+        expect((await services.repos.taskRepo.getLatestTaskPollByCategory(TaskCategory.PvM))?.id).toBe("new");
+        expect(await services.repos.taskRepo.getTaskPollById("old")).toMatchObject({ id: "old", isActive: false });
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.MinigameMisc)).toBeNull();
     });
 
     test(
         "counts every vote when voters vote at the same time",
-        async ({ repo }) => {
+        async ({ services }) => {
             const poll = taskPollFactory.build();
-            await repo.createTaskPoll(poll);
+            await services.repos.taskRepo.createTaskPoll(poll);
 
             await Promise.all(
                 Array.from({ length: 5 }, () =>
-                    repo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), "PVM001"),
+                    services.repos.taskRepo.voteInPollOnce(poll.id, SnowflakeUtil.generate().toString(), "PVM001"),
                 ),
             );
 
-            expect(Object.keys((await repo.getTaskPollById(poll.id))?.votes ?? {})).toHaveLength(5);
+            expect(Object.keys((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes ?? {})).toHaveLength(5);
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,
     );
