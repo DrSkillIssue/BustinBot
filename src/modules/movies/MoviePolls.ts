@@ -7,7 +7,6 @@ import { injectMockUsers } from "./MovieMockUtils.js";
 import { createLocalMoviePreviewEmbed } from "./MovieEmbeds.js";
 import { saveCurrentMovie } from "./PickMovieInteractions.js";
 import { DateTime } from "luxon";
-import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
@@ -124,8 +123,6 @@ async function createAndSendMoviePoll(
     poll.messageId = message.id;
     poll.channelId = message.channelId;
     await movieRepo.createPoll(poll);
-
-    await scheduleActivePollClosure(services, client);
 }
 
 export async function pollMovieRandom(services: ServiceContainer, interaction: RepliableInteraction, count: number | null) {
@@ -199,14 +196,14 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
 export async function closeActiveMoviePoll(services: ServiceContainer, client: Client, closedBy: string): Promise<{ success: boolean; message: string; winner?: Movie, winningVotes?: number, tieBreak?: boolean }> {
     const movieRepo = services.repos.movieRepo;
 
-    const activePoll = await movieRepo.getActivePoll();
-    if (!activePoll || !activePoll.isActive) {
+    const openPoll = await movieRepo.getActivePoll();
+    const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;
+    if (!activePoll) {
         return { success: false, message: "No active poll found." };
     }
 
     const voteEntries = Object.entries(activePoll.votes ?? {});
     if (!voteEntries.length) {
-        await movieRepo.closePoll(activePoll.id);
         console.log(`[MoviePoll] Poll closed by ${closedBy}, but no votes were cast.`);
         return {
             success: true,
@@ -226,7 +223,6 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
     const sorted = [...voteCounts.entries()].sort((a, b) => b[1] - a[1]);
     const topEntry = sorted[0];
     if (!topEntry) {
-        await movieRepo.closePoll(activePoll.id);
         return {
             success: true,
             message: "Poll closed. Votes could not be tallied, so no winner was selected.",
@@ -250,11 +246,8 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
         return { success: false, message: "Could not find the winning movie in poll options." };
     }
 
-    // Mark poll inactive and persist
-    await movieRepo.closePoll(activePoll.id);
-
     // Save the selected movie as current
-    await saveCurrentMovie(services, winningMovie, closedBy, client);
+    await saveCurrentMovie(services, winningMovie, closedBy);
     await notifyMovieSubmitter(winningMovie, client, services);
 
     const baseMessage = tieBreak

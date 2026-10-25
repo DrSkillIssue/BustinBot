@@ -25,4 +25,16 @@ describe("/moviehelp", () => {
         ]);
         expect(commandsFor(admin)).toContain("/movienight");
     });
+
+    test("recognises a movie admin whose member Discord sends as role ids", async ({
+        discord,
+        interact,
+        uncachedGuild,
+    }) => {
+        const command = await interact(chatInputInteraction("moviehelp", [], { ...uncachedGuild, ...AS.movieAdmin }));
+
+        expect(discord.originalEdits(command)[0]?.embeds?.[0]?.fields?.at(-1)?.name).toBe(
+            "Available Commands (User + Admin)",
+        );
+    });
 });

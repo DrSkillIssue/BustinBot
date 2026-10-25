@@ -5,6 +5,8 @@ import type { BotStatsService } from "./BotStatsService.js";
 import { TaskService } from "../../modules/tasks/TaskService.js";
 import { TaskEventStore } from "../../modules/tasks/TaskEventStore.js";
 import { KeywordSelector } from "../../modules/tasks/KeywordSelector.js";
+import { MovieAttendance } from "../../modules/movies/MovieAttendance.js";
+import { ManualPollSelections } from "../../modules/movies/MovieManualPoll.js";
 import { MovieRepository } from "../database/MovieRepo.js";
 import { GuildRepository } from "../database/GuildRepo.js";
 import { GuildService } from "./GuildService.js";
@@ -36,6 +38,8 @@ export function createServiceContainer(db: Firestore, guildId: string, botStats:
         keywords,
         guilds,
         setup: new SetupService(),
+        movieAttendance: new MovieAttendance(),
+        manualPolls: new ManualPollSelections(),
         repos: { taskRepo, prizeRepo, movieRepo, keywordRepo, guildRepo, userRepo, taskLeaderboardRepo },
     };
 

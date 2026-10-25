@@ -53,8 +53,7 @@ const mytask: Command = {
 
             if (currentlyActive.length === 0) {
                 await interaction.editReply({
-                    content: 'There are no active task events at the moment.',
-                    flags: 1 << 6
+                    content: 'There are no active task events at the moment.'
                 });
                 return;
             }
@@ -76,8 +75,7 @@ const mytask: Command = {
 
                 if (!selectedEvent) {
                     await interaction.editReply({
-                        content: `There is no active ${targetCategory} task event at the moment.`,
-                        flags: 1 << 6
+                        content: `There is no active ${targetCategory} task event at the moment.`
                     });
                     return;
                 }
@@ -88,8 +86,7 @@ const mytask: Command = {
 
                 if (submissions.length === 0) {
                     await interaction.editReply({
-                        content: `You have no submissions for the current ${targetCategory} task event.`,
-                        flags: 1 << 6
+                        content: `You have no submissions for the current ${targetCategory} task event.`
                     });
                     return;
                 }
@@ -103,8 +100,7 @@ const mytask: Command = {
 
                 if (submissions.length === 0) {
                     await interaction.editReply({
-                        content: 'You have no submissions for currently active task events.',
-                        flags: 1 << 6
+                        content: 'You have no submissions for currently active task events.'
                     });
                     return;
                 }
@@ -148,10 +144,10 @@ const mytask: Command = {
                 ? `**Task Submission Status:**\n\n${statusLines.join('\n')}`
                 : `**Your Active Task Submissions:**\n\n${statusLines.join('\n')}`;
 
-            await interaction.editReply({ content: replyText, flags: 1 << 6 });
+            await interaction.editReply({ content: replyText });
         } catch (error) {
             console.error('[MyTask] Error fetching submissions:', error);
-            await interaction.editReply({ content: 'Failed to fetch your task submissions.', flags: 1 << 6 });
+            await interaction.editReply({ content: 'Failed to fetch your task submissions.' });
         }
     }
 };

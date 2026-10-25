@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes, TextChannel } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
+import { resolveMovieChannel } from "../../movies/MovieChannel.js";
 
 const cancelmovie: Command = {
     name: 'cancelmovie',
@@ -31,7 +31,7 @@ const cancelmovie: Command = {
         const client = interaction.client;
 
         async function fetchMessageFromChannels(messageId: string, ...channelIds: (string | null | undefined)[]) {
-            for (const channelId of channelIds) {
+            for (const channelId of new Set(channelIds)) {
                 if (!channelId) continue;
                 try {
                     const fetchedChannel = await client.channels.fetch(channelId);
@@ -39,7 +39,7 @@ const cancelmovie: Command = {
                     const message = await fetchedChannel.messages.fetch(messageId);
                     return { channel: fetchedChannel as TextChannel, message };
                 } catch (err) {
-                    if ((err as any)?.code === 10008) {
+                    if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownMessage) {
                         continue;
                     }
                     throw err;
@@ -54,14 +54,11 @@ const cancelmovie: Command = {
         const cancellationMessage = `❌ Movie night has been cancelled by <@${interaction.user.id}>.`;
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
-        clearScheduledMovieAutoEnd(services.guildId);
-        actions.push("Cleared movie auto-end timer");
-
         try {
             // Cancel active poll
-            const activePoll = await movieRepo.getActivePoll();
-            if (activePoll?.isActive) {
-                await movieRepo.closePoll(activePoll.id);
+            const openPoll = await movieRepo.getActivePoll();
+            const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;
+            if (activePoll) {
                 actions.push("Active movie poll set inactive");
 
                 if (activePoll.messageId) {
@@ -93,12 +90,8 @@ const cancelmovie: Command = {
             const latestEvent = await movieRepo.getActiveEvent();
             if (latestEvent && !latestEvent.completed) {
                 fallbackAnnouncementChannelId = latestEvent.channelId;
-                const completedEvent = {
-                    ...latestEvent,
-                    completed: true,
-                    completedAt: new Date(),
-                };
-                await movieRepo.createMovieEvent(completedEvent);
+                await movieRepo.completeEvent(latestEvent.id);
+                services.movieAttendance.stop();
                 actions.push("Movie night event marked as cancelled");
 
                 if (latestEvent.announcementMessageId) {
@@ -160,17 +153,8 @@ const cancelmovie: Command = {
                 }
             }
 
-            if (!targetChannel) {
-                targetChannel = guild.channels.cache.find(
-                    (ch) => ch.name === "movie-night" && ch.isTextBased()
-                ) as TextChannel | undefined;
-            }
-
-            if (targetChannel) {
-                await targetChannel.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
-            } else {
-                console.warn("[CancelMovie] Could not find movie night channel for cancellation notice.");
-            }
+            targetChannel ??= await resolveMovieChannel(interaction.client, services) ?? undefined;
+            await targetChannel?.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
         }
 
         await interaction.editReply({

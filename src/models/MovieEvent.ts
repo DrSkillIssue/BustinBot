@@ -1,5 +1,7 @@
 import type { Movie } from "./Movie.js";
 
+export const UNPICKED_MOVIE_ID = "TBD";
+
 export interface MovieEvent {
     // Unique identifier for the event
     id: string;
@@ -39,4 +41,6 @@ export interface MovieEvent {
 
     // Discord user ID of the host or organiser
     hostedBy: string;
+
+    remindersSent?: string[];
 }

@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createFirestore } from "../core/database/firestore.js";
-import { fetchMovieDetails, fetchMovieDetailsById } from "../modules/movies/MovieService.js";
-import { Timestamp } from "firebase-admin/firestore";
+import { fetchMovieDetails } from "../modules/movies/MovieService.js";
 import "dotenv/config";
 
 const db = createFirestore();
@@ -65,20 +64,13 @@ async function importMovieList() {
         try {
             console.log(`🎬 Processing: ${name}`);
 
-            const baseDetails = await fetchMovieDetails(name);
+            const enriched = await fetchMovieDetails(name);
 
-            if (!baseDetails?.tmdbId) {
+            if (!enriched?.tmdbId) {
                 console.warn(`No TMDb match found for "${name}"`);
                 failed++;
                 continue;
             }
-
-            const fullDetails = await fetchMovieDetailsById(baseDetails.tmdbId);
-
-            const enriched = {
-                ...baseDetails,
-                ...fullDetails,
-            };
 
             const movieData = {
                 id: docId,
@@ -96,7 +88,7 @@ async function importMovieList() {
                 watched: false,
                 addedBy: userId,
                 addedByDisplay: suggestedby,
-                addedAt: Timestamp.now().toDate(),
+                addedAt: new Date(),
             };
 
             await docRef.set(movieData);

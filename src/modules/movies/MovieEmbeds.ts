@@ -1,9 +1,11 @@
 import { EmbedBuilder } from 'discord.js';
 import type { Movie } from '../../models/Movie.js';
+import type { TMDbSearchResult } from "./MovieService.js";
 import { getDisplayNameFromAddedBy } from './MovieMockUtils.js';
 
 export function truncate(text: string, length = 200): string {
-    return text.length > length ? text.slice(0, length - 3) + '...' : text;
+    if (text.length <= length) return text;
+    return length < 3 ? text.slice(0, length) : text.slice(0, length - 3) + '...';
 }
 
 export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {
@@ -24,7 +26,7 @@ export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {
     return embed;
 }
 
-export function createMoviePreviewEmbeds(results: any[]): EmbedBuilder[] {
+export function createMoviePreviewEmbeds(results: TMDbSearchResult[]): EmbedBuilder[] {
     return results.map((movie, index) => {
         const title = `${movie.title} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
 

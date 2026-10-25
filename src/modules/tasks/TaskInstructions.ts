@@ -2,7 +2,7 @@ import { TaskType } from "../../models/Task.js";
 
 export const TaskInstructions: Record<TaskType, string> = {
     [TaskType.XP]:
-        'Submit **before and after screenshots** showing your XP in the relevant skill with the **keyword** visible. RuneLite users are recommended to use the XP tracker overlay for eassy verification.',
+        'Submit **before and after screenshots** showing your XP in the relevant skill with the **keyword** visible. RuneLite users are recommended to use the XP tracker overlay for easy verification.',
     [TaskType.KC]:
         'Submit **before and after screenshots** of your Kill Count for the relevant boss/activity with the **keyword** visible. This can be via the collection log, kill notification messages, or KC overlays.',
     [TaskType.Drop]:

@@ -1,7 +1,9 @@
 import type { Interaction } from "discord.js";
-import { handleMoviePickChooseModalSubmit, handleConfirmRandomMovie, handleRerollRandomMovie, handleMoviePollVote, handleManualPollInteraction, handleRandomPollCountSelect } from "./PickMovieInteractions.js";
+import { handleMoviePickChooseModalSubmit, handleConfirmRandomMovie, handleRerollRandomMovie, handleMoviePollVote, handleManualPollInteraction, handlePickMovieButton, handleRandomPollCountSelect } from "./PickMovieInteractions.js";
 import { handleMovieNightDate, handleMovieNightTime } from "./MovieScheduler.js";
-import { updateManualPollSelection, showMovieManualPollMenu } from "./MovieManualPoll.js";
+import { showMovieManualPollMenu } from "./MovieManualPoll.js";
+import { MOVIE_LIST_BUTTON, buildMovieListPage, movieListButtonPage } from "./MovieList.js";
+import { ADD_MOVIE_BUTTON, handleAddMovieButton } from "./MovieSelector.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
 export async function handleMovieInteraction(
@@ -45,6 +47,22 @@ export async function handleMovieInteraction(
             return;
         }
 
+        if (["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"].includes(customId)) {
+            await handlePickMovieButton(services, interaction);
+            return;
+        }
+
+        if (customId.startsWith(ADD_MOVIE_BUTTON)) {
+            await handleAddMovieButton(services, interaction);
+            return;
+        }
+
+        if (customId.startsWith(MOVIE_LIST_BUTTON)) {
+            await interaction.deferUpdate();
+            await interaction.editReply(await buildMovieListPage(services, movieListButtonPage(customId)));
+            return;
+        }
+
         if (customId === "moviesetup_confirm") {
             const selections = services.setup.getSelections("movie", userId);
             const missing = services.setup.getMissingFields("movie", selections);
@@ -83,7 +101,8 @@ export async function handleMovieInteraction(
                 await handleRandomPollCountSelect(services, interaction);
                 return;
             case "movie_poll_manual_select":
-                updateManualPollSelection(interaction.user.id, interaction.values);
+                await interaction.deferUpdate();
+                services.manualPolls.select(interaction.user.id, interaction.values);
                 await showMovieManualPollMenu(services, interaction);
                 return;
             case "movienight-select-date":

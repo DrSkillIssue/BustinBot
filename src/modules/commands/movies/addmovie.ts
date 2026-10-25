@@ -1,14 +1,8 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from "discord.js";
-import { randomUUID } from "node:crypto";
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { addMovieWithStats, fetchMovieDetailsById } from "../../movies/MovieService.js";
-import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
-import { presentMovieSelection } from "../../movies/MovieSelector.js";
-import type { Movie } from "../../../models/Movie.js";
+import { checkCanAddMovie, presentMovieSelection } from "../../movies/MovieSelector.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-
-const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
 const addmovie: Command = {
     name: 'addmovie',
@@ -43,109 +37,20 @@ const addmovie: Command = {
             return;
         }
 
-        const movieRepo = services.repos.movieRepo;
-
-        const guild = interaction.guild!;
-        const member = interaction.member as GuildMember;
-
-        const guildRoles = guildConfig.roles ?? {};
-        const userRoleIds = member.roles.cache.map((r) => r.id);
-
-        const isBotAdmin =
-            guildRoles.admin && userRoleIds.includes(guildRoles.admin);
-        const isMovieAdmin =
-            guildRoles.movieAdmin && userRoleIds.includes(guildRoles.movieAdmin);
-
-        const isPrivilegedUser =
-            guild.ownerId === interaction.user.id ||
-            member.permissions.has("Administrator") ||
-            isBotAdmin ||
-            isMovieAdmin;
-
-        let allMovies: Movie[] = [];
-
         try {
-            allMovies = await movieRepo.getAllMovies();
-            const activeMoviesByUser = allMovies.filter(
-                (movie) => movie.addedBy === interaction.user.id && !movie.watched
-            );
-
-            if (!isPrivilegedUser && activeMoviesByUser.length >= MAX_ACTIVE_MOVIES_PER_USER) {
-                await interaction.editReply(
-                    `You have reached the maximum of ${MAX_ACTIVE_MOVIES_PER_USER} active movies. Remove one or wait for a movie night to conclude before adding more.`
-                );
+            const refusal = await checkCanAddMovie(services, interaction);
+            if (refusal) {
+                await interaction.editReply(refusal);
                 return;
             }
-        } catch (error) {
-            console.error("[AddMovie] Failed to validate movie cap:", error);
-            await interaction.editReply("Could not verify your movie count. Please try again later.");
-            return;
-        }
 
-        const query = interaction.options.getString("title", true);
-        const yearRaw = interaction.options.getInteger("year", false);
-        const year = yearRaw ?? undefined;
-
-        try {
+            const query = interaction.options.getString("title", true);
+            const year = interaction.options.getInteger("year", false) ?? undefined;
             // Present top search results from TMDb and let user choose one
-            const selected = await presentMovieSelection(interaction, query, year, 3, (candidate) => {
-                const existingMovie = allMovies.find(
-                    (movie) => movie.tmdbId !== undefined && movie.tmdbId === candidate.id && !movie.watched
-                );
-
-                if (!existingMovie) {
-                    return { isValid: true };
-                }
-
-                const addedBy = existingMovie.addedByDisplay ?? `<@${existingMovie.addedBy}>`;
-                return {
-                    isValid: false,
-                    message: `**${existingMovie.title}** is already in the movie list (added by ${addedBy}). Please choose a different result.`,
-                };
-            });
-            if (!selected) return;
-
-            // Fetch full metadata from TMDb
-            const movieMetadata = await fetchMovieDetailsById(selected.id);
-            if (!movieMetadata) {
-                await interaction.editReply(`Could not fetch details for ${selected.title}.`);
-                return;
-            }
-
-            // Build movie object
-            const newMovie: Movie = {
-                id: randomUUID(),
-                tmdbId: movieMetadata.tmdbId,
-                title: movieMetadata.title ?? selected.title,
-                releaseDate: movieMetadata.releaseDate,
-                posterUrl: movieMetadata.posterUrl,
-                infoUrl: movieMetadata.infoUrl,
-                overview: movieMetadata.overview,
-                runtime: movieMetadata.runtime,
-                genres: movieMetadata.genres,
-                rating: movieMetadata.rating,
-                director: movieMetadata.director,
-                cast: movieMetadata.cast,
-                watched: false,
-                addedBy: interaction.user.id,
-                addedAt: new Date(),
-            };
-
-            // Save to Firestore
-            await addMovieWithStats(newMovie, services);
-
-            // Confirm addition
-            const embed = createMovieEmbed(newMovie)
-                .setTitle(`Added: ${newMovie.title}`)
-                .setFooter({ text: `Added by ${interaction.user.username}` });
-
-            await interaction.editReply({ embeds: [embed], components: [] });
-            console.log(`[AddMovie] Added "${newMovie.title}" by ${interaction.user.username}`);
+            await presentMovieSelection(interaction, query, year);
         } catch (error) {
             console.error("[AddMovie Command Error]", error);
-            await interaction.editReply(
-                "An error occurred while adding the movie. Check console for details."
-            );
+            await interaction.editReply("An error occurred while adding the movie. Check console for details.");
         }
     },
 };

@@ -1,23 +1,92 @@
-import { StringSelectMenuInteraction, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, TextChannel, Client } from "discord.js";
+import { StringSelectMenuInteraction, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client } from "discord.js";
+import cron, { type ScheduledTask } from 'node-cron';
 import { DateTime } from 'luxon';
-import { createMovieNightEmbed } from "./MovieEmbeds.js";
+import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
 import type { Movie } from "../../models/Movie.js";
-import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
-import { scheduleMovieReminders, getPendingReminders } from "./MovieReminders.js";
-import { scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } from "./MovieLifecycle.js";
+import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
+import { getPendingReminders, sendDueReminders } from "./MovieReminders.js";
+import { finishMovieNight, movieNightEndsAt } from "./MovieLifecycle.js";
+import { closeActiveMoviePoll } from "./MoviePolls.js";
+import { getActiveVoiceMemberIds } from "./MovieAttendance.js";
+import { resolveMovieChannel } from "./MovieChannel.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { registerVoiceListeners } from "./MovieAttendance.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
-async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
+export async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
     if (!guildId) return "UTC";
     const config = await services.guilds.get(guildId);
     return config?.timezone || "UTC";
 }
 
-export function initMovieScheduler(client: Client) {
-    registerVoiceListeners(client);
-    console.log("[MovieScheduler] Voice listeners registered for attendance tracking.");
+export function startMovieScheduler(client: Client, guildServices: () => ServiceContainer[]): ScheduledTask {
+    return cron.schedule('* * * * *', async () => {
+        for (const services of guildServices()) {
+            await sweepMovieNight(client, services);
+        }
+    }, { name: 'movieScheduler:sweep', noOverlap: true });
+}
+
+export async function sweepMovieNight(client: Client, services: ServiceContainer): Promise<void> {
+    const now = new Date();
+    const movieRepo = services.repos.movieRepo;
+
+    const step = async (name: string, work: () => Promise<void>) => {
+        try {
+            await work();
+        } catch (err) {
+            console.error(`[MovieScheduler] ${name} failed for guild ${services.guildId}:`, err);
+        }
+    };
+
+    await step('Closing the poll', () => closeDuePoll(client, services, now));
+
+    const event = await movieRepo.getActiveEvent();
+    if (!event) return;
+
+    await step('Sending reminders', () => sendDueReminders(client, services, event, now));
+    if (event.movie.id === UNPICKED_MOVIE_ID) return;
+
+    await step('Counting attendance', () => trackAttendance(client, services, event, now));
+
+    const endsAt = movieNightEndsAt(event);
+    if (endsAt && endsAt <= now) {
+        await step('Ending the movie night', () => endMovieNight(client, services, event, now));
+    }
+}
+
+async function closeDuePoll(client: Client, services: ServiceContainer, now: Date): Promise<void> {
+    const poll = await services.repos.movieRepo!.getActivePoll();
+    if (!poll?.isActive || poll.endsAt > now) return;
+
+    const result = await closeActiveMoviePoll(services, client, 'Scheduler');
+    console.log(`[MovieScheduler] Poll closed: ${result.message}`);
+    if (!result.success || !result.winner) return;
+
+    const channel = await resolveMovieChannel(client, services);
+    await channel?.send({ embeds: [createMoviePollClosedEmbed(result.winner, 'Scheduler', result.winningVotes ?? 0, result.tieBreak ?? false)] });
+}
+
+async function trackAttendance(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
+    const attendance = services.movieAttendance;
+    const guildConfig = await services.guilds.get(services.guildId);
+    const voiceChannelId = event.voiceChannelId ?? guildConfig?.channels?.movieVC ?? null;
+    const memberIds = voiceChannelId ? await getActiveVoiceMemberIds(client, voiceChannelId) : [];
+
+    if (!attendance.isTracking(event.id)) {
+        attendance.start(event.id, voiceChannelId, memberIds, now);
+    } else {
+        attendance.reconcile(memberIds, now);
+    }
+}
+
+async function endMovieNight(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
+    const result = await finishMovieNight('auto', services, client, now, event.id);
+    if (!result.success || !result.finishedMovie) return;
+
+    const channel = await resolveMovieChannel(client, services);
+    await channel?.send({
+        content: `🎞️ **${result.finishedMovie.title}** has finished and has now been archived from the active list. Thanks for watching!`,
+    });
 }
 
 export async function handleMovieNightDate(interaction: StringSelectMenuInteraction, services: ServiceContainer) {
@@ -102,11 +171,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
                 ...activePoll,
                 endsAt: adjustedEnd.toJSDate()
             });
-            await scheduleActivePollClosure(services, interaction.client);
         }
     }
-
-    const startISO = utcDateTime.toISO()!;
 
     // Build embed
     const readableDate = localDateTime.toFormat("cccc, dd LLLL yyyy");
@@ -139,37 +205,12 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         interaction.user.username
     );
 
-    const guild = interaction.guild;
-    if (!guild) {
-        await interaction.editReply({
-            content: "Could not identify the guild. Please try again in a server channel."
-        });
-        return;
-    }
-
-    const channelId = guildConfig.channels?.movieNight;
-    let movieChannel: TextChannel | undefined;
-    if (channelId) {
-        const fetched = await guild.channels.fetch(channelId);
-        if (fetched?.isTextBased()) {
-            movieChannel = fetched as TextChannel;
-        }
-    }
-
-    if (!movieChannel) {
-        movieChannel = guild.channels.cache.find(
-            ch => ch.name === 'movie-night' && ch.isTextBased()
-        ) as TextChannel | undefined;
-    }
+    const movieChannel = await resolveMovieChannel(interaction.client, services);
 
     const movieRoleId = guildConfig.roles?.movieUser;
     const voiceChannelId = guildConfig.channels?.movieVC;
-    const role = movieRoleId ? guild.roles.cache.get(movieRoleId) : null;
-    const mention = role ? `<@&${role.id}>` : '';
+    const mention = movieRoleId ? `<@&${movieRoleId}>` : '';
     const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-
-    // A newly scheduled movie night supersedes any prior auto-end timer.
-    clearScheduledMovieAutoEnd(services.guildId);
 
     if (!voiceChannelId) {
         console.warn("[MovieScheduler] No movie voice channel configured; attendance tracking will be disabled for this event.");
@@ -179,16 +220,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const existingEvents = await movieRepo.getAllEvents();
     const activeEvents = existingEvents.filter((event) => !event.completed);
     if (activeEvents.length) {
-        const completedAt = new Date();
-        await Promise.all(
-            activeEvents.map((event) =>
-                movieRepo.createMovieEvent({
-                    ...event,
-                    completed: true,
-                    completedAt,
-                })
-            )
-        );
+        await Promise.all(activeEvents.map((event) => movieRepo.completeEvent(event.id)));
+        services.movieAttendance.stop();
     }
 
     // Prepare movie event record; announcement details filled after send
@@ -197,7 +230,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         id: eventId,
         createdAt: new Date(),
         startTime: utcDateTime.toJSDate(),
-        movie: movie ?? { id: "TBD", title: "TBD", addedBy: interaction.user.id, addedAt: new Date(), watched: false },
+        movie: movie ?? { id: UNPICKED_MOVIE_ID, title: "TBD", addedBy: interaction.user.id, addedAt: new Date(), watched: false },
         channelId: pollChannelId || interaction.channelId || "",
         voiceChannelId,
         hostedBy: interaction.user.id,
@@ -213,6 +246,8 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         announcementChannelId = sent.channelId;
     }
 
+    // The scheduler's sweep sends its reminders, counts attendance and ends it from what is stored here
+
     // Avoid spreading an undefined voiceChannelId (MovieEvent expects a string); exclude it and re-add only if defined.
     const { voiceChannelId: _voiceChannelId, ...eventWithoutVoice } = baseEvent;
     await movieRepo.createMovieEvent({
@@ -221,14 +256,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         channelId: announcementChannelId,
         ...(announcementMessageId ? { announcementMessageId } : {}),
     });
-
-    // Auto-end scheduling (if runtime known) after the event is persisted
-    if (movie?.runtime) {
-        scheduleMovieAutoEnd(services, startISO, movie.runtime, interaction.client);
-    }
-
-    // Schedule reminders
-    await scheduleMovieReminders(services, utcDateTime, interaction.client);
 
     // Edit deferred reply with success message
     await interaction.editReply({

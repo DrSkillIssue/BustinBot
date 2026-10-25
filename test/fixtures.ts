@@ -1,6 +1,10 @@
 import path from "node:path";
 import type { Interaction, Message } from "discord.js";
-import type { APIInteraction, GatewayMessageCreateDispatchData } from "discord-api-types/v10";
+import type {
+    APIInteraction,
+    GatewayMessageCreateDispatchData,
+    GatewayVoiceStateUpdateDispatchData,
+} from "discord-api-types/v10";
 import type { DateTime } from "luxon";
 import { test as base } from "vitest";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
@@ -193,6 +197,10 @@ export const test = base
         const interaction = await discord.dispatch(payload);
         await routeInteraction(interaction, discord.client, commands, services);
         return interaction;
+    })
+    .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
+        const [oldState, newState] = await discord.voiceStateUpdate(state);
+        services.movieAttendance.voiceStateChanged(oldState, newState);
     })
     .extend(
         "prefix",

@@ -1,27 +1,44 @@
-import { ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, Message } from "discord.js";
-import { createMoviePreviewEmbeds } from "./MovieEmbeds.js";
-import type { TMDbSearchResponse } from "./MovieService.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChatInputCommandInteraction, GuildMember, MessageFlags, PermissionFlagsBits } from "discord.js";
+import { randomUUID } from "node:crypto";
+import { createMovieEmbed, createMoviePreviewEmbeds } from "./MovieEmbeds.js";
+import { addMovieWithStats, fetchMovieDetailsById, type TMDbSearchResponse } from "./MovieService.js";
+import type { Movie } from "../../models/Movie.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
-type MovieSelection = {
-    id: number;
-    title?: string;
-};
+export const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
-type MovieSelectionValidationResult = {
-    isValid: boolean;
-    message?: string;
-};
+export const ADD_MOVIE_BUTTON = "addmovie|";
 
-type MovieSelectionValidator =
-    (selected: MovieSelection) => Promise<MovieSelectionValidationResult | boolean> | MovieSelectionValidationResult | boolean;
+type Member = ChatInputCommandInteraction["member"] | ButtonInteraction["member"];
 
-export async function presentMovieSelection(
-    interaction: ChatInputCommandInteraction,
-    query: string,
-    year?: number,
-    maxResults = 3,
-    validateSelection?: MovieSelectionValidator
-): Promise<any | null> {
+export async function isMovieNightAdmin(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<boolean> {
+    if (interaction.guild?.ownerId === interaction.user.id) return true;
+    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+
+    const member: Member = interaction.member;
+    const roleIds = member instanceof GuildMember ? [...member.roles.cache.keys()] : member?.roles ?? [];
+    const roles = (await services.guilds.get(services.guildId))?.roles ?? {};
+    return [roles.admin, roles.movieAdmin].some((roleId) => !!roleId && roleIds.includes(roleId));
+}
+
+export async function checkCanAddMovie(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction, tmdbId?: number): Promise<string | null> {
+    const movies = await services.repos.movieRepo!.getAllMovies();
+    const active = movies.filter((movie) => !movie.watched);
+
+    const own = active.filter((movie) => movie.addedBy === interaction.user.id);
+    if (own.length >= MAX_ACTIVE_MOVIES_PER_USER && !(await isMovieNightAdmin(services, interaction))) {
+        return `You have reached the maximum of ${MAX_ACTIVE_MOVIES_PER_USER} active movies. Remove one or wait for a movie night to conclude before adding more.`;
+    }
+
+    const existing = tmdbId === undefined ? undefined : active.find((movie) => movie.tmdbId === tmdbId);
+    if (existing) {
+        const addedBy = existing.addedByDisplay ?? `<@${existing.addedBy}>`;
+        return `**${existing.title}** is already in the movie list (added by ${addedBy}). Please choose a different result.`;
+    }
+    return null;
+}
+
+export async function presentMovieSelection(interaction: ChatInputCommandInteraction, query: string, year?: number, maxResults = 3): Promise<void> {
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}${year ? `&year=${year}` : ''}`;
     const response = await fetch(searchUrl);
@@ -29,84 +46,73 @@ export async function presentMovieSelection(
 
     if (!data?.results?.length) {
         await interaction.editReply(`No results found for "${query}".`);
-        return null;
+        return;
     }
 
     const topResults = data.results.slice(0, maxResults);
-    const embeds = createMoviePreviewEmbeds(topResults);
-
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        ...topResults.map((_: any, i: number) =>
+        ...topResults.map((result, i) =>
             new ButtonBuilder()
-                .setCustomId(`movie_select_${i}`)
+                .setCustomId(`${ADD_MOVIE_BUTTON}select|${result.id}`)
                 .setLabel(`${i + 1}`)
                 .setStyle(ButtonStyle.Primary)
         ),
         new ButtonBuilder()
-            .setCustomId(`movie_cancel`)
+            .setCustomId(`${ADD_MOVIE_BUTTON}cancel`)
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
 
-    const reply = await interaction.editReply({ content: "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.", embeds, components: [buttons] }) as Message;
-
-    const collector = reply.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 180000,
-        filter: (btnInt) => btnInt.user.id === interaction.user.id,
+    await interaction.editReply({
+        content: "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.",
+        embeds: createMoviePreviewEmbeds(topResults),
+        components: [buttons],
     });
+}
 
-    return new Promise((resolve) => {
-        let resolved = false;
+export async function handleAddMovieButton(services: ServiceContainer, interaction: ButtonInteraction): Promise<void> {
+    const [, action, id] = interaction.customId.split("|");
+    if (action === "cancel") {
+        await interaction.update({ content: 'Cancelled movie selection.', components: [], embeds: [] });
+        return;
+    }
 
-        const resolveOnce = (value: MovieSelection | null) => {
-            if (resolved) return;
-            resolved = true;
-            resolve(value);
-        };
+    await interaction.deferUpdate();
+    const tmdbId = Number(id);
+    const refusal = await checkCanAddMovie(services, interaction, tmdbId);
+    if (refusal) {
+        await interaction.followUp({ content: refusal, flags: MessageFlags.Ephemeral });
+        return;
+    }
 
-        collector.on('collect', async (btnInt) => {
-            if (btnInt.customId === 'movie_cancel') {
-                await btnInt.update({ content: 'Cancelled movie selection.', components: [], embeds: [] });
-                collector.stop();
-                resolveOnce(null);
-                return;
-            }
+    const metadata = await fetchMovieDetailsById(tmdbId);
+    if (!metadata?.title) {
+        await interaction.followUp({ content: `Could not fetch details for that movie.`, flags: MessageFlags.Ephemeral });
+        return;
+    }
 
-            const index = parseInt(btnInt.customId.replace('movie_select_', ''), 10);
-            const selected = topResults[index] as MovieSelection | undefined;
+    const movie: Movie = {
+        id: randomUUID(),
+        tmdbId: metadata.tmdbId,
+        title: metadata.title,
+        releaseDate: metadata.releaseDate,
+        posterUrl: metadata.posterUrl,
+        infoUrl: metadata.infoUrl,
+        overview: metadata.overview,
+        runtime: metadata.runtime,
+        genres: metadata.genres,
+        rating: metadata.rating,
+        director: metadata.director,
+        cast: metadata.cast,
+        watched: false,
+        addedBy: interaction.user.id,
+        addedAt: new Date(),
+    };
+    await addMovieWithStats(movie, services);
 
-            if (!selected) {
-                await btnInt.reply({ content: 'That selection is no longer available. Please try again.', flags: 1 << 6 });
-                return;
-            }
-
-            if (validateSelection) {
-                const validation = await validateSelection(selected);
-                const isValid = typeof validation === 'boolean' ? validation : validation.isValid;
-                const message =
-                    typeof validation === 'boolean'
-                        ? 'That movie cannot be selected right now. Please choose another option.'
-                        : (validation.message ?? 'That movie cannot be selected right now. Please choose another option.');
-
-                if (!isValid) {
-                    await btnInt.reply({ content: message, flags: 1 << 6 });
-                    return;
-                }
-            }
-
-            await btnInt.deferUpdate();
-
-            // await interaction.editReply({ content: `Selected **${selected.title}** **${selected.year}**`, embeds: [], components: [] });
-            collector.stop();
-            resolveOnce(selected);
-        });
-
-        collector.on('end', async (_, reason) => {
-            if (reason === 'time') {
-                await interaction.editReply({ content: 'Movie selection timed out.', embeds: [], components: [] });
-                resolveOnce(null);
-            }
-        })
-    });
+    const embed = createMovieEmbed(movie)
+        .setTitle(`Added: ${movie.title}`)
+        .setFooter({ text: `Added by ${interaction.user.username}` });
+    await interaction.editReply({ content: '', embeds: [embed], components: [] });
+    console.log(`[AddMovie] Added "${movie.title}" by ${interaction.user.username}`);
 }

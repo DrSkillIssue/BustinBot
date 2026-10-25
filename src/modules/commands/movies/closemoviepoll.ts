@@ -1,9 +1,10 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 import { closeActiveMoviePoll } from '../../movies/MoviePolls.js';
 import { createMoviePollClosedEmbed } from '../../movies/MovieEmbeds.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { resolveMovieChannel } from '../../movies/MovieChannel.js';
 
 const closemoviepoll: Command = {
     name: 'closemoviepoll',
@@ -26,19 +27,15 @@ const closemoviepoll: Command = {
             return;
         }
 
-        const guild = interaction.guild;
-        const channel = guild?.channels.cache.find(
-            (ch) => ch.name === 'movie-night' && ch.isTextBased()
-        ) as TextChannel | undefined;
-
-        if (result.winner && channel) {
+        if (result.winner) {
+            const channel = await resolveMovieChannel(interaction.client, services);
             const embed = createMoviePollClosedEmbed(
                 result.winner,
                 interaction.user.username,
                 result.winningVotes ?? 0,
                 result.tieBreak ?? false
             );
-            await channel.send({ embeds: [embed] });
+            await channel?.send({ embeds: [embed] });
         }
 
         await interaction.editReply(`✅ Movie poll closed successfully.\n${result.message}`);
