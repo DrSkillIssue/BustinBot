@@ -7,6 +7,7 @@ import { TaskCategory, type Task } from "../../src/models/Task.js";
 import { type TaskPoll } from "../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
 import { runTaskStartJob } from "../../src/modules/tasks/TaskScheduler.js";
+import assert from "node:assert";
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) =>
@@ -157,6 +158,37 @@ describe("starting a category's task", () => {
 
         expect(warn).toHaveBeenCalledWith(`[TaskStart] No active poll found for ${TaskCategory.PvM}.`);
         expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+});
+
+describe("/testtask", () => {
+    test("posts a week-long test task event in the channel and stores it", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const task = await factories.task.create();
+        discord.acceptMessages(IDS.channel);
+
+        const command = await interact(chatInputInteraction("testtask", [], AS.botAdmin));
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({ content: "Test task event posted!" }),
+        ]);
+        const event = await services.repos.taskRepo.getLatestTaskEvent();
+        assert(event);
+        expect(event.id).toMatch(new RegExp(`^test-${task.id}-\\d+$`));
+        expect(event.endTime.getTime() - event.startTime.getTime()).toBe(Duration.fromObject({ days: 7 }).toMillis());
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({
+                embeds: [
+                    expect.objectContaining({
+                        footer: { text: `Ends ${event.endTime.toUTCString()} • ${event.id}` },
+                    }),
+                ],
+            }),
+        ]);
     });
 });
 

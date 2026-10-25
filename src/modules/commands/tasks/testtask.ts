@@ -4,9 +4,7 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { buildTaskEventEmbed } from "../../tasks/TaskEmbeds.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
-import { TaskCategory, type Task } from "../../../models/Task.js";
-import fs from "fs";
-import path from "path";
+import { TaskCategory } from "../../../models/Task.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const testtask: Command = {
@@ -24,8 +22,7 @@ const testtask: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const filePath = path.join(import.meta.dirname, '../../../../data/tasks.json');
-        const taskData = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Task[];
+        const taskData = await services.repos.taskRepo.getAllTasks();
 
         if (!taskData.length) {
             await interaction.editReply({ content: "No tasks available." });
