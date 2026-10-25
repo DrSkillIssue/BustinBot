@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { sample } from "es-toolkit";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -8,16 +9,20 @@ import { TaskCategory } from "../../../models/Task.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const testtask: Command = {
-    name: 'testtask',
-    description: 'Post a fake task event for testing the submission flow.',
+    name: "testtask",
+    description: "Post a fake task event for testing the submission flow.",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.BotAdmin],
 
-    slashData: new SlashCommandBuilder()
-        .setName('testtask')
-        .setDescription('Post a fake task event for testing.'),
+    slashData: new SlashCommandBuilder().setName("testtask").setDescription("Post a fake task event for testing."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
@@ -28,13 +33,8 @@ const testtask: Command = {
             await interaction.editReply({ content: "No tasks available." });
             return;
         }
-        const randomTask = taskData[Math.floor(Math.random() * taskData.length)];
-        if (!randomTask) {
-            await interaction.editReply({ content: 'Failed to retrieve a random task.' });
-            return;
-        }
-        const selectedAmount = randomTask.amounts?.length ? randomTask.amounts[Math.floor(Math.random() * randomTask.amounts.length)] : undefined;
-
+        const randomTask = sample(taskData);
+        const selectedAmount = randomTask.amounts?.length ? sample(randomTask.amounts) : undefined;
 
         // Fake task event data
         const now = DateTime.utc();
@@ -44,7 +44,7 @@ const testtask: Command = {
             id: taskEventId,
             task: randomTask,
             category: TaskCategory.PvM,
-            keyword: 'pineapple',
+            keyword: "pineapple",
             amounts: {
                 bronze: randomTask.amtBronze ?? 0,
                 silver: randomTask.amtSilver ?? 0,
@@ -53,22 +53,22 @@ const testtask: Command = {
             startTime: now.toJSDate(),
             endTime: now.plus({ weeks: 1 }).toJSDate(),
             createdAt: now.toJSDate(),
-        }
+        };
 
-        const event: TaskEvent = selectedAmount !== undefined
-            ? { ...baseEvent, selectedAmount }
-            : baseEvent;
+        const event: TaskEvent = selectedAmount !== undefined ? { ...baseEvent, selectedAmount } : baseEvent;
 
         const channel = interaction.channel;
         if (!channel?.isSendable()) {
-            await interaction.editReply({ content: 'Test task events can only be posted in a channel the bot can send to.' });
+            await interaction.editReply({
+                content: "Test task events can only be posted in a channel the bot can send to.",
+            });
             return;
         }
         const { embeds, components } = buildTaskEventEmbed(event);
 
         await channel.send({ embeds, components });
         await services.taskEvents.storeTaskEvent(event);
-        await interaction.editReply({ content: 'Test task event posted!' });
+        await interaction.editReply({ content: "Test task event posted!" });
     },
 };
 

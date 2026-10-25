@@ -43,6 +43,9 @@ export class SchedulerStatusReporter {
     }
 
     static scheduleDailyLog(services: ServiceContainer): void {
-        cron.schedule("0 0 * * *", () => this.logAllUpcoming(services), { timezone: "UTC", name: "daily-schedule-log" });
+        cron.schedule("0 0 * * *", () => this.logAllUpcoming(services), {
+            timezone: "UTC",
+            name: "daily-schedule-log",
+        });
     }
 }

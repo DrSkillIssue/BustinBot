@@ -1,16 +1,30 @@
-import { ButtonInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
-import { SubmissionStatus, TIERS, type SubmissionTier, type TaskSubmission } from '../../models/TaskSubmission.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { getTaskDisplayName, getTierLabel } from './TaskEmbeds.js';
-import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
-import { raisedTier, type ReviewResult } from './TaskService.js';
+import {
+    ButtonInteraction,
+    Message,
+    Client,
+    ModalSubmitInteraction,
+    ModalBuilder,
+    LabelBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    MessageFlags,
+} from "discord.js";
+import { SubmissionStatus, TIERS, type SubmissionTier, type TaskSubmission } from "../../models/TaskSubmission.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { getTaskDisplayName, getTierLabel } from "./TaskEmbeds.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
+import { raisedTier, type ReviewResult } from "./TaskService.js";
 
 // STEP 1: "Submit Screenshot" button clicked on task embed
 export async function handleSubmitButton(interaction: ButtonInteraction, services: ServiceContainer) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const parts = interaction.customId.split('-');
-    const taskEventId = parts.slice(2).join('-');
+    const parts = interaction.customId.split("-");
+    const taskEventId = parts.slice(2).join("-");
 
     if (!taskEventId) {
         await interaction.editReply({ content: "Task ID missing from interaction." });
@@ -33,14 +47,14 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
 
     try {
         await interaction.user.send(
-            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`
+            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`,
         );
         await interaction.editReply({
             content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
         });
     } catch {
         await interaction.editReply({
-            content: "I couldn't send you a DM. Please enable direct messages from server members and try again."
+            content: "I couldn't send you a DM. Please enable direct messages from server members and try again.",
         });
     }
 }
@@ -49,10 +63,12 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
 export async function handleDirectMessage(message: Message, client: Client, guildServices: ServiceContainer[]) {
     if (message.author.bot) return;
 
-    const drafts = await Promise.all(guildServices.map(async (services) => ({
-        services,
-        draft: await services.tasks.getSubmissionDraft(message.author.id),
-    })));
+    const drafts = await Promise.all(
+        guildServices.map(async (services) => ({
+            services,
+            draft: await services.tasks.getSubmissionDraft(message.author.id),
+        })),
+    );
     const latest = drafts
         .flatMap(({ services, draft }) => (draft ? [{ services, draft }] : []))
         .sort((a, b) => b.draft.createdAt.getTime() - a.draft.createdAt.getTime())[0];
@@ -68,25 +84,39 @@ export async function handleDirectMessage(message: Message, client: Client, guil
     }
 
     try {
-        const outcome = await services.tasks.submit(client, draft, imageUrls, message.content.trim() || undefined, services);
+        const outcome = await services.tasks.submit(
+            client,
+            draft,
+            imageUrls,
+            message.content.trim() || undefined,
+            services,
+        );
         switch (outcome.result) {
-            case 'submitted': {
+            case "submitted": {
                 const { taskName, screenshotUrls } = outcome.submission;
-                await message.reply(`✅ Submission for **${taskName ?? 'your task'}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? '' : 's'} and sent for review!`);
+                await message.reply(
+                    `✅ Submission for **${taskName ?? "your task"}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? "" : "s"} and sent for review!`,
+                );
                 break;
             }
-            case 'taskNotFound':
-                await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
+            case "taskNotFound":
+                await message.reply(
+                    "Couldn't locate the task details. Please try submitting again or contact a Task Admin.",
+                );
                 break;
-            case 'adminsUnreachable':
-                await message.reply("I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.");
+            case "adminsUnreachable":
+                await message.reply(
+                    "I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.",
+                );
                 break;
-            case 'alreadySubmitted':
-                await message.reply("I've already received your submission for this task. To send another, click Submit on the task again.");
+            case "alreadySubmitted":
+                await message.reply(
+                    "I've already received your submission for this task. To send another, click Submit on the task again.",
+                );
                 break;
         }
     } catch (err) {
-        console.error('[TaskDM] Failed to store submission:', err);
+        console.error("[TaskDM] Failed to store submission:", err);
         await message.reply("Something went wrong saving your submission. Please send it again.");
     }
 }
@@ -96,7 +126,7 @@ function alreadyReviewedMessage(submission: TaskSubmission): string {
 }
 
 function archivedEnding(archived: boolean): string {
-    return archived ? ' and archived.' : ". It couldn't be archived; check the logs.";
+    return archived ? " and archived." : ". It couldn't be archived; check the logs.";
 }
 
 function formatTier(tier: SubmissionTier): string {
@@ -108,42 +138,42 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
     const customId = interaction.customId;
 
     // Second-step cancel action from confirmation prompt
-    if (customId.startsWith('review-cancel|')) {
+    if (customId.startsWith("review-cancel|")) {
         await interaction.update({
-            content: 'Review action cancelled. No changes were made.',
+            content: "Review action cancelled. No changes were made.",
             components: [],
         });
         return;
     }
 
     // Second-step confirm action from confirmation prompt
-    if (customId.startsWith('review-confirm|')) {
-        const parts = customId.split('|');
+    if (customId.startsWith("review-confirm|")) {
+        const parts = customId.split("|");
         const confirmAction = parts[1];
         const maybeTier = parts[2];
-        const submissionId = parts.slice(3).join('|').trim();
+        const submissionId = parts.slice(3).join("|").trim();
 
         if (!confirmAction || !submissionId) {
             await interaction.update({
-                content: 'Invalid confirmation payload. Please try again.',
+                content: "Invalid confirmation payload. Please try again.",
                 components: [],
             });
             return;
         }
 
-        if (confirmAction === 'reject') {
+        if (confirmAction === "reject") {
             const modal = new ModalBuilder()
                 .setCustomId(`reject_reason_${submissionId}`)
-                .setTitle('Reject Submission')
+                .setTitle("Reject Submission")
                 .addLabelComponents(
                     new LabelBuilder()
-                        .setLabel('Rejection Reason')
+                        .setLabel("Rejection Reason")
                         .setTextInputComponent(
                             new TextInputBuilder()
-                                .setCustomId('reason')
+                                .setCustomId("reason")
                                 .setStyle(TextInputStyle.Paragraph)
-                                .setRequired(false)
-                        )
+                                .setRequired(false),
+                        ),
                 );
             await interaction.showModal(modal);
             return;
@@ -152,7 +182,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
         const tier = TIERS.find((candidate) => candidate === maybeTier);
         if (!tier) {
             await interaction.update({
-                content: 'Invalid tier selected for approval.',
+                content: "Invalid tier selected for approval.",
                 components: [],
             });
             return;
@@ -167,25 +197,29 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
         const reviewerId = interaction.user.id;
         let outcome: ReviewResult;
         try {
-            outcome = await services.tasks.review(interaction.client, { submissionId, reviewedBy: reviewerId, decision: tier }, services);
+            outcome = await services.tasks.review(
+                interaction.client,
+                { submissionId, reviewedBy: reviewerId, decision: tier },
+                services,
+            );
         } catch (err) {
-            console.error('[TaskInteractions] Tier approval failed:', err);
+            console.error("[TaskInteractions] Tier approval failed:", err);
             await interaction.editReply({ content: "❌ Failed to process tier approval. Check logs for details." });
             return;
         }
 
-        if (outcome.result === 'notFound') {
-            await interaction.editReply({ content: 'Submission not found.' });
+        if (outcome.result === "notFound") {
+            await interaction.editReply({ content: "Submission not found." });
             return;
         }
-        if (outcome.result === 'alreadyReviewed') {
+        if (outcome.result === "alreadyReviewed") {
             await interaction.editReply({ content: alreadyReviewedMessage(outcome.submission) });
             return;
         }
 
         const { submission, heldTier, archived } = outcome;
         const taskLabel = submission.taskName ?? `Task ${submission.taskEventId}`;
-        const rolls = `${submission.prizeRolls ?? 0} roll${(submission.prizeRolls ?? 0) === 1 ? '' : 's'}`;
+        const rolls = `${submission.prizeRolls ?? 0} roll${(submission.prizeRolls ?? 0) === 1 ? "" : "s"}`;
         // Approving below the tier the member already holds resolves the submission without changing their tier
         const keptTier = raisedTier(outcome) ? null : heldTier;
         const approvalMessage = keptTier
@@ -201,7 +235,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             content: keptTier
                 ? `✅ Submission approved for **${formatTier(tier)} tier**${archivedEnding(archived)} The member already holds ${getTierLabel(keptTier)} for this task, so their tier is unchanged.`
                 : `✅ Submission approved for **${formatTier(tier)} tier** (${rolls})${archivedEnding(archived)}`,
-            components: []
+            components: [],
         });
         return;
     }
@@ -210,14 +244,14 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
     let submissionId: string | undefined;
     let maybeTier: string | undefined;
 
-    if (customId.startsWith('reject_')) {
-        action = 'reject';
-        submissionId = customId.slice('reject_'.length).trim();
-    } else if (customId.startsWith('approve_')) {
-        action = 'approve';
-        const parts = customId.split('_');
+    if (customId.startsWith("reject_")) {
+        action = "reject";
+        submissionId = customId.slice("reject_".length).trim();
+    } else if (customId.startsWith("approve_")) {
+        action = "approve";
+        const parts = customId.split("_");
         maybeTier = parts[1];
-        submissionId = parts.slice(2).join('_').trim();
+        submissionId = parts.slice(2).join("_").trim();
     }
 
     if (!submissionId) {
@@ -229,20 +263,20 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
         return;
     }
 
-    if (action === 'reject') {
+    if (action === "reject") {
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
                 .setCustomId(`review-confirm|reject||${submissionId}`)
-                .setLabel('Confirm Reject')
+                .setLabel("Confirm Reject")
                 .setStyle(ButtonStyle.Danger),
             new ButtonBuilder()
                 .setCustomId(`review-cancel|${submissionId}`)
-                .setLabel('Cancel')
-                .setStyle(ButtonStyle.Secondary)
+                .setLabel("Cancel")
+                .setStyle(ButtonStyle.Secondary),
         );
 
         await interaction.reply({
-            content: 'Are you sure you want to reject this submission?',
+            content: "Are you sure you want to reject this submission?",
             components: [row],
             flags: MessageFlags.Ephemeral,
         });
@@ -264,8 +298,8 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId(`review-cancel|${submissionId}`)
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Secondary)
+            .setLabel("Cancel")
+            .setStyle(ButtonStyle.Secondary),
     );
 
     await interaction.reply({
@@ -281,8 +315,8 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const reviewerId = interaction.user.id;
-    const reason = interaction.fields.getTextInputValue('reason');
-    const submissionId = interaction.customId.slice('reject_reason_'.length);
+    const reason = interaction.fields.getTextInputValue("reason");
+    const submissionId = interaction.customId.slice("reject_reason_".length);
     if (!submissionId) {
         await interaction.editReply({ content: "Submission ID missing from interaction." });
         return;
@@ -293,19 +327,19 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
         outcome = await services.tasks.review(
             interaction.client,
             { submissionId, reviewedBy: reviewerId, decision: SubmissionStatus.Rejected, rejectionReason: reason },
-            services
+            services,
         );
     } catch (err) {
-        console.error('[TaskInteractions] Rejection failed:', err);
+        console.error("[TaskInteractions] Rejection failed:", err);
         await interaction.editReply({ content: "❌ Failed to reject the submission. Check logs for details." });
         return;
     }
 
-    if (outcome.result === 'notFound') {
-        await interaction.editReply({ content: 'Submission not found.' });
+    if (outcome.result === "notFound") {
+        await interaction.editReply({ content: "Submission not found." });
         return;
     }
-    if (outcome.result === 'alreadyReviewed') {
+    if (outcome.result === "alreadyReviewed") {
         await interaction.editReply({ content: alreadyReviewedMessage(outcome.submission) });
         return;
     }
@@ -313,24 +347,17 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
     const { submission, archived } = outcome;
     // Update the ephemeral reply
     await interaction.editReply({
-        content: `❌ Submission rejected${archivedEnding(archived)}`
+        content: `❌ Submission rejected${archivedEnding(archived)}`,
     });
 
     // Post a visible message in the admin channel
-    const guildConfig = await services.guilds.get(services.guildId);
-    const verificationChannelId = guildConfig?.channels?.taskVerification;
-    if (!verificationChannelId) {
-        console.warn(`[TaskInteractions] Task verification channel not configured for guild ${services.guildId}.`);
-        return;
-    }
+    const adminChannel = await configuredChannel(interaction.client, services, "taskVerification");
+    if (!adminChannel) return;
     try {
-        const adminChannel = await interaction.client.channels.fetch(verificationChannelId);
-        if (adminChannel?.isSendable()) {
-            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-            const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** by <@${submission.userId}>. Reason: ${reason || "No reason provided"}.${archived ? " Submission moved to archive channel." : ""}`;
-            await adminChannel.send(withSuppressedMentions({ content: rejectionMessage }, suppressMentions));
-        }
+        const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+        const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** by <@${submission.userId}>. Reason: ${reason || "No reason provided"}.${archived ? " Submission moved to archive channel." : ""}`;
+        await adminChannel.send(withSuppressedMentions({ content: rejectionMessage }, suppressMentions));
     } catch (err) {
-        console.warn(`[TaskInteractions] Failed to notify task admins in channel ${verificationChannelId}:`, err);
+        console.warn(`[TaskInteractions] Failed to notify task admins in channel ${adminChannel.id}:`, err);
     }
 }

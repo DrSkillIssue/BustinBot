@@ -15,6 +15,7 @@ import path from "path";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { packageVersion } from "../../../utils/version.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 interface Announcement {
     title: string;
@@ -23,10 +24,7 @@ interface Announcement {
     footer?: string;
 }
 
-function buildSection(
-    content: string | string[],
-    accessoryUrl?: string
-): APIMessageTopLevelComponent[] {
+function buildSection(content: string | string[], accessoryUrl?: string): APIMessageTopLevelComponent[] {
     const textArray = Array.isArray(content) ? content : [content];
 
     if (accessoryUrl) {
@@ -69,7 +67,13 @@ const announce: Command = {
         .setName("announce")
         .setDescription("Post the latest BustinBot version announcement."),
 
-    async execute({ interaction, services, }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>, services: ServiceContainer; }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -93,23 +97,16 @@ const announce: Command = {
         }
 
         // Get announcement channel
-        const guildConfig = await services.guilds.get(interaction.guildId);
-        const channelId = guildConfig?.channels?.announcements;
-        if (!channelId) {
+        const channel = await configuredChannel(interaction.client, services, "announcements");
+        if (!channel) {
+            const channelId = (await services.guilds.get(services.guildId))?.channels?.announcements;
             await interaction.editReply({
-                content: "Announcement channel not configured. Please run `/setup` first.",
+                content: channelId
+                    ? `I can't reach the announcement channel <#${channelId}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`
+                    : "Announcement channel not configured. Please run `/setup` first.",
             });
             return;
         }
-
-        const fetchedChannel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
-        if (!fetchedChannel || !fetchedChannel.isTextBased()) {
-            await interaction.editReply({
-                content: `I can't reach the announcement channel <#${channelId}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`,
-            });
-            return;
-        }
-        const channel = fetchedChannel;
 
         // Build sections
         const botUser = interaction.client.user;
@@ -117,9 +114,7 @@ const announce: Command = {
 
         const sectionHeader = buildSection(announcement.title, avatarUrl);
         const sectionIntro = buildSection(announcement.intro);
-        const featureSections = announcement.sections.flatMap((sec) =>
-            buildSection([`**${sec.name}**`, sec.value])
-        );
+        const featureSections = announcement.sections.flatMap((sec) => buildSection([`**${sec.name}**`, sec.value]));
 
         const components: APIMessageTopLevelComponent[] = [
             ...sectionHeader,
@@ -128,16 +123,14 @@ const announce: Command = {
             ...featureSections,
         ];
 
-        const suppressMentions = services
-            ? await isMentionSuppressed(services.guilds, interaction.guildId)
-            : false;
+        const suppressMentions = services ? await isMentionSuppressed(services.guilds, interaction.guildId) : false;
 
         // Send announcement
         const message: MessageCreateOptions = { flags: MessageFlags.IsComponentsV2, components };
         await channel.send(withSuppressedMentions(message, suppressMentions));
 
         await interaction.editReply({
-            content: `Announcement for **v${currentVersion}** posted in <#${channelId}>.`,
+            content: `Announcement for **v${currentVersion}** posted in <#${channel.id}>.`,
         });
     },
 };

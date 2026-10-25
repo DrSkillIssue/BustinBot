@@ -40,6 +40,8 @@ describe("nextTaskId", () => {
     });
 
     test("has nothing to follow for a category without numbered IDs", () => {
-        expect(nextTaskId([taskFactory.build({ id: "PVM001", category: TaskCategory.PvM })], TaskCategory.Leagues)).toBeNull();
+        expect(
+            nextTaskId([taskFactory.build({ id: "PVM001", category: TaskCategory.PvM })], TaskCategory.Leagues),
+        ).toBeNull();
     });
 });

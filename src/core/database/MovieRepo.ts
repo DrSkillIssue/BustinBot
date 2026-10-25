@@ -8,7 +8,7 @@ import { movieConverter, movieEventConverter, moviePollConverter } from "./conve
 
 export class MovieRepository extends GuildScopedRepository<Movie> implements IMovieRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'movies', movieConverter);
+        super(db, guildId, "movies", movieConverter);
     }
 
     async getAllMovies(): Promise<Movie[]> {
@@ -30,7 +30,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     private get pollsCollection() {
-        return this.guildCollection('moviePolls', moviePollConverter);
+        return this.guildCollection("moviePolls", moviePollConverter);
     }
 
     async createPoll(poll: MoviePoll): Promise<void> {
@@ -38,7 +38,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     async getActivePoll(): Promise<MoviePoll | null> {
-        const snapshot = await this.pollsCollection.where('isActive', '==', true).get();
+        const snapshot = await this.pollsCollection.where("isActive", "==", true).get();
 
         const polls = snapshot.docs
             .map((doc) => doc.data())
@@ -65,7 +65,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     private get eventsCollection() {
-        return this.guildCollection('movieEvents', movieEventConverter);
+        return this.guildCollection("movieEvents", movieEventConverter);
     }
 
     async createMovieEvent(event: MovieEvent): Promise<void> {
@@ -81,7 +81,12 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         return this.db.runTransaction(async (transaction) => {
             const event = (await transaction.get(docRef)).data();
             if (!event || event.completed) return null;
-            const completed: MovieEvent = { ...event, ...changes, completed: true, completedAt: changes.completedAt ?? new Date() };
+            const completed: MovieEvent = {
+                ...event,
+                ...changes,
+                completed: true,
+                completedAt: changes.completedAt ?? new Date(),
+            };
             transaction.set(docRef, completed);
             return completed;
         });
@@ -100,9 +105,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     async getActiveEvent(): Promise<MovieEvent | null> {
-        const snapshot = await this.eventsCollection
-            .where('completed', '==', false)
-            .get();
+        const snapshot = await this.eventsCollection.where("completed", "==", false).get();
 
         if (snapshot.empty) return null;
 
@@ -114,17 +117,14 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     async getLatestEvent(): Promise<MovieEvent | null> {
-        const snapshot = await this.eventsCollection
-        .orderBy('createdAt', 'desc')
-        .limit(1)
-        .get();
+        const snapshot = await this.eventsCollection.orderBy("createdAt", "desc").limit(1).get();
 
         if (snapshot.empty) return null;
         return snapshot.docs[0]?.data() ?? null;
     }
 
     async getAllEvents(): Promise<MovieEvent[]> {
-        const snapshot = await this.eventsCollection.orderBy('createdAt', 'desc').get();
+        const snapshot = await this.eventsCollection.orderBy("createdAt", "desc").get();
         return snapshot.docs.map((doc) => doc.data());
     }
 
@@ -135,7 +135,11 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         await batch.commit();
     }
 
-    async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: MoviePoll; }> {
+    async voteInPollOnce(
+        pollId: string,
+        userId: string,
+        optionId: string,
+    ): Promise<{ firstTime: boolean; updatedPoll: MoviePoll }> {
         const pollRef = this.pollsCollection.doc(pollId);
         return this.db.runTransaction(async (tx) => {
             const snap = await tx.get(pollRef);

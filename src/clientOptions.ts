@@ -1,4 +1,4 @@
-import { GatewayIntentBits, Partials, type ClientOptions } from 'discord.js';
+import { GatewayIntentBits, Partials, type ClientOptions } from "discord.js";
 
 export const clientOptions: ClientOptions = {
     intents: [

@@ -1,31 +1,33 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import Fuse from 'fuse.js';
-import type { Command } from '../../../models/Command.js';
-import { CommandModule, CommandRole } from '../../../models/Command.js';
-import { createMovieEmbed } from '../../movies/MovieEmbeds.js';
-import type { Movie } from '../../../models/Movie.js';
-import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import Fuse from "fuse.js";
+import type { Command } from "../../../models/Command.js";
+import { CommandModule, CommandRole } from "../../../models/Command.js";
+import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
+import type { Movie } from "../../../models/Movie.js";
+import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const viewmovie: Command = {
-    name: 'viewmovie',
-    description: 'View details of a movie in the watchlist.',
+    name: "viewmovie",
+    description: "View details of a movie in the watchlist.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.Everyone],
 
     slashData: new SlashCommandBuilder()
-        .setName('viewmovie')
-        .setDescription('View a movie from the local movie list.')
-        .addStringOption(option =>
-            option.setName('title')
-                .setDescription('Name of the movie.')
-                .setRequired(true)
-        ),
+        .setName("viewmovie")
+        .setDescription("View a movie from the local movie list.")
+        .addStringOption((option) => option.setName("title").setDescription("Name of the movie.").setRequired(true)),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-       const movieRepo = services.repos.movieRepo;
+        const movieRepo = services.repos.movieRepo;
 
         const titleQuery = interaction.options.getString("title", true);
 
@@ -61,13 +63,11 @@ const viewmovie: Command = {
 
             await interaction.editReply({ embeds: [embed] });
 
-            console.log(
-                `[ViewMovie] ${interaction.user.username} viewed details for "${matchedMovie.title}".`
-            );
+            console.log(`[ViewMovie] ${interaction.user.username} viewed details for "${matchedMovie.title}".`);
         } catch (error) {
             console.error("[ViewMovie Command Error]", error);
             await interaction.editReply(
-                "An error occurred while fetching the movie details. Check console for details."
+                "An error occurred while fetching the movie details. Check console for details.",
             );
         }
     },

@@ -2,8 +2,16 @@ import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../fixtures.js";
 import { handleInteraction } from "../../src/core/events/onInteraction.js";
 import { CommandRole } from "../../src/models/Command.js";
-import { AS, IDS, NAMES, chatInputInteraction, apiUser, messageCreate } from "../discord/payloads.js";
-import { PRIVATE_DEFERRAL, DiscordError } from "../discord/harness.js";
+import {
+    AS,
+    DiscordError,
+    IDS,
+    NAMES,
+    chatInputInteraction,
+    apiBotUser,
+    messageCreate,
+    PRIVATE_DEFERRAL,
+} from "../discord/payloads.js";
 import { commandFactory } from "../factories.js";
 import { handleMessage } from "../../src/core/events/onMessage.js";
 
@@ -13,7 +21,6 @@ const failing = commandFactory.build({
         throw new Error("boom");
     },
 });
-const { user: _user, permissions: _permissions, ...botAdmin } = AS.botAdmin.member;
 
 describe("slash command routing", () => {
     test("recognises a role configured by name for a member Discord sends as role ids", async ({
@@ -22,7 +29,7 @@ describe("slash command routing", () => {
         uncachedGuild,
     }) => {
         await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
-        const interaction = await discord.dispatch(
+        const interaction = await discord.sendInteraction(
             chatInputInteraction("probe", [], { ...uncachedGuild, ...AS.botAdmin }),
         );
         const ran = commandFactory.build({
@@ -49,7 +56,7 @@ describe("slash command routing", () => {
         uncachedGuild,
     }) => {
         await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
-        const interaction = await discord.dispatch(
+        const interaction = await discord.sendInteraction(
             chatInputInteraction("setup", [], { ...uncachedGuild, ...AS.botAdmin }),
         );
 
@@ -65,7 +72,7 @@ describe("slash command routing", () => {
         uncachedGuild,
     }) => {
         await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
-        const interaction = await discord.dispatch(
+        const interaction = await discord.sendInteraction(
             chatInputInteraction("setup", [], { ...uncachedGuild, ...AS.taskAdmin }),
         );
 
@@ -83,7 +90,7 @@ describe("slash command routing", () => {
     });
 
     test("replies privately when the command is unknown", async ({ discord, services }) => {
-        const interaction = await discord.dispatch(chatInputInteraction("missing"));
+        const interaction = await discord.sendInteraction(chatInputInteraction("missing"));
 
         await handleInteraction(interaction, new Map(), services);
 
@@ -96,7 +103,7 @@ describe("slash command routing", () => {
     });
 
     test("refuses a role-restricted command to members without the role", async ({ discord, services }) => {
-        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        const interaction = await discord.sendInteraction(chatInputInteraction("probe"));
         const execute = vi.fn();
 
         await handleInteraction(
@@ -122,7 +129,7 @@ describe("slash command routing", () => {
         await services.guilds.update(IDS.guild, {
             setupComplete: { core: false, movie: false, task: false },
         });
-        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        const interaction = await discord.sendInteraction(chatInputInteraction("probe"));
 
         await handleInteraction(interaction, new Map([["probe", commandFactory.build({ execute })]]), services);
 
@@ -141,7 +148,7 @@ describe("slash command routing", () => {
 
     test("replies with a private error when a command fails before responding", async ({ discord, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
-        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        const interaction = await discord.sendInteraction(chatInputInteraction("probe"));
 
         await handleInteraction(
             interaction,
@@ -178,7 +185,7 @@ describe("slash command routing", () => {
         services,
     }) => {
         vi.spyOn(console, "error").mockImplementation(() => {});
-        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        const interaction = await discord.sendInteraction(chatInputInteraction("probe"));
 
         await handleInteraction(
             interaction,
@@ -220,10 +227,10 @@ describe("prefix commands", () => {
 
     test("ignores messages without the prefix, from bots, or for unknown commands", async ({ discord, prefix }) => {
         await prefix("goodbot");
-        await prefix("!goodbot", { author: apiUser({ id: IDS.bot, bot: true }) });
+        await prefix("!goodbot", { author: apiBotUser() });
         await prefix("!unknown");
 
-        expect(discord.requests()).toEqual([]);
+        expect(discord.requests).toEqual([]);
     });
 
     test("refuses a restricted command to members without the role", async ({ discord, prefix }) => {
@@ -237,7 +244,7 @@ describe("prefix commands", () => {
 
     test("runs a restricted command for members with the role", async ({ discord, prefix }) => {
         discord.acceptMessages(IDS.channel);
-        await prefix("!sendas", { member: botAdmin });
+        await prefix("!sendas", AS.botAdmin);
 
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
             expect.objectContaining({ content: expect.stringContaining("replaced with a slash command") }),

@@ -1,4 +1,9 @@
-import { Timestamp, type DocumentData, type FirestoreDataConverter, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+    Timestamp,
+    type DocumentData,
+    type FirestoreDataConverter,
+    type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 import { cloneDeepWith } from "es-toolkit";
 import type { BotStats } from "../../models/BotStats.js";
 import type { Guild } from "../../models/Guild.js";

@@ -1,4 +1,4 @@
-import type { Client } from 'discord.js';
+import type { Client } from "discord.js";
 import {
     SubmissionStatus,
     isTier,
@@ -8,41 +8,53 @@ import {
     type SubmissionTier,
     type TaskSubmission,
     type TaskSubmissionDraft,
-} from '../../models/TaskSubmission.js';
-import type { UserStats } from '../../models/UserStats.js';
-import { MAX_SCREENSHOTS, archiveSubmission, notifyUser, postToAdminChannel, removeReviewPost, type ReviewPost } from './SubmissionActions.js';
-import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
-import { getTaskDisplayName } from './TaskEmbeds.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { calculateTaskStreakSummary } from './TaskStreaks.js';
-import { ensureTaskLeaderboardsInitialized, getStatusPoints, incrementLifetimePoints, recordPeriodicTierChange } from './TaskLeaderboards.js';
-import { applyTaskMilestoneRoles } from './TaskMilestones.js';
-import { refreshTaskEventMessage } from './HandleTaskStart.js';
+} from "../../models/TaskSubmission.js";
+import type { UserStats } from "../../models/UserStats.js";
+import {
+    MAX_SCREENSHOTS,
+    archiveSubmission,
+    notifyUser,
+    postToAdminChannel,
+    removeReviewPost,
+    type ReviewPost,
+} from "./SubmissionActions.js";
+import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
+import { getTaskDisplayName } from "./TaskEmbeds.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { calculateTaskStreakSummary } from "./TaskStreaks.js";
+import {
+    ensureTaskLeaderboardsInitialized,
+    getStatusPoints,
+    incrementLifetimePoints,
+    incrementPeriodicPoints,
+} from "./TaskLeaderboards.js";
+import { applyTaskMilestoneRoles } from "./TaskMilestones.js";
+import { refreshTaskEventMessage } from "./HandleTaskStart.js";
 
 const TIER_STATS: Record<SubmissionTier, keyof UserStats> = {
-    [SubmissionStatus.Bronze]: 'tasksCompletedBronze',
-    [SubmissionStatus.Silver]: 'tasksCompletedSilver',
-    [SubmissionStatus.Gold]: 'tasksCompletedGold',
+    [SubmissionStatus.Bronze]: "tasksCompletedBronze",
+    [SubmissionStatus.Silver]: "tasksCompletedSilver",
+    [SubmissionStatus.Gold]: "tasksCompletedGold",
 };
 
 export type SubmitOutcome =
-    | { result: 'submitted'; submission: TaskSubmission }
-    | { result: 'taskNotFound' }
-    | { result: 'adminsUnreachable' }
-    | { result: 'alreadySubmitted' };
+    | { result: "submitted"; submission: TaskSubmission }
+    | { result: "taskNotFound" }
+    | { result: "adminsUnreachable" }
+    | { result: "alreadySubmitted" };
 
 export type ReviewResult =
-    | Exclude<SubmissionReviewOutcome, { result: 'reviewed' }>
-    | (Extract<SubmissionReviewOutcome, { result: 'reviewed' }> & { archived: boolean });
+    | Exclude<SubmissionReviewOutcome, { result: "reviewed" }>
+    | (Extract<SubmissionReviewOutcome, { result: "reviewed" }> & { archived: boolean });
 
 export function raisedTier(outcome: SubmissionReviewOutcome): SubmissionTier | null {
-    if (outcome.result !== 'reviewed') return null;
+    if (outcome.result !== "reviewed") return null;
     const { submission, heldTier } = outcome;
     return isTier(submission.status) && tierRank(submission.status) > tierRank(heldTier) ? submission.status : null;
 }
 
 export class TaskService {
-    constructor(private repo: ITaskRepository) { }
+    constructor(private repo: ITaskRepository) {}
 
     get repository() {
         return this.repo;
@@ -58,11 +70,17 @@ export class TaskService {
         return this.repo.getSubmissionDraft(userId);
     }
 
-    async submit(client: Client, draft: TaskSubmissionDraft, screenshotUrls: string[], notes: string | undefined, services: ServiceContainer): Promise<SubmitOutcome> {
+    async submit(
+        client: Client,
+        draft: TaskSubmissionDraft,
+        screenshotUrls: string[],
+        notes: string | undefined,
+        services: ServiceContainer,
+    ): Promise<SubmitOutcome> {
         const event = await this.repo.getTaskEventById(draft.taskEventId);
         if (!event) {
             await this.repo.deleteSubmissionDraft(draft.userId);
-            return { result: 'taskNotFound' };
+            return { result: "taskNotFound" };
         }
 
         const now = new Date();
@@ -85,7 +103,7 @@ export class TaskService {
             posted = await postToAdminChannel(client, submission, event, heldTier, services);
         } catch (err) {
             console.warn(`[TaskService] Couldn't post submission ${submission.id} for review:`, err);
-            return { result: 'adminsUnreachable' };
+            return { result: "adminsUnreachable" };
         }
 
         const stored: TaskSubmission = { ...submission, ...posted };
@@ -98,9 +116,9 @@ export class TaskService {
         }
         if (!submitted) {
             await removeReviewPost(client, stored, services);
-            return { result: 'alreadySubmitted' };
+            return { result: "alreadySubmitted" };
         }
-        return { result: 'submitted', submission: stored };
+        return { result: "submitted", submission: stored };
     }
 
     async review(client: Client, review: SubmissionReview, services: ServiceContainer): Promise<ReviewResult> {
@@ -109,7 +127,7 @@ export class TaskService {
         }
 
         const outcome = await this.repo.reviewSubmission(review);
-        if (outcome.result !== 'reviewed') return outcome;
+        if (outcome.result !== "reviewed") return outcome;
 
         const { submission, heldTier } = outcome;
         const tier = raisedTier(outcome);
@@ -140,7 +158,7 @@ export class TaskService {
         submission: TaskSubmission,
         tier: SubmissionTier,
         heldTier: SubmissionTier | null,
-        services: ServiceContainer
+        services: ServiceContainer,
     ): Promise<string | undefined> {
         const { userId, taskEventId } = submission;
         const userRepo = services.repos.userRepo;
@@ -156,7 +174,7 @@ export class TaskService {
         }
         const points = getStatusPoints(tier) - (heldTier ? getStatusPoints(heldTier) : 0);
         await incrementLifetimePoints(services, userId, points);
-        await recordPeriodicTierChange(services, taskEventId, { userId, points, from: heldTier, to: tier });
+        await incrementPeriodicPoints(services, userId, points, taskEventId, tier);
         try {
             await applyTaskMilestoneRoles(client, services, userId);
         } catch (err) {
@@ -174,7 +192,10 @@ export class TaskService {
 
         try {
             const streak = await calculateTaskStreakSummary(userId, this.repo);
-            await userRepo.updateUser(userId, { taskStreak: streak.currentStreak, longestTaskStreak: streak.longestStreak });
+            await userRepo.updateUser(userId, {
+                taskStreak: streak.currentStreak,
+                longestTaskStreak: streak.longestStreak,
+            });
             return `\n🔥 Task streak: **${streak.currentStreak}** (Longest: **${streak.longestStreak}**).`;
         } catch (err) {
             console.warn(`[TaskService] Failed to compute streak summary for ${userId}:`, err);

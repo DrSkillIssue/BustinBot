@@ -1,4 +1,4 @@
-import { shuffle } from "es-toolkit";
+import { random, randomInt, shuffle } from "es-toolkit";
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
 
@@ -14,9 +14,9 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
 
         let chosenIndex: number;
         if (totalWeight <= 0) {
-            chosenIndex = Math.floor(Math.random() * pool.length);
+            chosenIndex = randomInt(pool.length);
         } else {
-            const roll = Math.random() * totalWeight;
+            const roll = random(totalWeight);
             let runningTotal = 0;
             chosenIndex = pool.length - 1;
             for (const [j, weight] of weights.entries()) {
@@ -32,16 +32,14 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     }
 
     console.log(
-        `[TaskSelector] Selected tasks: ${selected
-            .map(t => `${t.taskName} (weight: ${t.weight ?? 50})`)
-            .join(", ")}`
+        `[TaskSelector] Selected tasks: ${selected.map((t) => `${t.taskName} (weight: ${t.weight ?? 50})`).join(", ")}`,
     );
 
     return selected;
 }
 
 export function selectTasksForCategory(category: TaskCategory, allTasks: Task[]): Task[] {
-    const taskData = allTasks.filter(t => t.category === category);
+    const taskData = allTasks.filter((t) => t.category === category);
     if (taskData.length === 0) {
         console.warn(`[TaskSelector] No tasks found for category ${category}`);
         return [];

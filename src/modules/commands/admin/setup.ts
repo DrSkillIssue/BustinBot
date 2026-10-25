@@ -1,17 +1,24 @@
-import { SlashCommandBuilder, ActionRowBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ActionRowBuilder,
+    ChannelSelectMenuBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { channelLabel } from "../../../core/services/SetupService.js";
 
 const setup: Command = {
-    name: 'setup',
-    description: 'Configure the general bot channels (announcements, logs, archive).',
+    name: "setup",
+    description: "Configure the general bot channels (announcements, logs, archive).",
     module: CommandModule.Core,
     allowedRoles: [CommandRole.BotAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('setup')
-        .setDescription('Configure the general bot channels (announcements, logs, archive).'),
+        .setName("setup")
+        .setDescription("Configure the general bot channels (announcements, logs, archive)."),
 
     async execute({ interaction, services }) {
         if (!interaction) return;
@@ -24,48 +31,43 @@ const setup: Command = {
         const current = guildConfig?.channels ?? {};
 
         const announceSelect = new ChannelSelectMenuBuilder()
-            .setCustomId('setup_announce')
-            .setPlaceholder(
-                `Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
+            .setCustomId("setup_announce")
+            .setPlaceholder(`Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
 
         const logSelect = new ChannelSelectMenuBuilder()
-            .setCustomId('setup_log')
-            .setPlaceholder(
-                `Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`
-            )
+            .setCustomId("setup_log")
+            .setPlaceholder(`Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
 
         const archiveSelect = new ChannelSelectMenuBuilder()
-            .setCustomId('setup_archive')
-            .setPlaceholder(
-                `Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`
-            )
+            .setCustomId("setup_archive")
+            .setPlaceholder(`Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
 
         const timezoneButton = new ButtonBuilder()
-            .setCustomId('setup_timezone')
-            .setLabel('Set Timezone')
+            .setCustomId("setup_timezone")
+            .setLabel("Set Timezone")
             .setStyle(ButtonStyle.Primary);
 
         const confirmButton = new ButtonBuilder()
-            .setCustomId('setup_confirm')
-            .setLabel('Confirm')
+            .setCustomId("setup_confirm")
+            .setLabel("Confirm")
             .setStyle(ButtonStyle.Success);
 
         const cancelButton = new ButtonBuilder()
-            .setCustomId('setup_cancel')
-            .setLabel('Cancel')
+            .setCustomId("setup_cancel")
+            .setLabel("Cancel")
             .setStyle(ButtonStyle.Danger);
 
         await interaction.editReply({
-            content: 'Select a channel for each category below, then click **Confirm** to save.',
+            content: "Select a channel for each category below, then click **Confirm** to save.",
             components: [
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(announceSelect),
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(logSelect),
@@ -73,7 +75,7 @@ const setup: Command = {
                 new ActionRowBuilder<ButtonBuilder>().addComponents(timezoneButton, confirmButton, cancelButton),
             ],
         });
-    }
+    },
 };
 
 export default setup;

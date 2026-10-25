@@ -10,21 +10,28 @@ const leaderboard: Command = {
     module: CommandModule.Task,
     allowedRoles: [CommandRole.Everyone],
 
-    slashData: new SlashCommandBuilder()
-        .setName("leaderboard")
-        .setDescription("View the task leaderboards."),
+    slashData: new SlashCommandBuilder().setName("leaderboard").setDescription("View the task leaderboards."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
         try {
-            const payload = await buildLeaderboardMessage(services, "lifetime", interaction.user.id, interaction.client, interaction.guild);
+            const payload = await buildLeaderboardMessage(services, "lifetime", interaction.user.id, {
+                client: interaction.client,
+                guild: interaction.guild,
+            });
             await interaction.editReply(payload);
         } catch (err) {
             await interaction.editReply("Leaderboard initialisation failed. Please use /reportbug if it continues.");
         }
-    }
+    },
 };
 
 export default leaderboard;

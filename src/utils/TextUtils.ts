@@ -9,5 +9,7 @@ export function textTable(rows: string[][], align: ("l" | "r")[], gap: string): 
         const width = Math.max(...cells.map((cell) => cell.length));
         return cells.map((cell) => (align[column] === "r" ? cell.padStart(width) : cell.padEnd(width)));
     });
-    return unzip(columns).map((row) => row.join(gap)).join("\n");
+    return unzip(columns)
+        .map((row) => row.join(gap))
+        .join("\n");
 }

@@ -23,7 +23,12 @@ export function resolveMilestones(configured?: TaskMilestoneRole[]): TaskMilesto
     return DEFAULT_TASK_MILESTONES;
 }
 
-export function getTotalTaskCompletions(stats: Pick<UserStats, "tasksCompletedBronze" | "tasksCompletedSilver" | "tasksCompletedGold" | "legacyTasksCompleted">): number {
+export function getTotalTaskCompletions(
+    stats: Pick<
+        UserStats,
+        "tasksCompletedBronze" | "tasksCompletedSilver" | "tasksCompletedGold" | "legacyTasksCompleted"
+    >,
+): number {
     return (
         (stats.tasksCompletedBronze ?? 0) +
         (stats.tasksCompletedSilver ?? 0) +
@@ -34,13 +39,13 @@ export function getTotalTaskCompletions(stats: Pick<UserStats, "tasksCompletedBr
 
 export function getHighestMilestone(
     milestones: TaskMilestoneRole[],
-    totalCompletions: number
+    totalCompletions: number,
 ): TaskMilestoneRole | null {
     const eligible = milestones
         .filter((milestone) => milestone.enabled && totalCompletions >= milestone.requiredSubmissions)
         .sort((a, b) => a.requiredSubmissions - b.requiredSubmissions);
 
-    return eligible.length > 0 ? eligible[eligible.length - 1] ?? null : null;
+    return eligible.length > 0 ? (eligible[eligible.length - 1] ?? null) : null;
 }
 
 function resolveMilestoneRoleId(guild: Guild, milestone: TaskMilestoneRole): string | null {
@@ -52,7 +57,7 @@ function resolveMilestoneRoleId(guild: Guild, milestone: TaskMilestoneRole): str
 export async function applyTaskMilestoneRoles(
     client: Client,
     services: ServiceContainer,
-    userId: string
+    userId: string,
 ): Promise<void> {
     const userRepo = services.repos.userRepo;
 
@@ -65,9 +70,9 @@ export async function applyTaskMilestoneRoles(
     const guildConfig = guildId ? await services.guilds.get(guildId) : null;
     if (!guildId || !guildConfig) return;
 
-    const milestones = resolveMilestones(guildConfig.taskSettings?.milestoneRoles).slice().sort(
-        (a, b) => a.requiredSubmissions - b.requiredSubmissions
-    );
+    const milestones = resolveMilestones(guildConfig.taskSettings?.milestoneRoles)
+        .slice()
+        .sort((a, b) => a.requiredSubmissions - b.requiredSubmissions);
 
     const highestMilestone = getHighestMilestone(milestones, totalApproved);
 
@@ -89,7 +94,9 @@ export async function applyTaskMilestoneRoles(
                 continue;
             }
             try {
-                await member.send(`You have earned the **${milestone.label}** role for completing ${milestone.requiredSubmissions} tasks!`);
+                await member.send(
+                    `You have earned the **${milestone.label}** role for completing ${milestone.requiredSubmissions} tasks!`,
+                );
             } catch (err) {
                 console.warn(`[TaskMilestones] Granted ${milestone.label} to ${userId} but couldn't DM them:`, err);
             }
@@ -97,7 +104,10 @@ export async function applyTaskMilestoneRoles(
             try {
                 await member.roles.remove(roleId);
             } catch (err) {
-                console.warn(`[TaskMilestones] Failed to remove milestone role ${milestone.label} from ${userId}:`, err);
+                console.warn(
+                    `[TaskMilestones] Failed to remove milestone role ${milestone.label} from ${userId}:`,
+                    err,
+                );
             }
         }
     }

@@ -20,5 +20,9 @@ export interface IMovieRepository {
     getLatestEvent(): Promise<MovieEvent | null>;
     getAllEvents(): Promise<MovieEvent[]>;
     clearEvents(): Promise<void>;
-    voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: MoviePoll; }>;
+    voteInPollOnce(
+        pollId: string,
+        userId: string,
+        optionId: string,
+    ): Promise<{ firstTime: boolean; updatedPoll: MoviePoll }>;
 }

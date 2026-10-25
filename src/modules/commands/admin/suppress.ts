@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, time, TimestampStyles } from "discord.js";
+import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -18,10 +19,16 @@ const suppress: Command = {
                 .setDescription("How long mention suppression should stay active.")
                 .setRequired(true)
                 .setMinValue(1)
-                .setMaxValue(1440)
+                .setMaxValue(1440),
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
@@ -33,15 +40,14 @@ const suppress: Command = {
         }
 
         const minutes = interaction.options.getInteger("minutes", true);
-        const untilMs = Date.now() + minutes * 60_000;
+        const until = DateTime.now().plus({ minutes }).toJSDate();
 
         await services.guilds.update(guildId, {
-            mentionSuppressedUntilMs: untilMs,
+            mentionSuppressedUntilMs: until.getTime(),
             updatedBy: interaction.user.id,
             updatedAt: new Date(),
         });
 
-        const until = new Date(untilMs);
         await interaction.editReply({
             content: `Mention suppression enabled for **${minutes}** minute${minutes === 1 ? "" : "s"}. It will expire ${time(until, TimestampStyles.RelativeTime)} (${time(until, TimestampStyles.LongDateTime)}).`,
         });

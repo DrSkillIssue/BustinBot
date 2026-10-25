@@ -1,18 +1,30 @@
-import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from "discord.js";
-import Fuse from 'fuse.js';
+import {
+    ButtonInteraction,
+    ModalSubmitInteraction,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    StringSelectMenuInteraction,
+    ModalBuilder,
+    LabelBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    StringSelectMenuBuilder,
+    MessageFlags,
+} from "discord.js";
+import Fuse from "fuse.js";
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
 import type { PollSession } from "../../models/PollSession.js";
 import { createMovieEmbed } from "./MovieEmbeds.js";
 import { pickRandomMovie, buildMovieEmbedWithMeta } from "./MovieLocalSelector.js";
-import { changeManualPollPage, showMovieManualPollMenu } from "./MovieManualPoll.js";
+import { showMovieManualPollMenu } from "./MovieManualPoll.js";
 import { pollMovieRandom, pollMovieWithList } from "./MoviePolls.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 function getActiveMoviesSorted(movies: Movie[]): Movie[] {
-    return movies
-        .filter((movie) => !movie.watched)
-        .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
+    return movies.filter((movie) => !movie.watched).sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
 }
 
 export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string) {
@@ -56,7 +68,7 @@ function getPollSession(poll: MoviePoll): PollSession<Movie> {
         voteCounts.set(movie.id, 0);
     }
 
-    Object.values(poll.votes).forEach(movieId => {
+    Object.values(poll.votes).forEach((movieId) => {
         const count = voteCounts.get(movieId);
         if (count !== undefined) {
             voteCounts.set(movieId, count + 1);
@@ -69,7 +81,10 @@ function getPollSession(poll: MoviePoll): PollSession<Movie> {
     };
 }
 
-export async function handleMoviePickChooseModalSubmit(services: ServiceContainer, interaction: ModalSubmitInteraction) {
+export async function handleMoviePickChooseModalSubmit(
+    services: ServiceContainer,
+    interaction: ModalSubmitInteraction,
+) {
     await interaction.deferReply({ flags: 1 << 6 });
 
     const movieRepo = services.repos.movieRepo;
@@ -118,10 +133,7 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     const existingDescription = embed.data.description ?? "";
     const addedByLine = `\n\n*Added by <@${selectedMovie.addedBy}>*`;
 
-    embed.setTitle(
-        `🎯  ${selectedMovie.title} ${selectedMovie.releaseDate ? `(${selectedMovie.releaseDate})` : ""
-        }`
-    );
+    embed.setTitle(`🎯  ${selectedMovie.title} ${selectedMovie.releaseDate ? `(${selectedMovie.releaseDate})` : ""}`);
     embed.setDescription(`${existingDescription}${addedByLine}`);
 
     const channel = interaction.channel;
@@ -139,7 +151,10 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     });
 }
 
-export async function handleRandomPollCountSelect(services: ServiceContainer, interaction: StringSelectMenuInteraction) {
+export async function handleRandomPollCountSelect(
+    services: ServiceContainer,
+    interaction: StringSelectMenuInteraction,
+) {
     const selectedValue = interaction.values[0];
     if (!selectedValue) {
         await interaction.reply({ content: "No movie count selected.", flags: 1 << 6 });
@@ -173,7 +188,7 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     const selectedMovie = movies.find((m) => m.id === movieId && !m.watched);
     if (!selectedMovie) {
         await interaction.editReply({
-            content: "Could not find the selected movie in the active movie list."
+            content: "Could not find the selected movie in the active movie list.",
         });
         return;
     }
@@ -211,29 +226,26 @@ export async function handleRerollRandomMovie(services: ServiceContainer, intera
 
     if (!newMovie) {
         await interaction.update({
-            content: 'Failed to reroll: movie list is empty.',
+            content: "Failed to reroll: movie list is empty.",
             components: [],
-            embeds: []
+            embeds: [],
         });
         return;
     }
 
-    const embed = await buildMovieEmbedWithMeta(newMovie, 'random');
+    const embed = await buildMovieEmbedWithMeta(newMovie, "random");
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
             .setCustomId(`confirm_random_movie_${newMovie.id}`)
-            .setLabel('🎥 Lock this in')
+            .setLabel("🎥 Lock this in")
             .setStyle(ButtonStyle.Success),
 
-        new ButtonBuilder()
-            .setCustomId('reroll_random_movie')
-            .setLabel('🔁 Reroll')
-            .setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId("reroll_random_movie").setLabel("🔁 Reroll").setStyle(ButtonStyle.Danger),
     );
 
     await interaction.update({
-        content: '🔁 New movie selected:',
+        content: "🔁 New movie selected:",
         embeds: [embed],
         components: [row],
     });
@@ -304,64 +316,64 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
 
 export async function handlePickMovieButton(services: ServiceContainer, interaction: ButtonInteraction) {
     switch (interaction.customId) {
-        case 'movie_pick_choose':
+        case "movie_pick_choose":
             await interaction.showModal(
                 new ModalBuilder()
-                    .setCustomId('movie_pick_choose_modal')
-                    .setTitle('Choose a movie')
+                    .setCustomId("movie_pick_choose_modal")
+                    .setTitle("Choose a movie")
                     .addLabelComponents(
                         new LabelBuilder()
-                            .setLabel('Enter movie title or list number')
+                            .setLabel("Enter movie title or list number")
                             .setTextInputComponent(
                                 new TextInputBuilder()
-                                    .setCustomId('movie_input')
-                                    .setPlaceholder('e.g., 3 or The Matrix')
+                                    .setCustomId("movie_input")
+                                    .setPlaceholder("e.g., 3 or The Matrix")
                                     .setStyle(TextInputStyle.Short)
-                                    .setRequired(true)
-                            )
-                    )
+                                    .setRequired(true),
+                            ),
+                    ),
             );
             return;
-        case 'movie_pick_random': {
+        case "movie_pick_random": {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const selectedMovie = await pickRandomMovie(services);
             if (!selectedMovie) {
-                await interaction.editReply({ content: 'Movie list not found or is empty.' });
+                await interaction.editReply({ content: "Movie list not found or is empty." });
                 return;
             }
 
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`confirm_random_movie_${selectedMovie.id}`)
-                    .setLabel('🎥 Lock this in')
+                    .setLabel("🎥 Lock this in")
                     .setStyle(ButtonStyle.Success),
                 new ButtonBuilder()
-                    .setCustomId('reroll_random_movie')
-                    .setLabel('🔁 Reroll')
-                    .setStyle(ButtonStyle.Danger)
+                    .setCustomId("reroll_random_movie")
+                    .setLabel("🔁 Reroll")
+                    .setStyle(ButtonStyle.Danger),
             );
             await interaction.editReply({
-                content: 'A random movie has been selected:',
-                embeds: [await buildMovieEmbedWithMeta(selectedMovie, 'random')],
+                content: "A random movie has been selected:",
+                embeds: [await buildMovieEmbedWithMeta(selectedMovie, "random")],
                 components: [row],
             });
             return;
         }
-        case 'movie_poll_random':
+        case "movie_poll_random":
             await interaction.reply({
-                content: 'How many movies should be included in the poll?',
+                content: "How many movies should be included in the poll?",
                 components: [
                     new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
                         new StringSelectMenuBuilder()
-                            .setCustomId('movie_poll_random_count')
-                            .setPlaceholder('Select how many movies to include')
-                            .addOptions([2, 3, 4, 5].map((num) => ({ label: `${num} movies`, value: num.toString() })))
+                            .setCustomId("movie_poll_random_count")
+                            .setPlaceholder("Select how many movies to include")
+                            .addOptions([2, 3, 4, 5].map((num) => ({ label: `${num} movies`, value: num.toString() }))),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
             });
             return;
-        case 'movie_poll_manual':
+        case "movie_poll_manual":
             await interaction.deferUpdate();
             await showMovieManualPollMenu(services, interaction);
             return;
@@ -372,25 +384,28 @@ export async function handleManualPollInteraction(services: ServiceContainer, in
     const uid = interaction.user.id;
 
     switch (interaction.customId) {
-        case 'movie_poll_manual_prev':
-        case 'movie_poll_manual_next':
+        case "movie_poll_manual_prev":
+        case "movie_poll_manual_next":
             await interaction.deferUpdate();
-            await changeManualPollPage(services, uid, interaction.customId === 'movie_poll_manual_prev' ? -1 : 1);
+            services.manualPolls.get(uid).page += interaction.customId === "movie_poll_manual_prev" ? -1 : 1;
             return showMovieManualPollMenu(services, interaction);
-        case 'movie_poll_manual_cancel':
+        case "movie_poll_manual_cancel":
             services.manualPolls.clear(uid);
-            return interaction.update({ content: 'Poll creation cancelled.', embeds: [], components: [] });
-        case 'movie_poll_manual_confirm': {
+            return interaction.update({ content: "Poll creation cancelled.", embeds: [], components: [] });
+        case "movie_poll_manual_confirm": {
             const session = services.manualPolls.get(uid);
             if (session.selected.size < 2 || session.selected.size > 5) {
-                return interaction.reply({ content: `You must select between 2 and 5 movies.`, flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: `You must select between 2 and 5 movies.`,
+                    flags: MessageFlags.Ephemeral,
+                });
             }
 
             const movieRepo = services.repos.movieRepo;
 
             const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
             const selectedMovieIds = Array.from(session.selected);
-            const selectedMovies = allMovies.filter(m => selectedMovieIds.includes(m.id));
+            const selectedMovies = allMovies.filter((m) => selectedMovieIds.includes(m.id));
 
             services.manualPolls.clear(uid);
 

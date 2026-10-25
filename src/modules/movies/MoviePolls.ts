@@ -7,19 +7,20 @@ import { injectMockUsers } from "./MovieMockUtils.js";
 import { createLocalMoviePreviewEmbed } from "./MovieEmbeds.js";
 import { saveCurrentMovie } from "./PickMovieInteractions.js";
 import { DateTime } from "luxon";
-import { shuffle, uniqBy } from "es-toolkit";
+import { sample, shuffle, uniqBy } from "es-toolkit";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
 
 const MAX_CHOICES = 5;
-const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+const emojiNumbers = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
 
 async function createAndSendMoviePoll(
     services: ServiceContainer,
     interaction: RepliableInteraction,
     client: Client,
-    movies: Movie[]
+    movies: Movie[],
 ) {
     const movieRepo = services.repos.movieRepo;
 
@@ -35,15 +36,14 @@ async function createAndSendMoviePoll(
         return;
     }
 
-    const guild = await client.guilds.fetch(services.guildId);
     const guildRoles = guildConfig.roles ?? {};
-    const guildChannels = guildConfig.channels ?? {};
-
-    const targetChannelId = guildChannels.movieNight || interaction.channelId;
-    if (!targetChannelId) return;
-    const channel = await guild.channels.fetch(targetChannelId).catch(() => null);
-    if (!channel?.isTextBased()) {
-        await interaction.editReply("Could not find the configured movie announcement channel. Please run `/moviesetup` again.");
+    const channel = guildConfig.channels?.movieNight
+        ? await configuredChannel(client, services, "movieNight")
+        : interaction.channel;
+    if (!channel?.isSendable()) {
+        await interaction.editReply(
+            "Could not find the configured movie announcement channel. Please run `/moviesetup` again.",
+        );
         return;
     }
 
@@ -59,7 +59,9 @@ async function createAndSendMoviePoll(
             const oneHourBefore = movieStart.minus({ hours: 1 });
             if (oneHourBefore < endsAt) {
                 endsAt = oneHourBefore;
-                console.log(`[MoviePoll] Adjusted poll close time to 1 hour before movie night (${oneHourBefore.toISO()})`);
+                console.log(
+                    `[MoviePoll] Adjusted poll close time to 1 hour before movie night (${oneHourBefore.toISO()})`,
+                );
             }
         }
     }
@@ -88,17 +90,14 @@ async function createAndSendMoviePoll(
             const truncatedTitle = movie.title.length > 20 ? movie.title.slice(0, 17) + "…" : movie.title;
             const label = `${emojiNumbers[i]} ${truncatedTitle}`;
 
-            return new ButtonBuilder()
-                .setCustomId(`movie_vote_${i}`)
-                .setLabel(label)
-                .setStyle(ButtonStyle.Secondary);
-        })
+            return new ButtonBuilder().setCustomId(`movie_vote_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary);
+        }),
     );
 
     // Mention movie role if exists
     let mention = "";
 
-    if (guildRoles.movieUser){
+    if (guildRoles.movieUser) {
         mention = `<@&${guildRoles.movieUser}>`;
     }
 
@@ -122,7 +121,11 @@ async function createAndSendMoviePoll(
     await movieRepo.createPoll(poll);
 }
 
-export async function pollMovieRandom(services: ServiceContainer, interaction: RepliableInteraction, count: number | null) {
+export async function pollMovieRandom(
+    services: ServiceContainer,
+    interaction: RepliableInteraction,
+    count: number | null,
+) {
     const movieRepo = services.repos.movieRepo;
 
     const client = interaction.client;
@@ -143,20 +146,21 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
         return;
     }
 
-    const selected = uniqueMovies.sort(() => Math.random() - 0.5).slice(0, maxChoices);
-    await createAndSendMoviePoll(services, interaction, client, selected);
+    await createAndSendMoviePoll(services, interaction, client, uniqueMovies.slice(0, maxChoices));
 }
 
-export async function pollMovieWithList(services: ServiceContainer, interaction: RepliableInteraction, selected: Movie[]) {
+export async function pollMovieWithList(
+    services: ServiceContainer,
+    interaction: RepliableInteraction,
+    selected: Movie[],
+) {
     const client = interaction.client;
     const activeSelection = selected.filter((movie) => !movie.watched);
 
     if (activeSelection.length < 2 || activeSelection.length > MAX_CHOICES) {
         const msg = "You must select between 2 and 5 movies.";
-        if (interaction.replied || interaction.deferred)
-            await interaction.editReply(msg);
-        else
-            await interaction.reply({ content: msg, flags: 1 << 6 });
+        if (interaction.replied || interaction.deferred) await interaction.editReply(msg);
+        else await interaction.reply({ content: msg, flags: 1 << 6 });
         return;
     }
 
@@ -171,7 +175,7 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
     }
 
     await interaction.editReply({
-        content: 'Poll confirmed and posted!',
+        content: "Poll confirmed and posted!",
         embeds: [],
         components: [],
     });
@@ -179,7 +183,11 @@ export async function pollMovieWithList(services: ServiceContainer, interaction:
     await createAndSendMoviePoll(services, interaction, client, moviesWithUsers);
 }
 
-export async function closeActiveMoviePoll(services: ServiceContainer, client: Client, closedBy: string): Promise<{ success: boolean; message: string; winner?: Movie, winningVotes?: number, tieBreak?: boolean }> {
+export async function closeActiveMoviePoll(
+    services: ServiceContainer,
+    client: Client,
+    closedBy: string,
+): Promise<{ success: boolean; message: string; winner?: Movie; winningVotes?: number; tieBreak?: boolean }> {
     const movieRepo = services.repos.movieRepo;
 
     const openPoll = await movieRepo.getActivePoll();
@@ -203,8 +211,7 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
     for (const option of activePoll.options) voteCounts.set(option.id, 0);
 
     voteEntries.forEach(([, movieId]) => {
-        if (voteCounts.has(movieId))
-            voteCounts.set(movieId, (voteCounts.get(movieId) ?? 0) + 1);
+        if (voteCounts.has(movieId)) voteCounts.set(movieId, (voteCounts.get(movieId) ?? 0) + 1);
     });
 
     const sorted = [...voteCounts.entries()].sort((a, b) => b[1] - a[1]);
@@ -223,9 +230,10 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
     let tieBreak = false;
     if (tiedEntries.length > 1) {
         tieBreak = true;
-        const randomIndex = Math.floor(Math.random() * tiedEntries.length);
-        winningId = (tiedEntries[randomIndex] ?? topEntry)[0];
-        console.log(`[MoviePoll] Tie detected among ${tiedEntries.length} movies (${topVotes} votes each). Randomly selected one.`);
+        [winningId] = sample(tiedEntries);
+        console.log(
+            `[MoviePoll] Tie detected among ${tiedEntries.length} movies (${topVotes} votes each). Randomly selected one.`,
+        );
     }
 
     const winningMovie = activePoll.options.find((m) => m.id === winningId);
@@ -241,7 +249,9 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
         ? `Poll closed successfully. After a tie with ${topVotes} votes, BustinBot chose ${winningMovie.title}.`
         : `Poll closed successfully. ${winningMovie.title} won with ${topVotes} votes.`;
 
-    console.log(`[MoviePoll] Poll closed by ${closedBy}. Winner: ${winningMovie.title}${tieBreak ? " (tie-breaker)" : ""}`);
+    console.log(
+        `[MoviePoll] Poll closed by ${closedBy}. Winner: ${winningMovie.title}${tieBreak ? " (tie-breaker)" : ""}`,
+    );
 
     // Update the poll message to show it's closed and disable buttons
     try {
@@ -259,7 +269,7 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
                             .setLabel(label)
                             .setStyle(ButtonStyle.Secondary)
                             .setDisabled(true);
-                    })
+                    }),
                 );
                 await message.edit({
                     content: `📊 **Vote for the next movie night pick!**\n~~Poll ended~~ - **${winningMovie.title}** was selected!`,
@@ -269,7 +279,7 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
             }
         }
     } catch (error) {
-        console.error('[MoviePoll] Failed to update poll message:', error);
+        console.error("[MoviePoll] Failed to update poll message:", error);
     }
 
     return {

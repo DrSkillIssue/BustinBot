@@ -1,40 +1,28 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction
-} from 'discord.js';
-import type { Command } from '../../../models/Command.js';
-import { CommandModule, CommandRole } from '../../../models/Command.js';
-import {
-    initTaskScheduler,
-    stopTaskScheduler
-} from '../../tasks/TaskScheduler.js';
-import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import type { Command } from "../../../models/Command.js";
+import { CommandModule, CommandRole } from "../../../models/Command.js";
+import { initTaskScheduler, stopTaskScheduler } from "../../tasks/TaskScheduler.js";
+import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const tasktoggle: Command = {
-    name: 'tasktoggle',
-    description: 'Toggle task automations on and off.',
+    name: "tasktoggle",
+    description: "Toggle task automations on and off.",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.BotAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('tasktoggle')
-        .setDescription('Toggle task automations on and off.')
+        .setName("tasktoggle")
+        .setDescription("Toggle task automations on and off.")
+        .addSubcommand((sub) => sub.setName("schedule").setDescription("Toggle the task scheduler on and off."))
         .addSubcommand((sub) =>
-            sub
-                .setName('schedule')
-                .setDescription('Toggle the task scheduler on and off.')
-        )
-        .addSubcommand((sub) =>
-            sub
-                .setName('leaderboard')
-                .setDescription('Toggle periodic leaderboard automation on and off.')
+            sub.setName("leaderboard").setDescription("Toggle periodic leaderboard automation on and off."),
         ),
 
     async execute({
         interaction,
         services,
     }: {
-        interaction?: ChatInputCommandInteraction<'raw' | 'cached'>;
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
         services: ServiceContainer;
     }) {
         if (!interaction) return;
@@ -49,7 +37,7 @@ const tasktoggle: Command = {
         // Fetch the latest guild config from Firestore
         const guildConfig = await guildService.get(guildId);
 
-        if (sub === 'schedule') {
+        if (sub === "schedule") {
             const currentState = guildConfig?.toggles?.taskScheduler ?? false;
             const newState = !currentState;
 
@@ -80,16 +68,11 @@ const tasktoggle: Command = {
             return;
         }
 
-        if (sub === 'leaderboard') {
+        if (sub === "leaderboard") {
             const currentState = guildConfig?.toggles?.taskLeaderboard ?? true;
             const newState = !currentState;
 
-            await guildService.updateToggle(
-                guildId,
-                "toggles.taskLeaderboard",
-                newState,
-                interaction.user.id
-            );
+            await guildService.updateToggle(guildId, "toggles.taskLeaderboard", newState, interaction.user.id);
 
             await interaction.editReply({
                 content: newState

@@ -1,11 +1,11 @@
-import { EmbedBuilder, type InteractionEditReplyOptions } from 'discord.js';
-import { textTable, truncate } from '../../utils/TextUtils.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { listPage, pageButtons } from '../../utils/Pagination.js';
-import { TaskCategory, type Task } from '../../models/Task.js';
+import { EmbedBuilder, type InteractionEditReplyOptions } from "discord.js";
+import { textTable, truncate } from "../../utils/TextUtils.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { listPage, pageButtons } from "../../utils/Pagination.js";
+import { TaskCategory, type Task } from "../../models/Task.js";
 
 const TASKS_PER_PAGE = 25;
-export const CATEGORY_ALL = 'all';
+export const CATEGORY_ALL = "all";
 
 export type CategoryFilter = TaskCategory | typeof CATEGORY_ALL;
 const CATEGORY_FILTERS: CategoryFilter[] = [CATEGORY_ALL, ...Object.values(TaskCategory)];
@@ -14,7 +14,7 @@ export function toCategoryFilter(value: string | null | undefined): CategoryFilt
     return CATEGORY_FILTERS.find((filter) => filter === value) ?? CATEGORY_ALL;
 }
 
-export const TASK_LIST_BUTTON = 'listtasks|';
+export const TASK_LIST_BUTTON = "listtasks|";
 
 function formatTaskTable(tasks: Task[]): string {
     const rows = tasks.map((task) => [
@@ -24,20 +24,31 @@ function formatTaskTable(tasks: Task[]): string {
         String(task.amtSilver),
         String(task.amtGold),
     ]);
-    return ['```', textTable([['ID', 'Task Name', 'B', 'S', 'G'], ...rows], ['l', 'l', 'r', 'r', 'r'], '  '), '```'].join('\n');
+    return [
+        "```",
+        textTable([["ID", "Task Name", "B", "S", "G"], ...rows], ["l", "l", "r", "r", "r"], "  "),
+        "```",
+    ].join("\n");
 }
 
 function categoryLabel(category: CategoryFilter): string {
-    return category === CATEGORY_ALL ? 'All Categories' : category;
+    return category === CATEGORY_ALL ? "All Categories" : category;
 }
 
-export async function buildTaskListPage(services: ServiceContainer, category: CategoryFilter, requestedPage: number): Promise<InteractionEditReplyOptions> {
+export async function buildTaskListPage(
+    services: ServiceContainer,
+    category: CategoryFilter,
+    requestedPage: number,
+): Promise<InteractionEditReplyOptions> {
     const tasks = (await services.repos.taskRepo.getAllTasks())
         .filter((task) => category === CATEGORY_ALL || task.category === category)
-        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: "base" }));
 
     if (!tasks.length) {
-        const content = category === CATEGORY_ALL ? 'No tasks were found in the database.' : `No tasks were found for **${category}**.`;
+        const content =
+            category === CATEGORY_ALL
+                ? "No tasks were found in the database."
+                : `No tasks were found for **${category}**.`;
         return { content, embeds: [], components: [] };
     }
 
@@ -46,11 +57,11 @@ export async function buildTaskListPage(services: ServiceContainer, category: Ca
         .setColor(0xa60000)
         .setTitle(`📋 Task List - ${categoryLabel(category)}`)
         .setDescription(formatTaskTable(items))
-        .setFooter({ text: `Page ${page + 1}/${lastPage + 1} • ${tasks.length} task${tasks.length === 1 ? '' : 's'}` });
+        .setFooter({ text: `Page ${page + 1}/${lastPage + 1} • ${tasks.length} task${tasks.length === 1 ? "" : "s"}` });
     const components = lastPage === 0 ? [] : [pageButtons(`${TASK_LIST_BUTTON}${category}|`, page, lastPage)];
-    return { content: '', embeds: [embed], components };
+    return { content: "", embeds: [embed], components };
 }
 
 export function taskListButtonCategory(customId: string): CategoryFilter {
-    return toCategoryFilter(customId.split('|')[1]);
+    return toCategoryFilter(customId.split("|")[1]);
 }

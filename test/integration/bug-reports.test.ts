@@ -12,8 +12,8 @@ describe("/reportbug", () => {
             guild_id: DEV_SERVER,
             name: "bug-reports",
         });
-        discord.guild(apiGuild({ id: DEV_SERVER }));
-        discord.guildChannels(DEV_SERVER, [
+        discord.serveGuild(apiGuild({ id: DEV_SERVER }));
+        discord.serveGuildChannels(DEV_SERVER, [
             apiTextChannel({ id: SnowflakeUtil.generate().toString(), guild_id: DEV_SERVER, name: "general" }),
             bugReports,
         ]);
@@ -45,8 +45,8 @@ describe("/reportbug", () => {
     });
 
     test("says so when the dev server has no bug channel", async ({ discord, interact }) => {
-        discord.guild(apiGuild({ id: DEV_SERVER }));
-        discord.guildChannels(DEV_SERVER, []);
+        discord.serveGuild(apiGuild({ id: DEV_SERVER }));
+        discord.serveGuildChannels(DEV_SERVER, []);
 
         const command = await interact(
             chatInputInteraction("reportbug", [

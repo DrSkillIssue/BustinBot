@@ -33,6 +33,10 @@ class TaskEventFactory extends Factory<TaskEvent> {
     running() {
         return this.params({ startTime: DateTime.now().minus({ days: 1 }).toJSDate() });
     }
+
+    ended() {
+        return this.params({ endTime: DateTime.now().minus({ days: 1 }).toJSDate() });
+    }
 }
 
 export const taskEventFactory = TaskEventFactory.define(({ params }) => {
@@ -77,22 +81,38 @@ export const submissionDraftFactory = Factory.define<TaskSubmissionDraft>(() => 
     createdAt: new Date("2026-01-06T00:00:00.000Z"),
 }));
 
-export const taskPollFactory = Factory.define<TaskPoll>(() => ({
-    id: "poll-1",
-    type: "task",
-    category: TaskCategory.PvM,
-    options: [
-        taskFactory.build({ id: "PVM001" }),
-        taskFactory.build({ id: "PVM002" }),
-        taskFactory.build({ id: "PVM003" }),
-    ],
-    messageId: SnowflakeUtil.generate().toString(),
-    channelId: IDS.channel,
-    createdAt: new Date("2026-01-04T00:00:00.000Z"),
-    endsAt: new Date("2026-01-05T00:00:00.000Z"),
-    isActive: true,
-    votes: {},
-}));
+class TaskPollFactory extends Factory<TaskPoll> {
+    open() {
+        return this.params({
+            createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
+            endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
+        });
+    }
+
+    ended() {
+        return this.params({ endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
+    }
+}
+
+export const taskPollFactory = TaskPollFactory.define(({ params }): TaskPoll => {
+    const messageId = params.messageId ?? SnowflakeUtil.generate().toString();
+    return {
+        id: messageId,
+        type: "task",
+        category: TaskCategory.PvM,
+        options: [
+            taskFactory.build({ id: "PVM001" }),
+            taskFactory.build({ id: "PVM002" }),
+            taskFactory.build({ id: "PVM003" }),
+        ],
+        messageId,
+        channelId: IDS.channel,
+        createdAt: new Date("2026-01-04T00:00:00.000Z"),
+        endsAt: new Date("2026-01-05T00:00:00.000Z"),
+        isActive: true,
+        votes: {},
+    };
+});
 
 export const taskFeedbackFactory = Factory.define<Omit<TaskFeedback, "id">>(() => ({
     taskId: "PVM001",
@@ -137,7 +157,13 @@ export const movieFactory = Factory.define<Movie>(() => ({
     runtime: 148,
 }));
 
-export const movieEventFactory = Factory.define<MovieEvent>(({ params }) => ({
+class MovieEventFactory extends Factory<MovieEvent> {
+    upcoming() {
+        return this.params({ startTime: DateTime.now().plus({ days: 1 }).toJSDate() });
+    }
+}
+
+export const movieEventFactory = MovieEventFactory.define(({ params }): MovieEvent => ({
     id: "event-1",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     startTime: new Date("2026-01-03T20:00:00.000Z"),
@@ -147,7 +173,20 @@ export const movieEventFactory = Factory.define<MovieEvent>(({ params }) => ({
     hostedBy: IDS.user,
 }));
 
-export const moviePollFactory = Factory.define<MoviePoll>(() => ({
+class MoviePollFactory extends Factory<MoviePoll> {
+    open() {
+        return this.params({
+            createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
+            endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
+        });
+    }
+
+    ended() {
+        return this.params({ endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate() });
+    }
+}
+
+export const moviePollFactory = MoviePollFactory.define((): MoviePoll => ({
     id: "poll-1",
     type: "movie",
     options: [movieFactory.build({ id: "movie-1" }), movieFactory.build({ id: "movie-2", title: "Arrival" })],

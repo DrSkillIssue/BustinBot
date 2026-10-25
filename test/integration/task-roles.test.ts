@@ -1,9 +1,18 @@
 import { RESTJSONErrorCodes, ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
-import { describe, expect, test, vi } from "../fixtures.js";
-import { type DiscordHarness, DiscordError } from "../discord/harness.js";
+import { addChampionRoles, championRoles, describe, expect, test, vi } from "../fixtures.js";
+import { type DiscordHarness } from "../discord/harness.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
-import { IDS, apiGuildMember, apiRole, apiUser, AS, chatInputInteraction } from "../discord/payloads.js";
+import {
+    DiscordError,
+    IDS,
+    apiGuildMember,
+    apiRole,
+    apiUser,
+    AS,
+    chatInputInteraction,
+    subcommand,
+} from "../discord/payloads.js";
 import { milestoneRoleFactory } from "../factories.js";
 import { applyTaskMilestoneRoles } from "../../src/modules/tasks/TaskMilestones.js";
 import { awardTaskChampionRoles } from "../../src/modules/tasks/TaskLeaderboards.js";
@@ -36,13 +45,13 @@ describe("milestone roles", () => {
     }) => {
         const { participant, enthusiast } = await setUpMilestoneRoles(discord, services);
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }), roles: [participant.id] }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: member }, roles: [participant.id] }));
         const dm = discord.acceptDirectMessages(apiUser({ id: member }));
 
         await applyTaskMilestoneRoles(discord.client, services, member);
 
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast.id}`]);
-        expect(discord.memberRoleChanges("DELETE")).toEqual([`${member}:${participant.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([{ member, role: enthusiast.id }]);
+        expect(discord.memberRoleChanges("DELETE")).toEqual([{ member, role: participant.id }]);
         expect(discord.messagesSentTo(dm)).toEqual([
             expect.objectContaining({
                 content: "You have earned the **Task Enthusiast** role for completing 25 tasks!",
@@ -53,13 +62,13 @@ describe("milestone roles", () => {
     test("still give the role to a member who doesn't accept DMs", async ({ discord, services, factories }) => {
         const { participant } = await setUpMilestoneRoles(discord, services);
         await factories.userStats.create({ userId: member, tasksCompletedGold: 6 });
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: member } }));
         discord.refuseDirectMessages(apiUser({ id: member }));
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         await applyTaskMilestoneRoles(discord.client, services, member);
 
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${participant.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([{ member, role: participant.id }]);
         expect(warn).toHaveBeenCalledWith(
             `[TaskMilestones] Granted Task Participant to ${member} but couldn't DM them:`,
             expect.objectContaining({ code: RESTJSONErrorCodes.CannotSendMessagesToThisUser }),
@@ -73,12 +82,7 @@ describe("champion roles", () => {
         services,
         factories,
     }) => {
-        const first = apiRole({ name: "Task Champion (1st)" });
-        const second = apiRole({ name: "Task Champion (2nd)" });
-        for (const role of [first, second]) await discord.addRole(IDS.guild, role);
-        await services.guilds.update(IDS.guild, {
-            roles: { taskChampionFirst: first.id, taskChampionSecond: second.id },
-        });
+        const { first, second } = await addChampionRoles(discord, services);
         const previousChampion = SnowflakeUtil.generate().toString();
         const runnerUp = SnowflakeUtil.generate().toString();
         const endedPeriod = 3;
@@ -86,9 +90,9 @@ describe("champion roles", () => {
             period: { index: endedPeriod + 1 },
             champions: { first: [previousChampion] },
         });
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: runnerUp }) }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: previousChampion }, roles: [first.id] }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: member } }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: runnerUp } }));
 
         await awardTaskChampionRoles(
             discord.client,
@@ -105,8 +109,11 @@ describe("champion roles", () => {
             endedPeriod,
         );
 
-        expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);
+        expect(discord.memberRoleChanges("DELETE")).toEqual([{ member: previousChampion, role: first.id }]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([
+            { member, role: first.id },
+            { member: runnerUp, role: second.id },
+        ]);
         expect(await services.repos.userRepo.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
         expect(await services.repos.userRepo.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
         expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.champions).toMatchObject({
@@ -120,15 +127,9 @@ describe("champion roles", () => {
 
 describe("/taskroles list", () => {
     test("shows the milestone thresholds and which champion roles are set", async ({ discord, interact }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
 
-        const interaction = await interact(
-            chatInputInteraction(
-                "taskroles",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "list" }],
-                AS.taskAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("taskroles", [subcommand("list")], AS.taskAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({
@@ -160,23 +161,19 @@ describe("/taskroles add", () => {
         interact,
         services,
     }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
         const legend = apiRole({ name: "Task Legend" });
-        discord.roleCreated(IDS.guild, legend);
+        discord.acceptRoleCreation(IDS.guild, legend);
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "add",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" },
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 200 },
-                        ],
-                    },
+                    subcommand("add", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" },
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 200 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -191,21 +188,17 @@ describe("/taskroles add", () => {
     });
 
     test("rejects a milestone threshold of zero without creating a role", async ({ discord, interact }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "add",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" },
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 0 },
-                        ],
-                    },
+                    subcommand("add", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" },
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 0 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -214,26 +207,22 @@ describe("/taskroles add", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Milestone thresholds must be greater than 0." }),
         ]);
-        expect(discord.rolesCreated(IDS.guild)).toEqual([]);
+        expect(discord.roleCreations(IDS.guild)).toEqual([]);
     });
 
     test("sets an existing role as a champion role", async ({ discord, interact, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        discord.guildRoles([gold]);
+        discord.serveGuildRoles([gold]);
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "add",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 1 },
-                        ],
-                    },
+                    subcommand("add", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 1 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -246,21 +235,17 @@ describe("/taskroles add", () => {
     });
 
     test("rejects a champion placement other than 1 to 3 without creating a role", async ({ discord, interact }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "add",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: "Fourth Place" },
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 4 },
-                        ],
-                    },
+                    subcommand("add", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: "Fourth Place" },
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 4 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -269,14 +254,14 @@ describe("/taskroles add", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Champion placement must be 1, 2, or 3." }),
         ]);
-        expect(discord.rolesCreated(IDS.guild)).toEqual([]);
+        expect(discord.roleCreations(IDS.guild)).toEqual([]);
     });
 });
 
 describe("/taskroles edit", () => {
     test("renames a milestone role and changes its threshold", async ({ discord, interact, services }) => {
         const expert = apiRole({ name: "Task Expert" });
-        discord.guildRoles([expert]);
+        discord.serveGuildRoles([expert]);
         await services.guilds.update(IDS.guild, {
             taskSettings: {
                 milestoneRoles: [
@@ -284,21 +269,17 @@ describe("/taskroles edit", () => {
                 ],
             },
         });
-        discord.roleEdited(IDS.guild, { ...expert, name: "Task Pro" });
+        discord.acceptRoleEdit(IDS.guild, { ...expert, name: "Task Pro" });
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "edit",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
-                            { type: ApplicationCommandOptionType.String, name: "newrole", value: "Task Pro" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 60 },
-                        ],
-                    },
+                    subcommand("edit", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
+                        { type: ApplicationCommandOptionType.String, name: "newrole", value: "Task Pro" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 60 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -317,22 +298,18 @@ describe("/taskroles edit", () => {
 
     test("moves a champion role to another placement", async ({ discord, interact, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        discord.guildRoles([gold]);
+        discord.serveGuildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "edit",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
-                            { type: ApplicationCommandOptionType.String, name: "newrole", value: "Gold Champion" },
-                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 2 },
-                        ],
-                    },
+                    subcommand("edit", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
+                        { type: ApplicationCommandOptionType.String, name: "newrole", value: "Gold Champion" },
+                        { type: ApplicationCommandOptionType.Integer, name: "value", value: 2 },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -356,7 +333,7 @@ describe("/taskroles delete", () => {
     }) => {
         const expert = apiRole({ name: "Task Expert" });
         const master = apiRole({ name: "Task Master" });
-        discord.guildRoles([expert, master]);
+        discord.serveGuildRoles([expert, master]);
         await services.guilds.update(IDS.guild, {
             taskSettings: {
                 milestoneRoles: [
@@ -365,19 +342,15 @@ describe("/taskroles delete", () => {
                 ],
             },
         });
-        discord.roleDeleted(IDS.guild, expert.id);
+        discord.acceptRoleDeletion(IDS.guild, expert.id);
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "delete",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
-                        ],
-                    },
+                    subcommand("delete", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -393,7 +366,7 @@ describe("/taskroles delete", () => {
 
     test("says so when Discord won't delete the role it stopped using", async ({ discord, interact, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        discord.guildRoles([gold]);
+        discord.serveGuildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
         discord.refuse("DELETE", `/guilds/${IDS.guild}/roles/${gold.id}`, DiscordError.missingPermissions);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -402,11 +375,9 @@ describe("/taskroles delete", () => {
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "delete",
-                        options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` }],
-                    },
+                    subcommand("delete", [
+                        { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -427,20 +398,16 @@ describe("/taskroles delete", () => {
 
 describe("/taskroles toggle", () => {
     test("disables milestone roles", async ({ discord, interact, services }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "toggle",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
-                            { type: ApplicationCommandOptionType.Boolean, name: "enabled", value: false },
-                        ],
-                    },
+                    subcommand("toggle", [
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
+                        { type: ApplicationCommandOptionType.Boolean, name: "enabled", value: false },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -463,26 +430,19 @@ describe("/taskroles toggle", () => {
         factories,
     }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        discord.guildRoles([gold]);
+        discord.serveGuildRoles([gold]);
         await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
         await factories.periodicLeaderboard.create({ champions: { first: [member] } });
-        discord.member(
-            IDS.guild,
-            apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }),
-        );
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: member, username: "champ" }, roles: [gold.id] }));
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "toggle",
-                        options: [
-                            { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
-                            { type: ApplicationCommandOptionType.Boolean, name: "enabled", value: false },
-                        ],
-                    },
+                    subcommand("toggle", [
+                        { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
+                        { type: ApplicationCommandOptionType.Boolean, name: "enabled", value: false },
+                    ]),
                 ],
                 AS.taskAdmin,
             ),
@@ -491,7 +451,7 @@ describe("/taskroles toggle", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Disabled champion roles." }),
         ]);
-        expect(discord.memberRoleChanges("DELETE")).toEqual([`${member}:${gold.id}`]);
+        expect(discord.memberRoleChanges("DELETE")).toEqual([{ member, role: gold.id }]);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.championRoles).toEqual({
             first: false,
             second: false,
@@ -503,22 +463,18 @@ describe("/taskroles toggle", () => {
 describe("/taskroles grant", () => {
     test("gives a member a role", async ({ discord, interact }) => {
         const gold = apiRole({ name: "Gold Champion" });
-        discord.guildRoles([gold]);
+        discord.serveGuildRoles([gold]);
         const target = apiUser({ id: member, username: "champ" });
-        discord.member(IDS.guild, apiGuildMember({ user: target }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: target }));
 
         const interaction = await interact(
             chatInputInteraction(
                 "taskroles",
                 [
-                    {
-                        type: ApplicationCommandOptionType.Subcommand,
-                        name: "grant",
-                        options: [
-                            { type: ApplicationCommandOptionType.User, name: "user", value: member },
-                            { type: ApplicationCommandOptionType.Role, name: "role", value: gold.id },
-                        ],
-                    },
+                    subcommand("grant", [
+                        { type: ApplicationCommandOptionType.User, name: "user", value: member },
+                        { type: ApplicationCommandOptionType.Role, name: "role", value: gold.id },
+                    ]),
                 ],
                 AS.taskAdmin,
                 { users: { [member]: target }, roles: { [gold.id]: gold } },
@@ -528,7 +484,7 @@ describe("/taskroles grant", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Granted **Gold Champion** to champ." }),
         ]);
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${gold.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([{ member, role: gold.id }]);
     });
 });
 
@@ -539,7 +495,7 @@ describe("/taskroles init", () => {
         services,
         factories,
     }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
         const enthusiast = apiRole({ name: "Task Enthusiast" });
         const milestones = [
             apiRole({ name: "Task Participant" }),
@@ -547,28 +503,18 @@ describe("/taskroles init", () => {
             apiRole({ name: "Task Expert" }),
             apiRole({ name: "Task Master" }),
         ];
-        const champions = {
-            first: apiRole({ name: "Task Champion (1st)" }),
-            second: apiRole({ name: "Task Champion (2nd)" }),
-            third: apiRole({ name: "Task Champion (3rd)" }),
-        };
+        const champions = championRoles();
         const created = [...milestones, champions.first, champions.second, champions.third];
-        for (const role of created) discord.roleCreated(IDS.guild, role);
+        for (const role of created) discord.acceptRoleCreation(IDS.guild, role);
         await factories.userStats.create({ userId: member, tasksCompletedBronze: 20, legacyTasksCompleted: 10 });
-        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member, username: "regular" }) }));
+        discord.serveMember(IDS.guild, apiGuildMember({ user: { id: member, username: "regular" } }));
 
-        const interaction = await interact(
-            chatInputInteraction(
-                "taskroles",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "init" }],
-                AS.taskAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("taskroles", [subcommand("init")], AS.taskAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Task roles synced and granted to eligible users." }),
         ]);
-        expect(discord.rolesCreated(IDS.guild).map((role) => [role.name, role.colors?.primary_color])).toEqual([
+        expect(discord.roleCreations(IDS.guild).map((role) => [role.name, role.colors?.primary_color])).toEqual([
             ["Task Participant", NEUTRAL],
             ["Task Enthusiast", NEUTRAL],
             ["Task Expert", NEUTRAL],
@@ -577,7 +523,7 @@ describe("/taskroles init", () => {
             ["Task Champion (2nd)", 0xc0c0c0],
             ["Task Champion (3rd)", 0xcd7f32],
         ]);
-        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${enthusiast.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([{ member, role: enthusiast.id }]);
         const stored = await services.repos.guildRepo.getGuild(IDS.guild);
         expect(stored?.taskSettings?.milestoneRoles?.map((role) => role.roleId)).toEqual(
             milestones.map((role) => role.id),
@@ -592,15 +538,9 @@ describe("/taskroles init", () => {
 
 describe("/taskroles with an option it doesn't know", () => {
     test("answers instead of leaving the reply pending", async ({ discord, interact }) => {
-        discord.guildRoles();
+        discord.serveGuildRoles();
 
-        const interaction = await interact(
-            chatInputInteraction(
-                "taskroles",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "rename" }],
-                AS.taskAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("taskroles", [subcommand("rename")], AS.taskAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Unknown taskroles option." }),

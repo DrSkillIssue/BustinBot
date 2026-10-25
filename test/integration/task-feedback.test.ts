@@ -1,7 +1,6 @@
 import { describe, expect, test } from "../fixtures.js";
-import { PRIVATE_DEFERRAL } from "../discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
-import { IDS, buttonInteraction } from "../discord/payloads.js";
+import { IDS, buttonInteraction, PRIVATE_DEFERRAL } from "../discord/payloads.js";
 import { taskFactory, taskFeedbackFactory } from "../factories.js";
 
 describe("task feedback buttons", () => {
@@ -32,8 +31,11 @@ describe("task feedback buttons", () => {
                 interact(buttonInteraction("task-feedback|up|PVM001|PVM001-20260105")),
             ]);
 
-            const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content).sort();
-            expect(replies).toEqual(["Thanks for your feedback!", "You already gave this task a 👍."]);
+            const replies = [first, second].map((click) => discord.originalEdits(click)[0]?.content);
+            expect(replies).toHaveLength(2);
+            expect(replies).toEqual(
+                expect.arrayContaining(["Thanks for your feedback!", "You already gave this task a 👍."]),
+            );
             expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 51 });
         },
         CONCURRENT_TRANSACTION_TIMEOUT_MS,

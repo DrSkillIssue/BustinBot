@@ -1,17 +1,24 @@
-import { AutocompleteInteraction, ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from 'discord.js';
-import type { ServiceContainer } from '../core/services/ServiceContainer.js';
+import {
+    AutocompleteInteraction,
+    ChatInputCommandInteraction,
+    Message,
+    SlashCommandBuilder,
+    type SlashCommandOptionsOnlyBuilder,
+    type SlashCommandSubcommandsOnlyBuilder,
+} from "discord.js";
+import type { ServiceContainer } from "../core/services/ServiceContainer.js";
 
 export enum CommandRole {
-    Everyone = 'Everyone',
-    TaskAdmin = 'TaskAdmin',
-    MovieAdmin = 'MovieAdmin',
-    BotAdmin = 'BotAdmin'
+    Everyone = "Everyone",
+    TaskAdmin = "TaskAdmin",
+    MovieAdmin = "MovieAdmin",
+    BotAdmin = "BotAdmin",
 }
 
 export enum CommandModule {
-    Core = 'core',
-    Movie = 'movie',
-    Task = 'task',
+    Core = "core",
+    Movie = "movie",
+    Task = "task",
 }
 
 export interface Command {
@@ -43,17 +50,14 @@ export interface Command {
     // Support both message-based (prefix) and slash commands
     execute: (context: {
         message?: Message;
-        interaction?: ChatInputCommandInteraction<'raw' | 'cached'>;
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
         args?: string[];
         services: ServiceContainer;
     }) => Promise<void>;
 
     // Suggestions for an option set with setAutocomplete
-    autocomplete?: (context: {
-        interaction: AutocompleteInteraction;
-        services: ServiceContainer;
-    }) => Promise<void>;
+    autocomplete?: (context: { interaction: AutocompleteInteraction; services: ServiceContainer }) => Promise<void>;
 
     // Optional method to return a SlashCommandBuilder for registering slash commands
-    slashData?: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder
+    slashData?: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
 }

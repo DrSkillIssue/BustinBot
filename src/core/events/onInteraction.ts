@@ -1,15 +1,15 @@
-import type { Interaction } from 'discord.js';
-import type { Command } from '../../models/Command.js';
-import { CommandModule, CommandRole } from '../../models/Command.js';
-import type { ServiceContainer } from '../services/ServiceContainer.js';
-import type { GuildSetupComplete } from '../../models/Guild.js';
-import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
-import { memberRoleIds } from '../../utils/MemberUtils.js';
+import type { Interaction } from "discord.js";
+import type { Command } from "../../models/Command.js";
+import { CommandModule, CommandRole } from "../../models/Command.js";
+import type { ServiceContainer } from "../services/ServiceContainer.js";
+import type { GuildSetupComplete } from "../../models/Guild.js";
+import { createTimezoneModal, timezoneService } from "../services/TimezoneService.js";
+import { memberRoleIds } from "../../utils/MemberUtils.js";
 
 export async function handleInteraction(
     interaction: Interaction,
     commands: Map<string, Command>,
-    services: ServiceContainer
+    services: ServiceContainer,
 ) {
     if (interaction.isAutocomplete()) {
         if (!interaction.inGuild()) {
@@ -23,14 +23,14 @@ export async function handleInteraction(
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command) {
-            await interaction.reply({ content: 'Command not found.', flags: 1 << 6 });
+            await interaction.reply({ content: "Command not found.", flags: 1 << 6 });
             return;
         }
 
-        const isSetupCommand = command.name === 'setup';
+        const isSetupCommand = command.name === "setup";
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: 'Unable to determine your server membership. Please try again from within the guild.',
+                content: "Unable to determine your server membership. Please try again from within the guild.",
                 flags: 1 << 6,
             });
             return;
@@ -59,10 +59,7 @@ export async function handleInteraction(
         }
 
         // Role-based permission logic
-        if (
-            command.allowedRoles.length > 0 &&
-            !command.allowedRoles.includes(CommandRole.Everyone)
-        ) {
+        if (command.allowedRoles.length > 0 && !command.allowedRoles.includes(CommandRole.Everyone)) {
             const guildConfig = await services.guilds.requireConfig(interaction);
             if (!guildConfig) return;
 
@@ -77,7 +74,7 @@ export async function handleInteraction(
                 return userRoleNames.includes(value);
             };
 
-            const roleMatch = command.allowedRoles.some(role => {
+            const roleMatch = command.allowedRoles.some((role) => {
                 switch (role) {
                     case CommandRole.BotAdmin:
                         return hasRole(guildRoles.admin, process.env.ADMIN_ROLE_NAME);
@@ -105,23 +102,29 @@ export async function handleInteraction(
         const moduleReady = setupMap[requiredModule];
 
         if (!setupMap.core && !isSetupCommand) {
-            await interaction.reply({ content: 'The bot has not been set up yet. Please run `/setup` first to configure the core channels.', flags: 1 << 6 });
+            await interaction.reply({
+                content: "The bot has not been set up yet. Please run `/setup` first to configure the core channels.",
+                flags: 1 << 6,
+            });
             return;
         }
 
         if (!moduleReady && !isSetupCommand) {
-            let setupCommandHint = '';
+            let setupCommandHint = "";
 
             switch (requiredModule) {
                 case CommandModule.Movie:
-                    setupCommandHint = '`/moviesetup`';
+                    setupCommandHint = "`/moviesetup`";
                     break;
                 case CommandModule.Task:
-                    setupCommandHint = '`/tasksetup`';
+                    setupCommandHint = "`/tasksetup`";
                     break;
             }
 
-            await interaction.reply({ content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`, flags: 1 << 6 });
+            await interaction.reply({
+                content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`,
+                flags: 1 << 6,
+            });
             return;
         }
 
@@ -136,11 +139,11 @@ export async function handleInteraction(
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
             if (interaction.deferred && !interaction.replied) {
-                await interaction.editReply({ content: 'There was an error executing that command.' });
+                await interaction.editReply({ content: "There was an error executing that command." });
             } else if (interaction.replied) {
-                await interaction.followUp({ content: 'There was an error executing that command.', flags: 1 << 6 });
+                await interaction.followUp({ content: "There was an error executing that command.", flags: 1 << 6 });
             } else {
-                await interaction.reply({ content: 'There was an error executing that command.', flags: 1 << 6 });
+                await interaction.reply({ content: "There was an error executing that command.", flags: 1 << 6 });
             }
         }
         return;
@@ -150,28 +153,32 @@ export async function handleInteraction(
         const { customId } = interaction;
         const userId = interaction.user.id;
 
-        if (customId === 'setup_confirm') {
-            const selections = services.setup.getSelections('core', userId);
-            const missing = services.setup.getMissingFields('core', selections);
+        if (customId === "setup_confirm") {
+            const selections = services.setup.getSelections("core", userId);
+            const missing = services.setup.getMissingFields("core", selections);
             if (!selections || missing.length) {
-                await interaction.reply({ content: `Please select: ${missing.join(', ')}`, flags: 1 << 6 });
+                await interaction.reply({ content: `Please select: ${missing.join(", ")}`, flags: 1 << 6 });
                 return;
             }
 
-            await services.setup.persist('core', services.guilds, services.guildId, selections);
-            services.setup.clearSelections('core', userId);
+            await services.setup.persist("core", services.guilds, services.guildId, selections);
+            services.setup.clearSelections("core", userId);
 
-            await interaction.update({ content: 'Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.', components: [] });
+            await interaction.update({
+                content:
+                    "Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.",
+                components: [],
+            });
             return;
         }
 
-        if (customId === 'setup_cancel') {
-            services.setup.clearSelections('core', userId);
-            await interaction.update({ content: 'Setup cancelled. No changes were made.', components: [] });
+        if (customId === "setup_cancel") {
+            services.setup.clearSelections("core", userId);
+            await interaction.update({ content: "Setup cancelled. No changes were made.", components: [] });
             return;
         }
 
-        if (customId === 'setup_timezone') {
+        if (customId === "setup_timezone") {
             const modal = createTimezoneModal();
             await interaction.showModal(modal);
             return;
@@ -182,19 +189,19 @@ export async function handleInteraction(
         const userId = interaction.user.id;
         const channelId = interaction.values[0];
         if (!channelId) {
-            await interaction.reply({ content: 'No channel selected.', flags: 1 << 6 });
+            await interaction.reply({ content: "No channel selected.", flags: 1 << 6 });
             return;
         }
 
         switch (interaction.customId) {
-            case 'setup_announce':
-                services.setup.setSelection('core', userId, 'announcements', channelId);
+            case "setup_announce":
+                services.setup.setSelection("core", userId, "announcements", channelId);
                 break;
-            case 'setup_log':
-                services.setup.setSelection('core', userId, 'botLog', channelId);
+            case "setup_log":
+                services.setup.setSelection("core", userId, "botLog", channelId);
                 break;
-            case 'setup_archive':
-                services.setup.setSelection('core', userId, 'botArchive', channelId);
+            case "setup_archive":
+                services.setup.setSelection("core", userId, "botArchive", channelId);
                 break;
             default:
                 return;
@@ -203,7 +210,7 @@ export async function handleInteraction(
         await interaction.deferUpdate();
     }
 
-    if (interaction.isModalSubmit() && interaction.customId === 'setup_timezone_modal') {
+    if (interaction.isModalSubmit() && interaction.customId === "setup_timezone_modal") {
         const input = interaction.fields.getTextInputValue("timezone_input").trim();
 
         const matchedZone = timezoneService.fuzzyMatch(input);
@@ -211,7 +218,8 @@ export async function handleInteraction(
         if (!matchedZone) {
             await interaction.reply({
                 content:
-                    "Could not recognise that timezone. Please try again using an IANA name (e.g., `Australia/Melbourne`, `America/New_York`).", flags: 1 << 6,
+                    "Could not recognise that timezone. Please try again using an IANA name (e.g., `Australia/Melbourne`, `America/New_York`).",
+                flags: 1 << 6,
             });
             return;
         }
@@ -220,7 +228,10 @@ export async function handleInteraction(
         await services.guilds.update(guildId, { timezone: matchedZone });
 
         const currentTime = timezoneService.getCurrentTimeInZone(matchedZone);
-        await interaction.reply({ content: `Timezone set to **${matchedZone}**.\nCurrent local time: **${currentTime}**`, flags: 1 << 6 });
+        await interaction.reply({
+            content: `Timezone set to **${matchedZone}**.\nCurrent local time: **${currentTime}**`,
+            flags: 1 << 6,
+        });
 
         console.log(`[Setup] Timezone updated for ${guildId}: ${matchedZone}`);
     }

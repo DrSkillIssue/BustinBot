@@ -7,19 +7,25 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { MAX_ACTIVE_MOVIES_PER_USER, isMovieNightAdmin } from "../../movies/MovieSelector.js";
 
 const mymovies: Command = {
-    name: 'mymovies',
-    description: 'View the movies you\'ve added to the list.',
+    name: "mymovies",
+    description: "View the movies you've added to the list.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.Everyone],
 
     slashData: new SlashCommandBuilder()
-        .setName('mymovies')
-        .setDescription('View the movies you\'ve added to the list.'),
+        .setName("mymovies")
+        .setDescription("View the movies you've added to the list."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
-        
+
         const movieRepo = services.repos.movieRepo;
 
         try {
@@ -54,14 +60,10 @@ const mymovies: Command = {
                 : `You have added **${userMovies.length}/${MAX_ACTIVE_MOVIES_PER_USER}** movies. You can still add **${remaining}** more using /addmovie.`;
             await interaction.editReply({ content, embeds });
 
-            console.log(
-                `[MyMovies] Displayed ${userMovies.length} movies for ${interaction.user.username}.`
-            );
+            console.log(`[MyMovies] Displayed ${userMovies.length} movies for ${interaction.user.username}.`);
         } catch (error) {
             console.error("[MyMovies Command Error]", error);
-            await interaction.editReply(
-                "An error occurred while retrieving your movies. Check console for details."
-            );
+            await interaction.editReply("An error occurred while retrieving your movies. Check console for details.");
         }
     },
 };

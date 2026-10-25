@@ -12,21 +12,18 @@ const setstreak: Command = {
     slashData: new SlashCommandBuilder()
         .setName("setstreak")
         .setDescription("Admin override to set a user's task streak.")
-        .addUserOption((option) =>
-            option
-                .setName("user")
-                .setDescription("User to update.")
-                .setRequired(true)
-        )
+        .addUserOption((option) => option.setName("user").setDescription("User to update.").setRequired(true))
         .addIntegerOption((option) =>
-            option
-                .setName("streak")
-                .setDescription("New current streak value.")
-                .setRequired(true)
-                .setMinValue(0)
+            option.setName("streak").setDescription("New current streak value.").setRequired(true).setMinValue(0),
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -51,14 +48,12 @@ const setstreak: Command = {
                 });
             }
 
-            await interaction.editReply(
-                `✅ Updated task streak for **${targetUser.username}** to **${streakValue}**.`
-            );
+            await interaction.editReply(`✅ Updated task streak for **${targetUser.username}** to **${streakValue}**.`);
         } catch (err) {
             console.error("[SetStreak Command] Failed to update streak:", err);
             await interaction.editReply("Failed to update the streak. Please try again later.");
         }
-    }
+    },
 };
 
 export default setstreak;

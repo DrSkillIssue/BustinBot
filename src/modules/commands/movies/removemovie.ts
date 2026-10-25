@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import Fuse from 'fuse.js';
+import Fuse from "fuse.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
@@ -8,31 +8,35 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { removeMovieWithStats } from "../../movies/MovieService.js";
 
 const removemovie: Command = {
-    name: 'removemovie',
-    description: 'Remove a movie you have added from the list (removie).',
+    name: "removemovie",
+    description: "Remove a movie you have added from the list (removie).",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.Everyone, CommandRole.MovieAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('removemovie')
-        .setDescription('Remove a movie you have added from the list (removie).')
-        .addStringOption(option =>
-            option.setName('title')
-                .setDescription('The movie title to remove.')
-                .setRequired(true)
+        .setName("removemovie")
+        .setDescription("Remove a movie you have added from the list (removie).")
+        .addStringOption((option) =>
+            option.setName("title").setDescription("The movie title to remove.").setRequired(true),
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
         const movieRepo = services.repos.movieRepo;
 
-        const query = interaction.options.getString('title', true);
+        const query = interaction.options.getString("title", true);
         const userId = interaction.user.id;
-        const isAdmin = interaction.memberPermissions?.has('Administrator') || false;
+        const isAdmin = interaction.memberPermissions?.has("Administrator") || false;
 
-       try {
+        try {
             // Fetch all movies
             const movies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
 
@@ -74,13 +78,11 @@ const removemovie: Command = {
                 embeds: [embed],
             });
 
-            console.log(
-                `[RemoveMovie] ${interaction.user.username} removed "${matched.title}" (${matched.id})`
-            );
+            console.log(`[RemoveMovie] ${interaction.user.username} removed "${matched.title}" (${matched.id})`);
         } catch (error) {
             console.error("[RemoveMovie Command Error]", error);
             await interaction.editReply(
-                "An error occurred while trying to remove the movie. Check console for details."
+                "An error occurred while trying to remove the movie. Check console for details.",
             );
         }
     },

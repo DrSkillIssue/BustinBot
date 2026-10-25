@@ -1,8 +1,12 @@
 import { GuildMemberFlagsBitField, RoleFlagsBitField, SnowflakeUtil } from "discord.js";
+import { pick } from "es-toolkit";
 import {
+    ApplicationCommandOptionType,
+    ApplicationFlags,
     ApplicationCommandType,
     ChannelType,
     ComponentType,
+    GatewayVersion,
     GuildDefaultMessageNotifications,
     GuildExplicitContentFilter,
     GuildMFALevel,
@@ -11,11 +15,17 @@ import {
     GuildSystemChannelFlags,
     GuildVerificationLevel,
     InteractionContextType,
+    InteractionResponseType,
     InteractionType,
     Locale,
+    MessageFlags,
     MessageType,
+    RESTJSONErrorCodes,
+    RouteBases,
     type APIApplicationCommandAutocompleteGuildInteraction,
+    type APIApplicationCommandInteractionDataBasicOption,
     type APIApplicationCommandInteractionDataOption,
+    type APIApplicationCommandInteractionDataSubcommandOption,
     type APIAttachment,
     type APIChatInputApplicationCommandGuildInteraction,
     type APIGuildMember,
@@ -35,6 +45,9 @@ import {
     type APIUser,
     type GatewayGuildCreateDispatchData,
     type GatewayMessageCreateDispatchData,
+    type APIDMChannel,
+    type APIGatewayBotInfo,
+    type GatewayReadyDispatchData,
 } from "discord-api-types/v10";
 
 export const IDS = {
@@ -65,6 +78,20 @@ export const NAMES = {
     roles: { admin: "BustinBot Admin", taskAdmin: "Task Admin", movieAdmin: "Movie Admin", taskUser: "Task User" },
 } as const;
 
+export const DiscordError = {
+    unknownChannel: { status: 404, body: { code: RESTJSONErrorCodes.UnknownChannel, message: "Unknown Channel" } },
+    unknownMessage: { status: 404, body: { code: RESTJSONErrorCodes.UnknownMessage, message: "Unknown Message" } },
+    missingAccess: { status: 403, body: { code: RESTJSONErrorCodes.MissingAccess, message: "Missing Access" } },
+    missingPermissions: {
+        status: 403,
+        body: { code: RESTJSONErrorCodes.MissingPermissions, message: "Missing Permissions" },
+    },
+    cannotMessageUser: {
+        status: 403,
+        body: { code: RESTJSONErrorCodes.CannotSendMessagesToThisUser, message: "Cannot send messages to this user" },
+    },
+} as const;
+
 const EPOCH = "2026-01-01T00:00:00.000Z";
 const NO_ROLE_FLAGS = new RoleFlagsBitField().bitfield;
 const NO_MEMBER_FLAGS = new GuildMemberFlagsBitField().bitfield;
@@ -78,6 +105,10 @@ export function apiUser(overrides: Partial<APIUser> = {}): APIUser {
         avatar: null,
         ...overrides,
     };
+}
+
+export function apiBotUser(): APIUser {
+    return apiUser({ id: IDS.bot, username: "BustinBot", bot: true });
 }
 
 export function apiRole(overrides: Partial<APIRole> = {}): APIRole {
@@ -138,25 +169,101 @@ export function apiVoiceChannel(
     };
 }
 
-export function apiVoiceState(
-    userId: string,
-    channelId: string | null,
-    overrides: Partial<APIVoiceState> = {},
-): APIVoiceState & { guild_id: string } {
+export function apiResolvedChannel(
+    overrides: Partial<APIInteractionDataResolvedChannel> = {},
+): APIInteractionDataResolvedChannel {
+    return { ...pick(apiTextChannel(), ["id", "name", "type"]), permissions: "0", ...overrides };
+}
+
+export function apiDMChannel(recipient: APIUser): APIDMChannel {
     return {
-        guild_id: IDS.guild,
-        channel_id: channelId,
-        user_id: userId,
-        member: apiGuildMember({ user: apiUser({ id: userId }) }),
-        session_id: `session-${userId}`,
+        id: SnowflakeUtil.generate().toString(),
+        type: ChannelType.DM,
+        name: null,
+        last_message_id: null,
+        recipients: [recipient],
+    };
+}
+
+type MemberFields = Omit<APIGuildMember, "user">;
+type GuildMemberParams = Partial<MemberFields> & { user?: Partial<APIUser> };
+type MemberParams = Partial<Omit<APIInteractionGuildMember, "user">> & { user?: Partial<APIUser> };
+
+function memberFields(): MemberFields {
+    return {
+        roles: [],
+        joined_at: EPOCH,
         deaf: false,
         mute: false,
-        self_deaf: false,
-        self_mute: false,
-        self_video: false,
-        suppress: false,
-        request_to_speak_timestamp: null,
+        flags: NO_MEMBER_FLAGS,
+        avatar: null,
+        banner: null,
+    };
+}
+
+export function apiGuildMember({ user, ...overrides }: GuildMemberParams = {}): APIGuildMember {
+    return { ...memberFields(), ...overrides, user: apiUser(user) };
+}
+
+export function apiMember({ user, ...overrides }: MemberParams = {}): APIInteractionGuildMember {
+    return { ...memberFields(), permissions: "0", ...overrides, user: apiUser(user) };
+}
+
+export function apiAttachment(overrides: Partial<APIAttachment> = {}): APIAttachment {
+    const id = overrides.id ?? SnowflakeUtil.generate().toString();
+    const filename = overrides.filename ?? "screenshot.png";
+    const path = `/attachments/${IDS.channel}/${id}/${filename}`;
+    return {
+        id,
+        filename,
+        size: 8,
+        url: `${RouteBases.cdn}${path}`,
+        proxy_url: `${RouteBases.media}${path}`,
+        content_type: "image/png",
         ...overrides,
+    };
+}
+
+export function apiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
+    return {
+        id: SnowflakeUtil.generate().toString(),
+        channel_id: IDS.channel,
+        author: apiBotUser(),
+        content: "",
+        timestamp: EPOCH,
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        pinned: false,
+        type: MessageType.Default,
+        ...overrides,
+    };
+}
+
+export function apiGatewayBot(): APIGatewayBotInfo {
+    return {
+        url: "wss://gateway.discord.gg",
+        shards: 1,
+        session_start_limit: { total: 1000, remaining: 1000, reset_after: 0, max_concurrency: 1 },
+    };
+}
+
+export function apiReady(guildId: string): GatewayReadyDispatchData {
+    return {
+        v: Number(GatewayVersion),
+        user: apiBotUser(),
+        guilds: [{ id: guildId, unavailable: true }],
+        session_id: "session",
+        resume_gateway_url: apiGatewayBot().url,
+        application: {
+            id: IDS.application,
+            flags: ApplicationFlags.ApplicationCommandBadge,
+            flags_new: String(ApplicationFlags.ApplicationCommandBadge),
+        },
     };
 }
 
@@ -224,22 +331,55 @@ export function apiOtherGuild(): GatewayGuildCreateDispatchData {
     });
 }
 
-export function apiGuildMember(overrides: Partial<APIGuildMember> = {}): APIGuildMember {
+export type MessageCreateParams = Partial<Omit<GatewayMessageCreateDispatchData, "member">> & {
+    member?: Partial<MemberFields>;
+};
+
+export function messageCreate(
+    content: string,
+    { member, ...overrides }: MessageCreateParams = {},
+): GatewayMessageCreateDispatchData {
     return {
-        user: apiUser(),
-        roles: [],
-        joined_at: EPOCH,
-        deaf: false,
-        mute: false,
-        flags: NO_MEMBER_FLAGS,
-        avatar: null,
-        banner: null,
+        ...apiMessage({ content, author: apiUser() }),
+        guild_id: IDS.guild,
+        member: { ...memberFields(), ...member },
+        mentions: [],
         ...overrides,
     };
 }
 
-export function apiMember(overrides: Partial<APIInteractionGuildMember> = {}): APIInteractionGuildMember {
-    return { ...apiGuildMember(), permissions: "0", ...overrides };
+export function directMessage(
+    content: string,
+    overrides: Partial<GatewayMessageCreateDispatchData> = {},
+): GatewayMessageCreateDispatchData {
+    return {
+        ...apiMessage({ content, author: apiUser(), channel_id: IDS.dm }),
+        channel_type: ChannelType.DM,
+        mentions: [],
+        ...overrides,
+    };
+}
+
+export function apiVoiceState(
+    userId: string,
+    channelId: string | null,
+    overrides: Partial<APIVoiceState> = {},
+): APIVoiceState & { guild_id: string } {
+    return {
+        guild_id: IDS.guild,
+        channel_id: channelId,
+        user_id: userId,
+        member: apiGuildMember({ user: { id: userId } }),
+        session_id: `session-${userId}`,
+        deaf: false,
+        mute: false,
+        self_deaf: false,
+        self_mute: false,
+        self_video: false,
+        suppress: false,
+        request_to_speak_timestamp: null,
+        ...overrides,
+    };
 }
 
 const interactionBase = {
@@ -255,26 +395,46 @@ const interactionBase = {
     attachment_size_limit: 10_485_760,
 };
 
-function interactionChannel() {
-    return { id: IDS.channel, type: ChannelType.GuildText as const, guild_id: IDS.guild, name: NAMES.channel };
-}
+type InteractionParams<T> = Partial<Omit<T, "member">> & { member?: MemberParams };
 
-export const AS = {
-    botAdmin: { member: apiMember({ roles: [IDS.roles.admin] }) },
-    taskAdmin: { member: apiMember({ roles: [IDS.roles.taskAdmin] }) },
-    movieAdmin: { member: apiMember({ roles: [IDS.roles.movieAdmin] }) },
-};
-
-export function chatInputInteraction(
-    name: string,
-    options: APIApplicationCommandInteractionDataOption[] = [],
-    overrides: Partial<APIChatInputApplicationCommandGuildInteraction> = {},
-    resolved?: APIInteractionDataResolved,
-): APIChatInputApplicationCommandGuildInteraction {
+function interactionFields(member?: MemberParams) {
+    const channel = pick(apiTextChannel(), ["id", "type", "guild_id", "name"]);
     return {
         ...interactionBase,
         id: SnowflakeUtil.generate().toString(),
         token: `token-${SnowflakeUtil.generate().toString()}`,
+        channel,
+        channel_id: channel.id,
+        member: apiMember(member),
+    };
+}
+
+export const PRIVATE_DEFERRAL = {
+    type: InteractionResponseType.DeferredChannelMessageWithSource,
+    data: { flags: MessageFlags.Ephemeral },
+};
+
+export const AS = {
+    botAdmin: { member: { roles: [IDS.roles.admin] } },
+    taskAdmin: { member: { roles: [IDS.roles.taskAdmin] } },
+    movieAdmin: { member: { roles: [IDS.roles.movieAdmin] } },
+};
+
+export function subcommand(
+    name: string,
+    options: APIApplicationCommandInteractionDataBasicOption[] = [],
+): APIApplicationCommandInteractionDataSubcommandOption {
+    return { type: ApplicationCommandOptionType.Subcommand, name, options };
+}
+
+export function chatInputInteraction(
+    name: string,
+    options: APIApplicationCommandInteractionDataOption[] = [],
+    { member, ...overrides }: InteractionParams<APIChatInputApplicationCommandGuildInteraction> = {},
+    resolved?: APIInteractionDataResolved,
+): APIChatInputApplicationCommandGuildInteraction {
+    return {
+        ...interactionFields(member),
         type: InteractionType.ApplicationCommand,
         data: {
             id: SnowflakeUtil.generate().toString(),
@@ -283,9 +443,6 @@ export function chatInputInteraction(
             options,
             ...(resolved ? { resolved } : {}),
         },
-        channel: interactionChannel(),
-        channel_id: IDS.channel,
-        member: apiMember(),
         ...overrides,
     };
 }
@@ -293,12 +450,10 @@ export function chatInputInteraction(
 export function autocompleteInteraction(
     name: string,
     options: APIApplicationCommandInteractionDataOption[],
-    overrides: Partial<APIApplicationCommandAutocompleteGuildInteraction> = {},
+    { member, ...overrides }: InteractionParams<APIApplicationCommandAutocompleteGuildInteraction> = {},
 ): APIApplicationCommandAutocompleteGuildInteraction {
     return {
-        ...interactionBase,
-        id: SnowflakeUtil.generate().toString(),
-        token: `token-${SnowflakeUtil.generate().toString()}`,
+        ...interactionFields(member),
         type: InteractionType.ApplicationCommandAutocomplete,
         data: {
             id: SnowflakeUtil.generate().toString(),
@@ -306,9 +461,6 @@ export function autocompleteInteraction(
             type: ApplicationCommandType.ChatInput,
             options,
         },
-        channel: interactionChannel(),
-        channel_id: IDS.channel,
-        member: apiMember(),
         ...overrides,
     };
 }
@@ -316,53 +468,39 @@ export function autocompleteInteraction(
 export function buttonInteraction(
     customId: string,
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentButtonInteraction> = {},
+    { member, ...overrides }: InteractionParams<APIMessageComponentButtonInteraction> = {},
 ): APIMessageComponentButtonInteraction {
     const data: APIMessageButtonInteractionData = { custom_id: customId, component_type: ComponentType.Button };
     return {
-        ...interactionBase,
-        id: SnowflakeUtil.generate().toString(),
-        token: `token-${SnowflakeUtil.generate().toString()}`,
+        ...interactionFields(member),
         type: InteractionType.MessageComponent,
         data,
         message,
-        channel: interactionChannel(),
-        channel_id: IDS.channel,
-        member: apiMember(),
         ...overrides,
     };
 }
+
+type SelectParams = InteractionParams<APIMessageComponentSelectMenuInteraction>;
 
 function selectInteraction(
     data: APIMessageSelectMenuInteractionData,
     message: APIMessage,
-    overrides: Partial<APIMessageComponentSelectMenuInteraction>,
+    { member, ...overrides }: SelectParams,
 ): APIMessageComponentSelectMenuInteraction {
     return {
-        ...interactionBase,
-        id: SnowflakeUtil.generate().toString(),
-        token: `token-${SnowflakeUtil.generate().toString()}`,
+        ...interactionFields(member),
         type: InteractionType.MessageComponent,
         data,
         message,
-        channel: interactionChannel(),
-        channel_id: IDS.channel,
-        member: apiMember(),
         ...overrides,
     };
-}
-
-export function apiResolvedChannel(
-    overrides: Partial<APIInteractionDataResolvedChannel> = {},
-): APIInteractionDataResolvedChannel {
-    return { id: IDS.channel, name: NAMES.channel, type: ChannelType.GuildText, permissions: "0", ...overrides };
 }
 
 export function channelSelectInteraction(
     customId: string,
     channelIds: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
+    overrides: SelectParams = {},
 ): APIMessageComponentSelectMenuInteraction {
     const channels = Object.fromEntries(channelIds.map((id) => [id, apiResolvedChannel({ id, name: "channel" })]));
     return selectInteraction(
@@ -381,7 +519,7 @@ export function roleSelectInteraction(
     customId: string,
     roleIds: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
+    overrides: SelectParams = {},
 ): APIMessageComponentSelectMenuInteraction {
     const roles = Object.fromEntries(roleIds.map((id) => [id, apiRole({ id })]));
     return selectInteraction(
@@ -395,7 +533,7 @@ export function stringSelectInteraction(
     customId: string,
     values: string[],
     message: APIMessage = apiMessage(),
-    overrides: Partial<APIMessageComponentSelectMenuInteraction> = {},
+    overrides: SelectParams = {},
 ): APIMessageComponentSelectMenuInteraction {
     return selectInteraction(
         { custom_id: customId, component_type: ComponentType.StringSelect, values },
@@ -407,12 +545,10 @@ export function stringSelectInteraction(
 export function modalSubmitInteraction(
     customId: string,
     fields: Record<string, string>,
-    overrides: Partial<APIModalSubmitGuildInteraction> = {},
+    { member, ...overrides }: InteractionParams<APIModalSubmitGuildInteraction> = {},
 ): APIModalSubmitGuildInteraction {
     return {
-        ...interactionBase,
-        id: SnowflakeUtil.generate().toString(),
-        token: `token-${SnowflakeUtil.generate().toString()}`,
+        ...interactionFields(member),
         type: InteractionType.ModalSubmit,
         data: {
             custom_id: customId,
@@ -421,70 +557,6 @@ export function modalSubmitInteraction(
                 component: { type: ComponentType.TextInput, custom_id: fieldId, value },
             })),
         },
-        channel: interactionChannel(),
-        channel_id: IDS.channel,
-        member: apiMember(),
-        ...overrides,
-    };
-}
-
-export function apiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
-    return {
-        id: SnowflakeUtil.generate().toString(),
-        channel_id: IDS.channel,
-        author: apiUser({ id: IDS.bot, username: "BustinBot", bot: true }),
-        content: "",
-        timestamp: EPOCH,
-        edited_timestamp: null,
-        tts: false,
-        mention_everyone: false,
-        mentions: [],
-        mention_roles: [],
-        attachments: [],
-        embeds: [],
-        pinned: false,
-        type: MessageType.Default,
-        ...overrides,
-    };
-}
-
-export function messageCreate(
-    content: string,
-    overrides: Partial<GatewayMessageCreateDispatchData> = {},
-): GatewayMessageCreateDispatchData {
-    const { user: _user, permissions: _permissions, ...member } = apiMember();
-    return {
-        ...apiMessage({ content, author: apiUser() }),
-        guild_id: IDS.guild,
-        member,
-        mentions: [],
-        ...overrides,
-    };
-}
-
-export function apiAttachment(overrides: Partial<APIAttachment> = {}): APIAttachment {
-    const id = overrides.id ?? SnowflakeUtil.generate().toString();
-    const filename = overrides.filename ?? "screenshot.png";
-    const url = `https://cdn.discordapp.com/attachments/${IDS.channel}/${id}/${filename}`;
-    return {
-        id,
-        filename,
-        size: 8,
-        url,
-        proxy_url: url.replace("cdn.discordapp.com", "media.discordapp.net"),
-        content_type: "image/png",
-        ...overrides,
-    };
-}
-
-export function directMessage(
-    content: string,
-    overrides: Partial<GatewayMessageCreateDispatchData> = {},
-): GatewayMessageCreateDispatchData {
-    return {
-        ...apiMessage({ content, author: apiUser(), channel_id: IDS.dm }),
-        channel_type: ChannelType.DM,
-        mentions: [],
         ...overrides,
     };
 }

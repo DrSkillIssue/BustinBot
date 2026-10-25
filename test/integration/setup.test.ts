@@ -1,7 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test as base, beforeEach, vi } from "../fixtures.js";
-import { PRIVATE_DEFERRAL, componentsIn } from "../discord/harness.js";
 import { routeInteraction } from "../../src/core/events/routeInteraction.js";
 import {
     AS,
@@ -13,6 +12,7 @@ import {
     roleSelectInteraction,
     stringSelectInteraction,
     chatInputInteraction,
+    PRIVATE_DEFERRAL,
 } from "../discord/payloads.js";
 import { guildFactory } from "../factories.js";
 import { GuildService } from "../../src/core/services/GuildService.js";
@@ -48,13 +48,26 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("setup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
-            { customId: "setup_announce", placeholder: `Channel for bot announcements (Current: #${NAMES.channel})` },
-            { customId: "setup_log", placeholder: "Channel for errors and logs (Current: None)" },
-            { customId: "setup_archive", placeholder: "Channel for archived posts (Current: None)" },
-            { customId: "setup_timezone" },
-            { customId: "setup_confirm" },
-            { customId: "setup_cancel" },
+        expect(discord.originalEdits(interaction)[0]?.components).toMatchObject([
+            {
+                components: [
+                    {
+                        custom_id: "setup_announce",
+                        placeholder: `Channel for bot announcements (Current: #${NAMES.channel})`,
+                    },
+                ],
+            },
+            { components: [{ custom_id: "setup_log", placeholder: "Channel for errors and logs (Current: None)" }] },
+            {
+                components: [{ custom_id: "setup_archive", placeholder: "Channel for archived posts (Current: None)" }],
+            },
+            {
+                components: [
+                    { custom_id: "setup_timezone" },
+                    { custom_id: "setup_confirm" },
+                    { custom_id: "setup_cancel" },
+                ],
+            },
         ]);
     });
 
@@ -65,19 +78,40 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("moviesetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+        expect(discord.originalEdits(interaction)[0]?.components).toMatchObject([
             {
-                customId: "moviesetup_admin_role",
-                placeholder: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
+                components: [
+                    {
+                        custom_id: "moviesetup_admin_role",
+                        placeholder: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
+                    },
+                ],
             },
-            { customId: "moviesetup_user_role", placeholder: "Role notified for movie nights (Current: None)" },
             {
-                customId: "moviesetup_channel",
-                placeholder: `Channel for movie night announcements (Current: #${NAMES.channel})`,
+                components: [
+                    {
+                        custom_id: "moviesetup_user_role",
+                        placeholder: "Role notified for movie nights (Current: None)",
+                    },
+                ],
             },
-            { customId: "moviesetup_voice_channel", placeholder: "Voice channel for movie nights (Current: None)" },
-            { customId: "moviesetup_confirm" },
-            { customId: "moviesetup_cancel" },
+            {
+                components: [
+                    {
+                        custom_id: "moviesetup_channel",
+                        placeholder: `Channel for movie night announcements (Current: #${NAMES.channel})`,
+                    },
+                ],
+            },
+            {
+                components: [
+                    {
+                        custom_id: "moviesetup_voice_channel",
+                        placeholder: "Voice channel for movie nights (Current: None)",
+                    },
+                ],
+            },
+            { components: [{ custom_id: "moviesetup_confirm" }, { custom_id: "moviesetup_cancel" }] },
         ]);
     });
 
@@ -88,22 +122,40 @@ describe("the setup commands", () => {
         const interaction = await interact(chatInputInteraction("tasksetup", [], AS.botAdmin));
 
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
-        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+        expect(discord.originalEdits(interaction)[0]?.components).toMatchObject([
             {
-                customId: "tasksetup_admin_role",
-                placeholder: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
+                components: [
+                    {
+                        custom_id: "tasksetup_admin_role",
+                        placeholder: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
+                    },
+                ],
             },
             {
-                customId: "tasksetup_user_role",
-                placeholder: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
+                components: [
+                    {
+                        custom_id: "tasksetup_user_role",
+                        placeholder: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
+                    },
+                ],
             },
-            { customId: "tasksetup_channel", placeholder: `Channel for task posts (Current: #${NAMES.channel})` },
             {
-                customId: "tasksetup_verification_channel",
-                placeholder: `Channel for managing submissions (Current: #${NAMES.channel})`,
+                components: [
+                    {
+                        custom_id: "tasksetup_channel",
+                        placeholder: `Channel for task posts (Current: #${NAMES.channel})`,
+                    },
+                ],
             },
-            { customId: "tasksetup_confirm" },
-            { customId: "tasksetup_cancel" },
+            {
+                components: [
+                    {
+                        custom_id: "tasksetup_verification_channel",
+                        placeholder: `Channel for managing submissions (Current: #${NAMES.channel})`,
+                    },
+                ],
+            },
+            { components: [{ custom_id: "tasksetup_confirm" }, { custom_id: "tasksetup_cancel" }] },
         ]);
     });
 });
@@ -171,7 +223,7 @@ describe("/setup choices", () => {
     test("keeps one guild's choices separate from another's", async ({ discord, interact, otherGuild, commands }) => {
         await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
 
-        const confirmElsewhere = await discord.dispatch(
+        const confirmElsewhere = await discord.sendInteraction(
             buttonInteraction("setup_confirm", undefined, { guild_id: IDS.otherGuild }),
         );
         await routeInteraction(confirmElsewhere, discord.client, commands, otherGuild);
@@ -377,7 +429,9 @@ describe("GuildService", () => {
         await repo.initGuild(IDS.guild, guildFactory.build({ id: IDS.guild }));
         await repo.initGuild(IDS.otherGuild, guildFactory.build({ id: IDS.otherGuild }));
 
-        expect((await guilds.getAll()).map((guild) => guild.id).sort()).toEqual([IDS.guild, IDS.otherGuild]);
+        const stored = (await guilds.getAll()).map((guild) => guild.id);
+        expect(stored).toHaveLength(2);
+        expect(stored).toEqual(expect.arrayContaining([IDS.guild, IDS.otherGuild]));
         await db.doc(`guilds/${IDS.guild}`).delete();
         expect(await guilds.get(IDS.guild)).toMatchObject({ id: IDS.guild });
     });

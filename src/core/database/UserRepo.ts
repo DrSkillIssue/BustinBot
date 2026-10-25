@@ -6,7 +6,7 @@ import { userStatsConverter } from "./converters.js";
 
 export class UserRepository extends GuildScopedRepository<UserStats> implements IUserRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'userStats', userStatsConverter);
+        super(db, guildId, "userStats", userStatsConverter);
     }
 
     async getAllUsers(): Promise<UserStats[]> {
@@ -38,23 +38,14 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         await batch.commit();
     }
 
-    async incrementStat(
-        userId: string,
-        field: keyof UserStats,
-        amount = 1
-    ): Promise<void> {
+    async incrementStat(userId: string, field: keyof UserStats, amount = 1): Promise<void> {
         // If exists, increment the field
-        await this.collection.doc(userId).set(
-            { userId, [field]: FieldValue.increment(amount), lastActiveAt: new Date() },
-            { merge: true },
-        );
+        await this.collection
+            .doc(userId)
+            .set({ userId, [field]: FieldValue.increment(amount), lastActiveAt: new Date() }, { merge: true });
     }
 
-    async updateTierStat(
-        userId: string,
-        fromField: keyof UserStats,
-        toField: keyof UserStats
-    ): Promise<void> {
+    async updateTierStat(userId: string, fromField: keyof UserStats, toField: keyof UserStats): Promise<void> {
         const docRef = this.collection.doc(userId);
 
         await this.db.runTransaction(async (transaction) => {

@@ -1,15 +1,17 @@
-import type { Movie } from '../../models/Movie.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
+import type { Movie } from "../../models/Movie.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
-function tmdbApiKey(): string {
+function tmdbUrl(path: string, params: Record<string, string> = {}): URL {
     const key = process.env.TMDB_API_KEY;
     if (!key) {
-        throw new Error('TMDB_API_KEY is not set in your environment variables.');
+        throw new Error("TMDB_API_KEY is not set in your environment variables.");
     }
-    return key;
+    const url = new URL(`${TMDB_BASE_URL}${path}`);
+    url.search = new URLSearchParams({ api_key: key, ...params }).toString();
+    return url;
 }
 
 // TMDb Response Types
@@ -21,7 +23,7 @@ export interface TMDbSearchResult {
     poster_path?: string;
 }
 
-export interface TMDbSearchResponse {
+interface TMDbSearchResponse {
     results: TMDbSearchResult[];
 }
 
@@ -37,23 +39,21 @@ interface TMDbCreditsResponse {
     crew: { job: string; name: string }[];
 }
 
+export async function searchMovies(query: string, year?: number): Promise<TMDbSearchResult[]> {
+    const response = await fetch(tmdbUrl("/search/movie", year === undefined ? { query } : { query, year: `${year}` }));
+    const data = (await response.json()) as TMDbSearchResponse;
+    return data?.results ?? [];
+}
+
 export async function fetchMovieDetails(movieName: string): Promise<Partial<Movie> | null> {
-    const searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${tmdbApiKey()}&query=${encodeURIComponent(movieName)}`;
-
-    const searchResponse = await fetch(searchUrl);
-    const searchData = await searchResponse.json() as TMDbSearchResponse;
-
-    const topResult = searchData?.results?.[0];
+    const [topResult] = await searchMovies(movieName);
     return topResult ? fetchMovieDetailsById(topResult.id) : null;
 }
 
 export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> | null> {
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${id}?api_key=${tmdbApiKey()}&language=en-US`;
-    const creditsUrl = `${TMDB_BASE_URL}/movie/${id}/credits?api_key=${tmdbApiKey()}&language=en-US`;
-
     const [detailsRes, creditsRes] = await Promise.all([
-        fetch(detailsUrl),
-        fetch(creditsUrl),
+        fetch(tmdbUrl(`/movie/${id}`, { language: "en-US" })),
+        fetch(tmdbUrl(`/movie/${id}/credits`, { language: "en-US" })),
     ]);
 
     if (!detailsRes.ok) throw new Error("Failed to fetch TMDb details");
@@ -65,21 +65,19 @@ export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> 
     if (!details?.id) return null;
 
     // Extract director and top 3 billed cast
-    const director =
-        credits.crew?.find((member) => member.job === "Director")?.name ?? undefined;
+    const director = credits.crew?.find((member) => member.job === "Director")?.name ?? undefined;
     const cast =
-        credits.cast?.slice(0, 3).map((actor) => actor.name).filter(Boolean) ?? [];
+        credits.cast
+            ?.slice(0, 3)
+            .map((actor) => actor.name)
+            .filter(Boolean) ?? [];
 
     return {
         tmdbId: details.id,
         title: details.title,
         overview: details.overview,
-        releaseDate: details.release_date
-            ? Number(details.release_date.slice(0, 4))
-            : undefined,
-        posterUrl: details.poster_path
-            ? `${TMDB_IMAGE_BASE}${details.poster_path}`
-            : undefined,
+        releaseDate: details.release_date ? Number(details.release_date.slice(0, 4)) : undefined,
+        posterUrl: details.poster_path ? `${TMDB_IMAGE_BASE}${details.poster_path}` : undefined,
         infoUrl: `https://www.themoviedb.org/movie/${details.id}`,
         runtime: details.runtime ?? undefined,
         rating: details.vote_average ?? undefined,

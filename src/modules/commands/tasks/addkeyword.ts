@@ -3,19 +3,16 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 
 const addkeyword: Command = {
-    name: 'addkeyword',
-    description: 'Add a new keyword to the keyword pool.',
+    name: "addkeyword",
+    description: "Add a new keyword to the keyword pool.",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.TaskAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('addkeyword')
-        .setDescription('Add a new keyword to the keyword pool.')
-        .addStringOption(opt =>
-            opt
-                .setName('word')
-                .setDescription('The keyword to add (e.g. "bustinbot")')
-                .setRequired(true)
+        .setName("addkeyword")
+        .setDescription("Add a new keyword to the keyword pool.")
+        .addStringOption((opt) =>
+            opt.setName("word").setDescription('The keyword to add (e.g. "bustinbot")').setRequired(true),
         ),
 
     async execute({ interaction, services }) {
@@ -27,7 +24,10 @@ const addkeyword: Command = {
 
         const word = interaction.options.getString("word", true).trim();
         const existing = await repo.getKeywordById(
-            word.toLowerCase().replace(/\s+/g, "_").replace(/[^\w_]/g, "")
+            word
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/[^\w_]/g, ""),
         );
 
         if (existing) {

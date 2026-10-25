@@ -1,7 +1,13 @@
 import type Fuse from "fuse.js";
 import type { Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
-import type { SubmissionReview, SubmissionReviewOutcome, SubmissionTier, TaskSubmission, TaskSubmissionDraft } from "../../../models/TaskSubmission.js";
+import type {
+    SubmissionReview,
+    SubmissionReviewOutcome,
+    SubmissionTier,
+    TaskSubmission,
+    TaskSubmissionDraft,
+} from "../../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
 import type { TaskFeedback, TaskFeedbackOutcome } from "../../../models/TaskFeedback.js";
 import type { TaskCategory } from "../../../models/Task.js";
@@ -49,5 +55,9 @@ export interface ITaskRepository {
     // Utilities
     deleteAllTasks(): Promise<void>;
     seedTasks(tasks: Task[]): Promise<void>;
-    voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: TaskPoll; }>;
+    voteInPollOnce(
+        pollId: string,
+        userId: string,
+        optionId: string,
+    ): Promise<{ firstTime: boolean; updatedPoll: TaskPoll }>;
 }

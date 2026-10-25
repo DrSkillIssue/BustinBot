@@ -6,7 +6,7 @@ import { prizeDrawConverter } from "./converters.js";
 
 export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implements IPrizeDrawRepository {
     constructor(db: Firestore, guildId: string) {
-        super(db, guildId, 'prizeDraws', prizeDrawConverter);
+        super(db, guildId, "prizeDraws", prizeDrawConverter);
     }
 
     async createPrizeDraw(draw: PrizeDraw): Promise<void> {
@@ -14,7 +14,7 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
     }
 
     async getAllPrizeDraws(): Promise<PrizeDraw[]> {
-        const snapshot = await this.collection.orderBy('start', 'desc').get();
+        const snapshot = await this.collection.orderBy("start", "desc").get();
         return snapshot.docs.map((doc) => doc.data());
     }
 
@@ -34,17 +34,13 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
         await batch.commit();
     }
 
-    async updateParticipants(
-        drawId: string,
-        participants: Record<string, number>
-    ): Promise<void> {
+    async updateParticipants(drawId: string, participants: Record<string, number>): Promise<void> {
         const docRef = this.collection.doc(drawId);
         await docRef.update({
             participants,
             totalEntries: Object.values(participants).reduce((a, b) => a + b, 0),
         });
     }
-
 
     async addEntry(drawId: string, userId: string): Promise<void> {
         const docRef = this.collection.doc(drawId);

@@ -1,9 +1,9 @@
-import { Message } from 'discord.js';
-import type { Command } from '../../models/Command.js';
-import { CommandRole } from '../../models/Command.js';
-import type { ServiceContainer } from '../services/ServiceContainer.js';
+import { Message } from "discord.js";
+import type { Command } from "../../models/Command.js";
+import { CommandRole } from "../../models/Command.js";
+import type { ServiceContainer } from "../services/ServiceContainer.js";
 
-const PREFIX = '!'; // Handle ! as the command prefix
+const PREFIX = "!"; // Handle ! as the command prefix
 
 export async function handleMessage(message: Message, commands: Map<string, Command>, services: ServiceContainer) {
     if (!message.content.startsWith(PREFIX) || message.author.bot) return;
@@ -20,7 +20,7 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
     // Permission check placeholder
     const member = message.member;
     if (!member) {
-        await message.reply('Unable to verify your permissions.');
+        await message.reply("Unable to verify your permissions.");
         return;
     }
 
@@ -33,7 +33,7 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
     // Role-based permission logic
     const hasPermission =
         command.allowedRoles.includes(CommandRole.Everyone) ||
-        command.allowedRoles.some(role => {
+        command.allowedRoles.some((role) => {
             switch (role) {
                 case CommandRole.BotAdmin:
                     return guildRoles.admin && userRoleIds.includes(guildRoles.admin);
@@ -56,7 +56,7 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
     } catch (err) {
         console.error(`[Command Error]: ${commandName}`, err);
         try {
-            await message.reply('There was an error executing that command.');
+            await message.reply("There was an error executing that command.");
         } catch (replyError) {
             console.error(`[Command Error]: ${commandName}: could not send the error reply`, replyError);
         }

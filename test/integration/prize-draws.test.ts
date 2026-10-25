@@ -1,8 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
-import { DiscordError, PRIVATE_DEFERRAL } from "../discord/harness.js";
-import { IDS, NAMES, apiUser, AS, chatInputInteraction } from "../discord/payloads.js";
+import { DiscordError, IDS, NAMES, apiUser, AS, chatInputInteraction, PRIVATE_DEFERRAL } from "../discord/payloads.js";
 import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
 import {
     announcePrizeDrawWinner,
@@ -23,13 +22,10 @@ const [winner, second, third, fourth] = [
 async function storeEvent(
     factories: StoringFactories,
     id: string,
-    endTime: DateTime,
+    events: StoringFactories["taskEvent"],
     submissions: Array<{ userId: string; status: SubmissionStatus; submittedAt?: Date; reviewedAt?: Date }>,
 ) {
-    await factories.taskEvent.create({
-        id,
-        endTime: endTime.toJSDate(),
-    });
+    await events.create({ id });
     for (const [index, submission] of submissions.entries()) {
         await factories.taskSubmission.create({ id: `${id}-${index}`, taskEventId: id, ...submission });
     }
@@ -51,7 +47,7 @@ describe("a prize draw snapshot", () => {
         services,
         factories,
     }) => {
-        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Bronze },
             { userId: winner, status: SubmissionStatus.Silver },
             { userId: winner, status: SubmissionStatus.Gold },
@@ -66,7 +62,7 @@ describe("a prize draw snapshot", () => {
 
     test("gives one entry for each task the member completed", async ({ services, factories }) => {
         for (const id of ["pvm", "skilling", "minigame"]) {
-            await storeEvent(factories, id, DateTime.now().minus({ days: 2 }), [
+            await storeEvent(factories, id, factories.taskEvent.ended(), [
                 { userId: winner, status: SubmissionStatus.Gold },
             ]);
         }
@@ -78,7 +74,7 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out submissions that are pending or rejected", async ({ services, factories }) => {
-        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Pending },
             { userId: second, status: SubmissionStatus.Rejected },
         ]);
@@ -90,10 +86,10 @@ describe("a prize draw snapshot", () => {
     });
 
     test("leaves out a task event that is still running", async ({ services, factories }) => {
-        await storeEvent(factories, "finished", DateTime.now().minus({ days: 2 }), [
+        await storeEvent(factories, "finished", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
-        await storeEvent(factories, "running", DateTime.now().plus({ hours: 1 }), [
+        await storeEvent(factories, "running", factories.taskEvent.running(), [
             { userId: second, status: SubmissionStatus.Gold },
         ]);
 
@@ -115,7 +111,7 @@ describe("a prize draw snapshot", () => {
             rolledAt: previousSnapshot.plus({ days: 1 }).toJSDate().toISOString(),
             taskEventIds: ["previous-event"],
         });
-        await storeEvent(factories, "previous-event", previousEnd, [
+        await storeEvent(factories, "previous-event", factories.taskEvent.params({ endTime: previousEnd.toJSDate() }), [
             {
                 userId: second,
                 status: SubmissionStatus.Silver,
@@ -135,7 +131,7 @@ describe("a prize draw snapshot", () => {
                 reviewedAt: previousEnd.plus({ days: 2 }).toJSDate(),
             },
         ]);
-        await storeEvent(factories, "current-event", DateTime.now().minus({ days: 2 }), [
+        await storeEvent(factories, "current-event", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
@@ -161,7 +157,7 @@ describe("a prize draw snapshot", () => {
                 rolledAt: end.plus({ days: 2 }).toJSDate().toISOString(),
                 taskEventIds: [`${id}-event`],
             });
-            await storeEvent(factories, `${id}-event`, end, [
+            await storeEvent(factories, `${id}-event`, factories.taskEvent.params({ endTime: end.toJSDate() }), [
                 {
                     userId: members[id],
                     status: SubmissionStatus.Bronze,
@@ -242,7 +238,7 @@ describe("announcing a prize draw winner", () => {
 
         const [posted] = discord.messagesSentTo(IDS.channel);
         expect(posted?.embeds).toHaveLength(1);
-        expect(posted).not.toHaveProperty("content");
+        expect(posted?.content).toBeUndefined();
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] Task user role not configured or not found.");
     });
 
@@ -253,14 +249,16 @@ describe("announcing a prize draw winner", () => {
     }) => {
         await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
         await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
-        discord.user(apiUser({ id: winner, username: "lucky" }));
+        discord.serveUser(apiUser({ id: winner, username: "lucky" }));
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(false);
 
-        expect(warn).toHaveBeenCalledWith("[PrizeDraw] Announcement channel not found.");
-        expect(discord.requests().filter((request) => request.method === "POST")).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+        expect(discord.requests.filter((request) => request.method === "POST")).toEqual([]);
     });
 });
 
@@ -269,7 +267,7 @@ describe("the scheduled prize draw job", () => {
 
     test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
         vi.setSystemTime(drawTuesday.toJSDate());
-        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
         discord.acceptMessages(IDS.channel);
@@ -285,7 +283,7 @@ describe("the scheduled prize draw job", () => {
 
     test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
         vi.setSystemTime(drawTuesday.plus({ weeks: 1 }).toJSDate());
-        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", factories.taskEvent.ended(), [
             { userId: winner, status: SubmissionStatus.Gold },
         ]);
 
@@ -320,7 +318,7 @@ describe("/taskdraw", () => {
         services,
         factories,
     }) => {
-        await storeEvent(factories, "pvm", DateTime.now().minus({ days: 2 }), [
+        await storeEvent(factories, "pvm", factories.taskEvent.ended(), [
             { userId: IDS.user, status: SubmissionStatus.Gold },
         ]);
 

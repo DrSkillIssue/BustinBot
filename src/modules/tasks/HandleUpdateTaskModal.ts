@@ -1,4 +1,5 @@
 import type { ModalSubmitInteraction } from "discord.js";
+import { DateTime } from "luxon";
 import { TaskType, type Task } from "../../models/Task.js";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
@@ -15,20 +16,22 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
 
     const repo = services.repos.taskRepo;
 
-    const taskId = interaction.customId.replace('update_task_modal_', '');
+    const taskId = interaction.customId.replace("update_task_modal_", "");
     const task = await repo.getTaskById(taskId);
     if (!task) {
         await interaction.editReply({ content: `Could not find task with ID **${taskId}**.` });
         return;
     }
 
-    const type = parseTaskType(interaction.fields.getTextInputValue('type'));
+    const type = parseTaskType(interaction.fields.getTextInputValue("type"));
     if (!type) {
-        await interaction.editReply({ content: `Type must be one of: ${Object.values(TaskType).join(', ')}. Nothing was changed.` });
+        await interaction.editReply({
+            content: `Type must be one of: ${Object.values(TaskType).join(", ")}. Nothing was changed.`,
+        });
         return;
     }
 
-    const amounts = parseAmounts(interaction.fields.getTextInputValue('amounts'));
+    const amounts = parseAmounts(interaction.fields.getTextInputValue("amounts"));
     if (!amounts) {
         await interaction.editReply({ content: `${AMOUNTS_ERROR} Nothing was changed.` });
         return;
@@ -37,8 +40,8 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     const updated: Task = {
         ...task,
         ...amounts,
-        taskName: interaction.fields.getTextInputValue('taskName').trim(),
-        shortName: interaction.fields.getTextInputValue('shortName').trim(),
+        taskName: interaction.fields.getTextInputValue("taskName").trim(),
+        shortName: interaction.fields.getTextInputValue("shortName").trim(),
         type,
     };
 
@@ -57,8 +60,9 @@ async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRep
     await repo.createTask(task);
 
     const now = new Date();
-    const activeEvents = (await repo.getTaskEventsBetween(now, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)))
-        .filter(event => event.task.id === task.id && event.startTime <= now);
+    const activeEvents = (
+        await repo.getTaskEventsBetween(now, DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate())
+    ).filter((event) => event.task.id === task.id && event.startTime <= now);
 
     for (const activeEvent of activeEvents) {
         activeEvent.task = task;
@@ -66,26 +70,26 @@ async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRep
             bronze: task.amtBronze,
             silver: task.amtSilver,
             gold: task.amtGold,
-        }
+        };
         await repo.updateTaskEventTask(activeEvent.id, activeEvent.task, activeEvent.amounts);
 
         try {
             await refreshTaskEventMessage(interaction.client, activeEvent);
         } catch (err) {
-            console.error('[HandleUpdateTaskModal] Failed to update active task event embed:', err);
+            console.error("[HandleUpdateTaskModal] Failed to update active task event embed:", err);
         }
     }
 
     const activePoll = await repo.getActiveTaskPollByCategory(task.category);
-    if (activePoll?.options.some(option => option.id === task.id)) {
-        activePoll.options = activePoll.options.map(option =>
-            option.id === task.id ? { ...option, ...task } : option
+    if (activePoll?.options.some((option) => option.id === task.id)) {
+        activePoll.options = activePoll.options.map((option) =>
+            option.id === task.id ? { ...option, ...task } : option,
         );
         await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
         try {
             await refreshTaskPollMessage(interaction.client, activePoll);
         } catch (err) {
-            console.error('[HandleUpdateTaskModal] Failed to refresh active task poll embed:', err);
+            console.error("[HandleUpdateTaskModal] Failed to refresh active task poll embed:", err);
         }
     }
 }

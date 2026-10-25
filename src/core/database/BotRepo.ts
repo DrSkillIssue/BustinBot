@@ -7,7 +7,7 @@ export class BotRepository implements IBotRepository {
     constructor(private readonly db: Firestore) {}
 
     private get docRef() {
-        return this.db.collection('bot').doc('stats').withConverter(botStatsConverter);
+        return this.db.collection("bot").doc("stats").withConverter(botStatsConverter);
     }
 
     async getBotStats(): Promise<BotStats | null> {
@@ -19,7 +19,7 @@ export class BotRepository implements IBotRepository {
         const existing = await this.docRef.get();
         if (!existing.exists) {
             await this.docRef.set(defaults);
-            console.log('[BotRepository] Initialised global bot stats document.');
+            console.log("[BotRepository] Initialised global bot stats document.");
         }
     }
 
@@ -43,7 +43,7 @@ export class BotRepository implements IBotRepository {
         };
 
         await this.docRef.update(defaults);
-        console.log('[BotRepository] Reset all bot stats');
+        console.log("[BotRepository] Reset all bot stats");
     }
 
     async increment(field: keyof BotStats | string, amount = 1): Promise<void> {
@@ -75,11 +75,7 @@ export class BotRepository implements IBotRepository {
         });
     }
 
-    async updateGuildStats(
-        guildCount: number,
-        channelCount: number,
-        userCount: number
-    ): Promise<void> {
+    async updateGuildStats(guildCount: number, channelCount: number, userCount: number): Promise<void> {
         await this.docRef.update({
             guildCount,
             channelCount,

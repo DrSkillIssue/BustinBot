@@ -1,6 +1,16 @@
-import { StringSelectMenuInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client, time, TimestampStyles } from "discord.js";
-import cron, { type ScheduledTask } from 'node-cron';
-import { DateTime } from 'luxon';
+import {
+    StringSelectMenuInteraction,
+    ModalBuilder,
+    LabelBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ModalSubmitInteraction,
+    Client,
+    time,
+    TimestampStyles,
+} from "discord.js";
+import cron, { type ScheduledTask } from "node-cron";
+import { DateTime } from "luxon";
 import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
 import type { Movie } from "../../models/Movie.js";
 import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
@@ -19,11 +29,15 @@ export async function resolveGuildTimezone(services: ServiceContainer, guildId: 
 }
 
 export function startMovieScheduler(client: Client, guildServices: () => ServiceContainer[]): ScheduledTask {
-    return cron.schedule('* * * * *', async () => {
-        for (const services of guildServices()) {
-            await sweepMovieNight(client, services);
-        }
-    }, { name: 'movieScheduler:sweep', noOverlap: true });
+    return cron.schedule(
+        "* * * * *",
+        async () => {
+            for (const services of guildServices()) {
+                await sweepMovieNight(client, services);
+            }
+        },
+        { name: "movieScheduler:sweep", noOverlap: true },
+    );
 }
 
 export async function sweepMovieNight(client: Client, services: ServiceContainer): Promise<void> {
@@ -38,19 +52,19 @@ export async function sweepMovieNight(client: Client, services: ServiceContainer
         }
     };
 
-    await step('Closing the poll', () => closeDuePoll(client, services, now));
+    await step("Closing the poll", () => closeDuePoll(client, services, now));
 
     const event = await movieRepo.getActiveEvent();
     if (!event) return;
 
-    await step('Sending reminders', () => sendDueReminders(client, services, event, now));
+    await step("Sending reminders", () => sendDueReminders(client, services, event, now));
     if (event.movie.id === UNPICKED_MOVIE_ID) return;
 
-    await step('Counting attendance', () => trackAttendance(client, services, event, now));
+    await step("Counting attendance", () => trackAttendance(client, services, event, now));
 
     const endsAt = movieNightEndsAt(event);
     if (endsAt && endsAt <= now) {
-        await step('Ending the movie night', () => endMovieNight(client, services, event, now));
+        await step("Ending the movie night", () => endMovieNight(client, services, event, now));
     }
 }
 
@@ -59,16 +73,25 @@ async function closeDuePoll(client: Client, services: ServiceContainer, now: Dat
     if (!poll?.isActive || poll.endsAt > now) return;
 
     // Close the poll in Firestore
-    const result = await closeActiveMoviePoll(services, client, 'Scheduler');
+    const result = await closeActiveMoviePoll(services, client, "Scheduler");
     console.log(`[MovieScheduler] Poll closed: ${result.message}`);
     // Send winner announcement if poll was successful
     if (!result.success || !result.winner) return;
 
     const channel = await configuredChannel(client, services, "movieNight");
-    await channel?.send({ embeds: [createMoviePollClosedEmbed(result.winner, 'Scheduler', result.winningVotes ?? 0, result.tieBreak ?? false)] });
+    await channel?.send({
+        embeds: [
+            createMoviePollClosedEmbed(result.winner, "Scheduler", result.winningVotes ?? 0, result.tieBreak ?? false),
+        ],
+    });
 }
 
-async function trackAttendance(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
+async function trackAttendance(
+    client: Client,
+    services: ServiceContainer,
+    event: MovieEvent,
+    now: Date,
+): Promise<void> {
     const attendance = services.movieAttendance;
     const guildConfig = await services.guilds.get(services.guildId);
     const voiceChannelId = event.voiceChannelId ?? guildConfig?.channels?.movieVC ?? null;
@@ -82,7 +105,7 @@ async function trackAttendance(client: Client, services: ServiceContainer, event
 }
 
 async function endMovieNight(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
-    const result = await finishMovieNight('auto', services, client, now, event.id);
+    const result = await finishMovieNight("auto", services, client, now, event.id);
     if (!result.success || !result.finishedMovie) return;
 
     const channel = await configuredChannel(client, services, "movieNight");
@@ -100,12 +123,10 @@ export async function handleMovieNightDate(interaction: StringSelectMenuInteract
     const numericOffset = now.toFormat("Z");
     const shortTZ = `(UTC${numericOffset})`;
 
-    const modal = new ModalBuilder()
-        .setCustomId(`movienight-time-${selectedDate}`)
-        .setTitle('Enter movie night time');
+    const modal = new ModalBuilder().setCustomId(`movienight-time-${selectedDate}`).setTitle("Enter movie night time");
 
     const timeInput = new TextInputBuilder()
-        .setCustomId('start-time')
+        .setCustomId("start-time")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setPlaceholder("e.g. 20:30");
@@ -128,15 +149,15 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         return;
     }
 
-    const parts = interaction.customId.split('-');
+    const parts = interaction.customId.split("-");
     const selectedDate = `${parts[2]}-${parts[3]}-${parts[4]}`;
-    const enteredTime = interaction.fields.getTextInputValue('start-time');
+    const enteredTime = interaction.fields.getTextInputValue("start-time");
     const timezone = await resolveGuildTimezone(services, interaction.guildId);
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(enteredTime)) {
         await interaction.editReply({
-            content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30)."
+            content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30).",
         });
         return;
     }
@@ -169,7 +190,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         if (adjustedEnd < pollEnd) {
             await movieRepo.createPoll({
                 ...activePoll,
-                endsAt: adjustedEnd.toJSDate()
+                endsAt: adjustedEnd.toJSDate(),
             });
         }
     }
@@ -178,12 +199,12 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const readableDate = localDateTime.toFormat("cccc, dd LLLL yyyy");
     const utcUnix = Math.floor(utcDateTime.toSeconds());
     const pendingReminders = getPendingReminders(utcDateTime);
-    const visibleReminders = pendingReminders.filter(r => r.label !== 'start time');
+    const visibleReminders = pendingReminders.filter((r) => r.label !== "start time");
     const reminderLine = visibleReminders.length
-        ? `_Reminders will be sent at ${visibleReminders.map(r => time(r.sendAt.toJSDate(), TimestampStyles.ShortTime)).join(' and ')} that day._`
-        : '';
+        ? `_Reminders will be sent at ${visibleReminders.map((r) => time(r.sendAt.toJSDate(), TimestampStyles.ShortTime)).join(" and ")} that day._`
+        : "";
 
-    let stateMessage = '';
+    let stateMessage = "";
     if (movie) {
         stateMessage = `🎬 We will be watching **${movie.title}**!`;
     } else if (pollChannelId) {
@@ -193,27 +214,21 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     }
 
     const showStateMessage = !movie;
-    const combinedMessage = [
-        showStateMessage ? stateMessage : '',
-        reminderLine
-    ].filter(Boolean).join('\n\n');
+    const combinedMessage = [showStateMessage ? stateMessage : "", reminderLine].filter(Boolean).join("\n\n");
 
-    const embed = createMovieNightEmbed(
-        movie,
-        utcUnix,
-        combinedMessage,
-        interaction.user.username
-    );
+    const embed = createMovieNightEmbed(movie, utcUnix, combinedMessage, interaction.user.username);
 
     const movieChannel = await configuredChannel(interaction.client, services, "movieNight");
 
     const movieRoleId = guildConfig.roles?.movieUser;
     const voiceChannelId = guildConfig.channels?.movieVC;
-    const mention = movieRoleId ? `<@&${movieRoleId}>` : '';
+    const mention = movieRoleId ? `<@&${movieRoleId}>` : "";
     const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
     if (!voiceChannelId) {
-        console.warn("[MovieScheduler] No movie voice channel configured; attendance tracking will be disabled for this event.");
+        console.warn(
+            "[MovieScheduler] No movie voice channel configured; attendance tracking will be disabled for this event.",
+        );
     }
 
     // Mark any previously active events as completed so lifecycle commands operate on a single active event.
@@ -230,7 +245,13 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         id: eventId,
         createdAt: new Date(),
         startTime: utcDateTime.toJSDate(),
-        movie: movie ?? { id: UNPICKED_MOVIE_ID, title: "TBD", addedBy: interaction.user.id, addedAt: new Date(), watched: false },
+        movie: movie ?? {
+            id: UNPICKED_MOVIE_ID,
+            title: "TBD",
+            addedBy: interaction.user.id,
+            addedAt: new Date(),
+            watched: false,
+        },
         channelId: pollChannelId || interaction.channelId || "",
         voiceChannelId,
         hostedBy: interaction.user.id,
@@ -241,7 +262,9 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     let announcementMessageId: string | undefined;
     let announcementChannelId = baseEvent.channelId;
     if (movieChannel) {
-        const sent = await movieChannel.send(withSuppressedMentions({ content: mention, embeds: [embed] }, suppressMentions));
+        const sent = await movieChannel.send(
+            withSuppressedMentions({ content: mention, embeds: [embed] }, suppressMentions),
+        );
         announcementMessageId = sent.id;
         announcementChannelId = sent.channelId;
     }
@@ -259,6 +282,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     // Edit deferred reply with success message
     await interaction.editReply({
-        content: `Movie night scheduled for **${readableDate}** at **${enteredTime}**.`
+        content: `Movie night scheduled for **${readableDate}** at **${enteredTime}**.`,
     });
 }

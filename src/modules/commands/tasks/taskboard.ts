@@ -13,33 +13,40 @@ const taskboard: Command = {
     slashData: new SlashCommandBuilder()
         .setName("taskboard")
         .setDescription("Manually post the weekly task leaderboard update.")
-        .addSubcommand((sub) =>
-            sub.setName("update").setDescription("Post the weekly leaderboard update.")
-        )
-        .addSubcommand((sub) =>
-            sub.setName("final").setDescription("Post the final leaderboard snapshot.")
-        ),
+        .addSubcommand((sub) => sub.setName("update").setDescription("Post the weekly leaderboard update."))
+        .addSubcommand((sub) => sub.setName("final").setDescription("Post the final leaderboard snapshot.")),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
         try {
             const sub = interaction.options.getSubcommand();
-            const posted = sub === "final"
-                ? await postFinalLeaderboardSnapshot(interaction.client, services)
-                : await postWeeklyLeaderboardSnapshot(interaction.client, services);
+            const posted =
+                sub === "final"
+                    ? await postFinalLeaderboardSnapshot(interaction.client, services)
+                    : await postWeeklyLeaderboardSnapshot(interaction.client, services);
             if (!posted) {
-                await interaction.editReply("Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.");
+                await interaction.editReply(
+                    "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
+                );
             } else {
-                await interaction.editReply(sub === "final" ? "Final leaderboard posted." : "Leaderboard update posted.");
+                await interaction.editReply(
+                    sub === "final" ? "Final leaderboard posted." : "Leaderboard update posted.",
+                );
             }
         } catch (err) {
             console.error("[TaskBoard Command Error]", err);
             await interaction.editReply("Failed to post the leaderboard. Check console for details.");
         }
-    }
+    },
 };
 
 export default taskboard;

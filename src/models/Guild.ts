@@ -44,22 +44,22 @@ export interface TaskSettings {
 }
 
 export interface Guild {
-  id: string;
+    id: string;
 
-  toggles: {
-    taskScheduler: boolean;
-    leaguesEnabled: boolean;
-    taskLeaderboard?: boolean;
-  };
+    toggles: {
+        taskScheduler: boolean;
+        leaguesEnabled: boolean;
+        taskLeaderboard?: boolean;
+    };
 
-  roles: GuildRoles;
-  channels: GuildChannels;
-  taskSettings?: TaskSettings;
+    roles: GuildRoles;
+    channels: GuildChannels;
+    taskSettings?: TaskSettings;
 
-  setupComplete?: GuildSetupComplete;
-  mentionSuppressedUntilMs?: number;
-  // In IANA format (e.g. 'Australia/Melbourne')
-  timezone?: string;
-  updatedBy?: string;
-  updatedAt?: Date;
+    setupComplete?: GuildSetupComplete;
+    mentionSuppressedUntilMs?: number;
+    // In IANA format (e.g. 'Australia/Melbourne')
+    timezone?: string;
+    updatedBy?: string;
+    updatedAt?: Date;
 }

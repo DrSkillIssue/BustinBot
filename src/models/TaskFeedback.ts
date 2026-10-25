@@ -3,7 +3,7 @@ export interface TaskFeedback {
     taskId: string;
     eventId: string;
     userId: string;
-    vote: 'up' | 'down';
+    vote: "up" | "down";
 }
 
 export type TaskFeedbackOutcome = "added" | "changed" | "unchanged" | "taskNotFound";

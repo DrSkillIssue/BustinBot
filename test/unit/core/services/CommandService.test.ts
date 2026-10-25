@@ -26,7 +26,8 @@ describe("loadCommands", () => {
 
         const commands = await loadCommands(commandsDir);
 
-        expect([...commands.keys()].sort()).toEqual(["bar", "f", "foo"]);
+        expect([...commands.keys()]).toHaveLength(3);
+        expect([...commands.keys()]).toEqual(expect.arrayContaining(["bar", "f", "foo"]));
         expect(commands.get("f")).toBe(commands.get("foo"));
     });
 

@@ -6,7 +6,7 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { isMovieNightAdmin } from "../../movies/MovieSelector.js";
 
 const moviehelp: Command = {
-    name: 'moviehelp',
+    name: "moviehelp",
     description: "Learn how movie nights work and what commands can be used.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.Everyone],
@@ -15,7 +15,13 @@ const moviehelp: Command = {
         .setName("moviehelp")
         .setDescription("Learn how movie nights work and what commands can be used."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -27,38 +33,37 @@ const moviehelp: Command = {
 
         const isPrivilegedUser = await isMovieNightAdmin(services, interaction);
 
-        const generalDescription = "BustinBot's **movie night system** helps the community host and vote on regular movie watch parties! Movies are added by users, selected by admins, random, or community polls, and watched together in the movie voice channel.";
+        const generalDescription =
+            "BustinBot's **movie night system** helps the community host and vote on regular movie watch parties! Movies are added by users, selected by admins, random, or community polls, and watched together in the movie voice channel.";
 
         const userCommands = [
             { name: "/addmovie", value: "Add a movie to the community watchlist (up to 3 active movies per user)." },
             { name: "/listmovies", value: "View the current unwatched movie list including who added each." },
             { name: "/viewmovie", value: "View details for a specific movie in the list." },
-            { name: "/currentmovie", value: "View details about an upcoming movie night."},
-            { name: "/removemovie", value: "Remove a movie you have added to the watchlist."},
-            { name: "/mymovies", value: "View all movies you have added to the watchlist."},
+            { name: "/currentmovie", value: "View details about an upcoming movie night." },
+            { name: "/removemovie", value: "Remove a movie you have added to the watchlist." },
+            { name: "/mymovies", value: "View all movies you have added to the watchlist." },
         ];
 
         const adminCommands = [
-            { name: "/moviesetup", value: "Configure movie-related channels and roles for the server."},
+            { name: "/moviesetup", value: "Configure movie-related channels and roles for the server." },
             { name: "/pickmovie", value: "Choose the next movie to watch by search, random roll or a community poll." },
-            { name: "/movienight", value: "Schedule and announce the next movie night."},
-            { name: "/cancelmovie", value: "Cancels a scheduled movie night and deselects the picked movie."},
-            { name: "/endmovie", value: "Manual override to finish a movie night (this should be automatic)."},
-            { name: "/closemoviepoll", value: "Manual override to end a movie poll early."}            
+            { name: "/movienight", value: "Schedule and announce the next movie night." },
+            { name: "/cancelmovie", value: "Cancels a scheduled movie night and deselects the picked movie." },
+            { name: "/endmovie", value: "Manual override to finish a movie night (this should be automatic)." },
+            { name: "/closemoviepoll", value: "Manual override to end a movie poll early." },
         ];
 
         const fields = [
             {
                 name: "🎞️ How It Works",
-                value: "Users can add up to 3 movies at a time to the community's watchlist. When a movie night is planned, admins will pick a movie from the list either directly, via a random roll or via a community poll of up to 5 movies from the list. Admins will schedule a date and time for the movie night in a public post and reminder notifications are automatically sent at 2 hours and at 30 mins before the start time. Once the movie ends, the bot marks it as watched and hides it from the watchlist, allowing the user who suggested it to add another movie in its place."
-            }
+                value: "Users can add up to 3 movies at a time to the community's watchlist. When a movie night is planned, admins will pick a movie from the list either directly, via a random roll or via a community poll of up to 5 movies from the list. Admins will schedule a date and time for the movie night in a public post and reminder notifications are automatically sent at 2 hours and at 30 mins before the start time. Once the movie ends, the bot marks it as watched and hides it from the watchlist, allowing the user who suggested it to add another movie in its place.",
+            },
         ];
 
         const visibleCommands = isPrivilegedUser ? [...userCommands, ...adminCommands] : userCommands;
 
-        const commandList = visibleCommands
-            .map((cmd) => `**${cmd.name}** - ${cmd.value}`)
-            .join("\n");
+        const commandList = visibleCommands.map((cmd) => `**${cmd.name}** - ${cmd.value}`).join("\n");
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
@@ -70,11 +75,11 @@ const moviehelp: Command = {
                 value: commandList,
             })
             .setFooter({
-                text: `BustinBot ${packageVersion} • Developed by dossyb`
+                text: `BustinBot ${packageVersion} • Developed by dossyb`,
             });
 
         await interaction.editReply({ embeds: [embed] });
-    }
+    },
 };
 
 export default moviehelp;

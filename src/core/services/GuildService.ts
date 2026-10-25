@@ -22,7 +22,7 @@ const DEFAULT_TASK_SETTINGS = {
 export class GuildService {
     private cache = new Map<string, Guild>();
 
-    constructor(private readonly repo: IGuildRepository) { }
+    constructor(private readonly repo: IGuildRepository) {}
 
     async get(guildId: string): Promise<Guild | null> {
         const cached = this.cache.get(guildId);
@@ -35,9 +35,7 @@ export class GuildService {
 
     async update(guildId: string, data: Partial<Guild>): Promise<void> {
         const existing = await this.get(guildId);
-        const mentionSuppressedUntilMs =
-            data.mentionSuppressedUntilMs ??
-            existing?.mentionSuppressedUntilMs;
+        const mentionSuppressedUntilMs = data.mentionSuppressedUntilMs ?? existing?.mentionSuppressedUntilMs;
 
         const defaultRoles = {
             admin: process.env.ADMIN_ROLE_NAME || "BustinBot Admin",
@@ -93,9 +91,7 @@ export class GuildService {
                 },
             },
             timezone: data.timezone ?? existing?.timezone ?? "UTC",
-            ...(mentionSuppressedUntilMs !== undefined
-                ? { mentionSuppressedUntilMs }
-                : {}),
+            ...(mentionSuppressedUntilMs !== undefined ? { mentionSuppressedUntilMs } : {}),
         };
 
         const meta: Partial<Pick<Guild, "updatedBy" | "updatedAt">> = {};
@@ -149,9 +145,9 @@ export class GuildService {
         const guildId = source.guildId;
         if (!guildId) {
             if (source instanceof Message) {
-                await source.reply('This command can only be used inside a server.');
+                await source.reply("This command can only be used inside a server.");
             } else {
-                await source.reply({ content: 'This command can only be used inside a server.', flags: 1 << 6 });
+                await source.reply({ content: "This command can only be used inside a server.", flags: 1 << 6 });
             }
             return null;
         }
@@ -159,7 +155,7 @@ export class GuildService {
         const guildConfig = await this.get(guildId);
 
         if (!guildConfig) {
-            const replyContent = 'Guild configuration not found. Please run `/setup` first.';
+            const replyContent = "Guild configuration not found. Please run `/setup` first.";
 
             if (source instanceof Message) {
                 await source.reply(replyContent);
@@ -181,5 +177,4 @@ export class GuildService {
         }
         return guild;
     }
-
 }

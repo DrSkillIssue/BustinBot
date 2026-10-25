@@ -2,10 +2,10 @@ import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import cron from "node-cron";
-import { ChannelType, ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ChannelType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, storePollableTasks, test, vi } from "../fixtures.js";
-import { DiscordError } from "../discord/harness.js";
-import { IDS, AS, chatInputInteraction } from "../discord/payloads.js";
+import { firestoreUnavailable } from "../firestoreEmulator.js";
+import { DiscordError, IDS, AS, chatInputInteraction, subcommand } from "../discord/payloads.js";
 import { TaskCategory } from "../../src/models/Task.js";
 import { configuredChannel } from "../../src/utils/ChannelUtils.js";
 import {
@@ -43,8 +43,7 @@ describe("task scheduler", () => {
     test("logs a job that fails under the job's name", async ({ discord, services }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         await initTaskScheduler(discord.client, services);
-        // The emulator can't be made to fail one read, so the guild read fails the way an unreachable Firestore fails it
-        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        const unavailable = firestoreUnavailable();
         vi.spyOn(services.guilds, "get").mockRejectedValueOnce(unavailable);
 
         const poll = taskSchedulerJobs(IDS.guild).get("poll");
@@ -102,7 +101,10 @@ describe("the dev-mode task cycle", () => {
             atMinute(7),
             DateTime.fromJSDate(atMinute(7)).plus({ weeks: 2 }).toJSDate(),
         );
-        expect(started.map((event) => event.task.id).sort()).toEqual(polls.map((poll) => poll?.options[0]?.id).sort());
+        expect(started).toHaveLength(polls.length);
+        expect(started.map((event) => event.task.id)).toEqual(
+            expect.arrayContaining(polls.map((poll) => poll?.options[0]?.id)),
+        );
     });
 
     test("draws the prize one minute after every other 7-minute mark", async ({ discord, services }) => {
@@ -134,7 +136,7 @@ describe("the dev-mode task cycle", () => {
 
         expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
         expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
-        expect(discord.requests()).toEqual([]);
+        expect(discord.requests).toEqual([]);
     });
 });
 
@@ -142,7 +144,7 @@ describe("the task channel", () => {
     test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
         const category = SnowflakeUtil.generate().toString();
         await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
-        discord.channel({
+        discord.serveChannel({
             id: category,
             type: ChannelType.GuildCategory,
             guild_id: IDS.guild,
@@ -172,13 +174,7 @@ describe("the task channel", () => {
 
 describe("/tasktoggle schedule", () => {
     test("starts this guild's task jobs and saves the toggle", async ({ discord, interact, services }) => {
-        const interaction = await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-                AS.botAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("tasktoggle", [subcommand("schedule")], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
@@ -189,21 +185,9 @@ describe("/tasktoggle schedule", () => {
 
     test("stops only this guild's task jobs when switched off", async ({ discord, interact, otherGuild, services }) => {
         await initTaskScheduler(discord.client, otherGuild);
-        await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-                AS.botAdmin,
-            ),
-        );
+        await interact(chatInputInteraction("tasktoggle", [subcommand("schedule")], AS.botAdmin));
 
-        const interaction = await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-                AS.botAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("tasktoggle", [subcommand("schedule")], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "⏹️ Task scheduler **disabled** and stopped for this guild." }),
@@ -217,13 +201,7 @@ describe("/tasktoggle schedule", () => {
         const { toggles: _toggles, ...withoutToggles } = guildFactory.build();
         await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
 
-        const interaction = await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
-                AS.botAdmin,
-            ),
-        );
+        const interaction = await interact(chatInputInteraction("tasktoggle", [subcommand("schedule")], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
@@ -236,25 +214,13 @@ describe("/tasktoggle leaderboard", () => {
     test("switches periodic leaderboard automation off and back on", async ({ discord, interact, services }) => {
         await services.guilds.updateToggle(IDS.guild, "toggles.taskLeaderboard", true, IDS.user);
 
-        const off = await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
-                AS.botAdmin,
-            ),
-        );
+        const off = await interact(chatInputInteraction("tasktoggle", [subcommand("leaderboard")], AS.botAdmin));
         expect(discord.originalEdits(off)).toEqual([
             expect.objectContaining({ content: "🧊 Periodic leaderboard automation **disabled** (read-only mode)." }),
         ]);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskLeaderboard).toBe(false);
 
-        const on = await interact(
-            chatInputInteraction(
-                "tasktoggle",
-                [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
-                AS.botAdmin,
-            ),
-        );
+        const on = await interact(chatInputInteraction("tasktoggle", [subcommand("leaderboard")], AS.botAdmin));
         expect(discord.originalEdits(on)).toEqual([
             expect.objectContaining({ content: "🏆 Periodic leaderboard automation **enabled**." }),
         ]);

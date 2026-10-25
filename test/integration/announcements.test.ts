@@ -10,8 +10,14 @@ import {
     RESTJSONErrorCodes,
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../fixtures.js";
-import { PRIVATE_DEFERRAL, DiscordError } from "../discord/harness.js";
-import { AS, IDS, chatInputInteraction, apiMember, apiResolvedChannel } from "../discord/payloads.js";
+import {
+    AS,
+    DiscordError,
+    IDS,
+    chatInputInteraction,
+    apiResolvedChannel,
+    PRIVATE_DEFERRAL,
+} from "../discord/payloads.js";
 import { packageVersion } from "../../src/utils/version.js";
 import { SnowflakeUtil } from "discord.js";
 
@@ -68,17 +74,22 @@ describe("/announce", () => {
 
     test("tells the admin when no announcement channel is configured", async ({ discord, interact, services }) => {
         await services.guilds.update(IDS.guild, { channels: { announcements: "" } });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Announcement channel not configured. Please run `/setup` first." }),
         ]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The announcements channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
     });
 
     test("tells the admin when the configured channel can't be reached", async ({ discord, interact, services }) => {
         await services.guilds.update(IDS.guild, { channels: { announcements: IDS.missingChannel } });
         discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
 
@@ -87,6 +98,9 @@ describe("/announce", () => {
                 content: `I can't reach the announcement channel <#${IDS.missingChannel}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`,
             }),
         ]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The announcements channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
     });
 });
 
@@ -123,7 +137,7 @@ describe("/sendas", () => {
                     { type: ApplicationCommandOptionType.Channel, name: "channel", value: IDS.channel },
                     { type: ApplicationCommandOptionType.String, name: "message", value: "Hello" },
                 ],
-                { member: apiMember() },
+                {},
                 { channels: { [IDS.channel]: apiResolvedChannel() } },
             ),
         );

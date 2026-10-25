@@ -37,7 +37,7 @@ export interface MovieEvent {
     pollResults?: {
         movieId: string;
         votes: number;
-    }
+    };
 
     // Discord user ID of the host or organiser
     hostedBy: string;

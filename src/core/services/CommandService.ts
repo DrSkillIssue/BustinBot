@@ -1,7 +1,7 @@
-import path from 'path';
-import { readdirSync, statSync } from 'fs';
-import { pathToFileURL } from 'url';
-import type { Command } from '../../models/Command.js';
+import path from "path";
+import { readdirSync, statSync } from "fs";
+import { pathToFileURL } from "url";
+import type { Command } from "../../models/Command.js";
 
 async function loadCommandFiles(dir: string, commandMap: Map<string, Command>): Promise<void> {
     const entries = readdirSync(dir);

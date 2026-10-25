@@ -1,13 +1,9 @@
 import path from "node:path";
 import type { Interaction, Message } from "discord.js";
-import type {
-    APIInteraction,
-    GatewayMessageCreateDispatchData,
-    GatewayVoiceStateUpdateDispatchData,
-} from "discord-api-types/v10";
-import type { DateTime } from "luxon";
+import type { APIInteraction, GatewayVoiceStateUpdateDispatchData } from "discord-api-types/v10";
+import { DateTime } from "luxon";
 import { test as base } from "vitest";
-import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
+import { getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { createServiceContainer } from "../src/core/services/ServiceFactory.js";
 import { BotStatsService } from "../src/core/services/BotStatsService.js";
 import { BotRepository } from "../src/core/database/BotRepo.js";
@@ -16,11 +12,12 @@ import { routeInteraction } from "../src/core/events/routeInteraction.js";
 import { handleMessage } from "../src/core/events/onMessage.js";
 import { GuildRepository } from "../src/core/database/GuildRepo.js";
 import type { ServiceContainer } from "../src/core/services/ServiceContainer.js";
-import { Skill, TaskCategory } from "../src/models/Task.js";
+import { Skill, TaskCategory, type Task } from "../src/models/Task.js";
+import type { TaskEvent } from "../src/models/TaskEvent.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
-import { IDS, apiGuild, messageCreate } from "./discord/payloads.js";
-import { newEmulatorDatabase } from "./firestoreEmulator.js";
+import { IDS, apiGuild, apiRole, messageCreate, type MessageCreateParams } from "./discord/payloads.js";
+import { newEmulatorDatabase, offlineAgent } from "./firestoreEmulator.js";
 import {
     guildFactory,
     keywordFactory,
@@ -38,61 +35,37 @@ import {
     userStatsFactory,
 } from "./factories.js";
 
+function saved<T>(save: (value: T) => Promise<unknown>): (value: T) => Promise<T> {
+    return async (value) => {
+        await save(value);
+        return value;
+    };
+}
+
 function storingFactories(db: Firestore, services: ServiceContainer) {
     const { repos } = services;
     return {
-        task: taskFactory.onCreate(async (task) => {
-            await repos.taskRepo.createTask(task);
-            return task;
-        }),
-        taskEvent: taskEventFactory.onCreate(async (event) => {
-            await repos.taskRepo.createTaskEvent(event);
-            return event;
-        }),
-        taskPoll: taskPollFactory.onCreate(async (poll) => {
-            await repos.taskRepo.createTaskPoll(poll);
-            return poll;
-        }),
-        taskSubmission: taskSubmissionFactory.onCreate(async (submission) => {
-            await repos.taskRepo.createSubmission(submission);
-            return submission;
-        }),
-        submissionDraft: submissionDraftFactory.onCreate(async (draft) => {
-            await repos.taskRepo.saveSubmissionDraft(draft);
-            return draft;
-        }),
-        userStats: userStatsFactory.onCreate(async (stats) => {
-            await repos.userRepo.createUser(stats);
-            return stats;
-        }),
-        periodicLeaderboard: periodicLeaderboardFactory.onCreate(async (board) => {
-            await repos.taskLeaderboardRepo.createLeaderboard(board);
-            return board;
-        }),
-        lifetimeLeaderboard: lifetimeLeaderboardFactory.onCreate(async (board) => {
-            await repos.taskLeaderboardRepo.createLeaderboard(board);
-            return board;
-        }),
-        prizeDraw: prizeDrawFactory.onCreate(async (draw) => {
-            await repos.prizeRepo.createPrizeDraw(draw);
-            return draw;
-        }),
-        movie: movieFactory.onCreate(async (movie) => {
-            await repos.movieRepo.upsertMovie(movie);
-            return movie;
-        }),
-        movieEvent: movieEventFactory.onCreate(async (event) => {
-            await repos.movieRepo.createMovieEvent(event);
-            return event;
-        }),
-        moviePoll: moviePollFactory.onCreate(async (poll) => {
-            await repos.movieRepo.createPoll(poll);
-            return poll;
-        }),
-        keyword: keywordFactory.onCreate(async (keyword) => {
-            await db.doc(`guilds/${services.guildId}/keywords/${keyword.id}`).set(keyword);
-            return keyword;
-        }),
+        task: taskFactory.onCreate(saved((task) => repos.taskRepo.createTask(task))),
+        taskEvent: taskEventFactory.onCreate(saved((event) => repos.taskRepo.createTaskEvent(event))),
+        taskPoll: taskPollFactory.onCreate(saved((poll) => repos.taskRepo.createTaskPoll(poll))),
+        taskSubmission: taskSubmissionFactory.onCreate(
+            saved((submission) => repos.taskRepo.createSubmission(submission)),
+        ),
+        submissionDraft: submissionDraftFactory.onCreate(saved((draft) => repos.taskRepo.saveSubmissionDraft(draft))),
+        userStats: userStatsFactory.onCreate(saved((stats) => repos.userRepo.createUser(stats))),
+        periodicLeaderboard: periodicLeaderboardFactory.onCreate(
+            saved((board) => repos.taskLeaderboardRepo.createLeaderboard(board)),
+        ),
+        lifetimeLeaderboard: lifetimeLeaderboardFactory.onCreate(
+            saved((board) => repos.taskLeaderboardRepo.createLeaderboard(board)),
+        ),
+        prizeDraw: prizeDrawFactory.onCreate(saved((draw) => repos.prizeRepo.createPrizeDraw(draw))),
+        movie: movieFactory.onCreate(saved((movie) => repos.movieRepo.upsertMovie(movie))),
+        movieEvent: movieEventFactory.onCreate(saved((event) => repos.movieRepo.createMovieEvent(event))),
+        moviePoll: moviePollFactory.onCreate(saved((poll) => repos.movieRepo.createPoll(poll))),
+        keyword: keywordFactory.onCreate(
+            saved((keyword) => db.doc(`guilds/${services.guildId}/keywords/${keyword.id}`).set(keyword)),
+        ),
     };
 }
 
@@ -113,29 +86,87 @@ export async function storeWeeks(factories: StoringFactories, firstStart: DateTi
     return ids;
 }
 
+export async function storeRunningEvent(
+    factories: StoringFactories,
+    event: Parameters<StoringFactories["taskEvent"]["create"]>[0] = {},
+): Promise<TaskEvent> {
+    const task = await factories.task.create(event.task);
+    return factories.taskEvent.running().create({ channelId: IDS.channel, ...event, task });
+}
+
+export async function storePeriodic(
+    factories: StoringFactories,
+    board: Parameters<StoringFactories["periodicLeaderboard"]["create"]>[0] = {},
+): Promise<void> {
+    await factories.periodicLeaderboard.create(board);
+    await factories.lifetimeLeaderboard.create();
+}
+
+export async function storeFinishedPeriod(
+    factories: StoringFactories,
+    board: Parameters<StoringFactories["periodicLeaderboard"]["create"]>[0] = {},
+): Promise<void> {
+    const eventIds = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+        "week-1",
+        "week-2",
+        "week-3",
+        "week-4",
+    ]);
+    await storePeriodic(factories, { ...board, period: { length: eventIds.length, eventIds, ...board.period } });
+}
+
+export function championRoles() {
+    return {
+        first: apiRole({ name: "Task Champion (1st)" }),
+        second: apiRole({ name: "Task Champion (2nd)" }),
+        third: apiRole({ name: "Task Champion (3rd)" }),
+    };
+}
+
+export async function addChampionRoles(
+    discord: DiscordHarness,
+    services: ServiceContainer,
+    { configured = true } = {},
+): Promise<ReturnType<typeof championRoles>> {
+    const roles = championRoles();
+    for (const role of Object.values(roles)) await discord.addRole(IDS.guild, role);
+    await services.guilds.update(IDS.guild, {
+        roles: {
+            taskChampionFirst: configured ? roles.first.id : "",
+            taskChampionSecond: configured ? roles.second.id : "",
+            taskChampionThird: configured ? roles.third.id : "",
+        },
+    });
+    return roles;
+}
+
 export async function storePollableTasks(
     factories: StoringFactories,
     categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc],
-): Promise<void> {
+): Promise<Task[]> {
+    const tasks: Task[] = [];
     for (const category of categories) {
         for (const [index, skill] of POLL_SKILLS.entries()) {
-            await factories.task.create({
-                id: `${TASK_ID_PREFIXES[category]}00${index + 1}`,
-                category,
-                ...(category === TaskCategory.Skilling ? { skill } : {}),
-            });
+            tasks.push(
+                await factories.task.create({
+                    id: `${TASK_ID_PREFIXES[category]}00${index + 1}`,
+                    category,
+                    ...(category === TaskCategory.Skilling ? { skill } : {}),
+                }),
+            );
         }
     }
+    return tasks;
 }
+
+export const COMMANDS_DIR = path.join(import.meta.dirname, "../src/modules/commands");
 
 export type Interact = (payload: APIInteraction) => Promise<Interaction>;
 
 export const test = base
     .extend("http", ({}, { onCleanup }) => {
         const offline = getGlobalDispatcher();
-        const agent = new MockAgent({ enableCallHistory: true });
-        agent.disableNetConnect();
-        if (process.env.FIRESTORE_EMULATOR_HOST) agent.enableNetConnect(process.env.FIRESTORE_EMULATOR_HOST);
+        const agent = offlineAgent();
         setGlobalDispatcher(agent);
         onCleanup(async () => {
             setGlobalDispatcher(offline);
@@ -151,8 +182,9 @@ export const test = base
         return agent;
     })
     .extend("discord", async ({ http }, { onCleanup }) => {
-        const discord = await DiscordHarness.start(http);
-        onCleanup(() => discord.destroy());
+        const discord = new DiscordHarness(http);
+        await discord.connect();
+        onCleanup(() => discord.client.destroy());
         return discord;
     })
     .extend("openDatabases", { scope: "file" }, ({}, { onCleanup }) => {
@@ -187,25 +219,23 @@ export const test = base
     })
     .extend("uncachedGuild", async ({ db, discord }) => {
         await new GuildRepository(db).initGuild(IDS.uncachedGuild, guildFactory.build({ id: IDS.uncachedGuild }));
-        discord.guild(apiGuild({ id: IDS.uncachedGuild }));
+        discord.serveGuild(apiGuild({ id: IDS.uncachedGuild }));
         return { guild_id: IDS.uncachedGuild };
     })
-    .extend("commands", { scope: "file" }, () =>
-        loadCommands(path.join(import.meta.dirname, "../src/modules/commands")),
-    )
+    .extend("commands", { scope: "file" }, () => loadCommands(COMMANDS_DIR))
     .extend("interact", ({ discord, services, commands }): Interact => async (payload) => {
-        const interaction = await discord.dispatch(payload);
+        const interaction = await discord.sendInteraction(payload);
         await routeInteraction(interaction, discord.client, commands, services);
         return interaction;
     })
     .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {
-        const [oldState, newState] = await discord.voiceStateUpdate(state);
+        const [oldState, newState] = await discord.updateVoiceState(state);
         services.movieAttendance.voiceStateChanged(oldState, newState);
     })
     .extend(
         "prefix",
         ({ discord, services, commands }) =>
-            async (content: string, overrides: Partial<GatewayMessageCreateDispatchData> = {}): Promise<Message> => {
+            async (content: string, overrides: MessageCreateParams = {}): Promise<Message> => {
                 const message = await discord.sendMessage(messageCreate(content, overrides));
                 await handleMessage(message, commands, services);
                 return message;

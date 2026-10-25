@@ -1,7 +1,15 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits } from "discord.js";
+import {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonInteraction,
+    ButtonStyle,
+    ChatInputCommandInteraction,
+    MessageFlags,
+    PermissionFlagsBits,
+} from "discord.js";
 import { randomUUID } from "node:crypto";
 import { createMovieEmbed, createMoviePreviewEmbeds } from "./MovieEmbeds.js";
-import { addMovieWithStats, fetchMovieDetailsById, type TMDbSearchResponse } from "./MovieService.js";
+import { addMovieWithStats, fetchMovieDetailsById, searchMovies } from "./MovieService.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { memberRoleIds } from "../../utils/MemberUtils.js";
@@ -10,7 +18,10 @@ export const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
 export const ADD_MOVIE_BUTTON = "addmovie|";
 
-export async function isMovieNightAdmin(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<boolean> {
+export async function isMovieNightAdmin(
+    services: ServiceContainer,
+    interaction: ChatInputCommandInteraction | ButtonInteraction,
+): Promise<boolean> {
     if (interaction.guild?.ownerId === interaction.user.id) return true;
     if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
 
@@ -19,7 +30,11 @@ export async function isMovieNightAdmin(services: ServiceContainer, interaction:
     return [roles.admin, roles.movieAdmin].some((roleId) => !!roleId && roleIds.includes(roleId));
 }
 
-export async function checkCanAddMovie(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction, tmdbId?: number): Promise<string | null> {
+export async function checkCanAddMovie(
+    services: ServiceContainer,
+    interaction: ChatInputCommandInteraction | ButtonInteraction,
+    tmdbId?: number,
+): Promise<string | null> {
     const movies = await services.repos.movieRepo.getAllMovies();
     const active = movies.filter((movie) => !movie.watched);
 
@@ -36,33 +51,32 @@ export async function checkCanAddMovie(services: ServiceContainer, interaction: 
     return null;
 }
 
-export async function presentMovieSelection(interaction: ChatInputCommandInteraction, query: string, year?: number, maxResults = 3): Promise<void> {
-    const TMDB_API_KEY = process.env.TMDB_API_KEY;
-    const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}${year ? `&year=${year}` : ''}`;
-    const response = await fetch(searchUrl);
-    const data = await response.json() as TMDbSearchResponse;
-
-    if (!data?.results?.length) {
+export async function presentMovieSelection(
+    interaction: ChatInputCommandInteraction,
+    query: string,
+    year?: number,
+    maxResults = 3,
+): Promise<void> {
+    const results = await searchMovies(query, year);
+    if (!results.length) {
         await interaction.editReply(`No results found for "${query}".`);
         return;
     }
 
-    const topResults = data.results.slice(0, maxResults);
+    const topResults = results.slice(0, maxResults);
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         ...topResults.map((result, i) =>
             new ButtonBuilder()
                 .setCustomId(`${ADD_MOVIE_BUTTON}select|${result.id}`)
                 .setLabel(`${i + 1}`)
-                .setStyle(ButtonStyle.Primary)
+                .setStyle(ButtonStyle.Primary),
         ),
-        new ButtonBuilder()
-            .setCustomId(`${ADD_MOVIE_BUTTON}cancel`)
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`${ADD_MOVIE_BUTTON}cancel`).setLabel("Cancel").setStyle(ButtonStyle.Danger),
     );
 
     await interaction.editReply({
-        content: "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.",
+        content:
+            "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.",
         embeds: createMoviePreviewEmbeds(topResults),
         components: [buttons],
     });
@@ -71,7 +85,7 @@ export async function presentMovieSelection(interaction: ChatInputCommandInterac
 export async function handleAddMovieButton(services: ServiceContainer, interaction: ButtonInteraction): Promise<void> {
     const [, action, id] = interaction.customId.split("|");
     if (action === "cancel") {
-        await interaction.update({ content: 'Cancelled movie selection.', components: [], embeds: [] });
+        await interaction.update({ content: "Cancelled movie selection.", components: [], embeds: [] });
         return;
     }
 
@@ -86,7 +100,10 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
     // Fetch full metadata from TMDb
     const metadata = await fetchMovieDetailsById(tmdbId);
     if (!metadata?.title) {
-        await interaction.followUp({ content: `Could not fetch details for that movie.`, flags: MessageFlags.Ephemeral });
+        await interaction.followUp({
+            content: `Could not fetch details for that movie.`,
+            flags: MessageFlags.Ephemeral,
+        });
         return;
     }
 
@@ -115,6 +132,6 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
     const embed = createMovieEmbed(movie)
         .setTitle(`Added: ${movie.title}`)
         .setFooter({ text: `Added by ${interaction.user.username}` });
-    await interaction.editReply({ content: '', embeds: [embed], components: [] });
+    await interaction.editReply({ content: "", embeds: [embed], components: [] });
     console.log(`[AddMovie] Added "${movie.title}" by ${interaction.user.username}`);
 }

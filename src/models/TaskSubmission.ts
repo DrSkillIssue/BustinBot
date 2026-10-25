@@ -1,10 +1,10 @@
 export enum SubmissionStatus {
-    Pending = 'pending',
-    Approved = 'approved',
-    Rejected = 'rejected',
-    Bronze = 'bronze',
-    Silver = 'silver',
-    Gold = 'gold',
+    Pending = "pending",
+    Approved = "approved",
+    Rejected = "rejected",
+    Bronze = "bronze",
+    Silver = "silver",
+    Gold = "gold",
 }
 
 export interface TaskSubmission {
@@ -54,7 +54,7 @@ export interface TaskSubmission {
 }
 
 export const TIERS = [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold] as const;
-export type SubmissionTier = typeof TIERS[number];
+export type SubmissionTier = (typeof TIERS)[number];
 
 export function isTier(status: SubmissionStatus): status is SubmissionTier {
     return (TIERS as readonly SubmissionStatus[]).includes(status);
@@ -65,7 +65,9 @@ export function tierRank(tier: SubmissionTier | null): number {
 }
 
 export function highestTier(statuses: SubmissionStatus[]): SubmissionTier | null {
-    return statuses.filter(isTier).reduce<SubmissionTier | null>((best, tier) => (tierRank(tier) > tierRank(best) ? tier : best), null);
+    return statuses
+        .filter(isTier)
+        .reduce<SubmissionTier | null>((best, tier) => (tierRank(tier) > tierRank(best) ? tier : best), null);
 }
 
 export interface TaskSubmissionDraft {
@@ -75,8 +77,7 @@ export interface TaskSubmissionDraft {
 }
 
 export type SubmissionReview = { submissionId: string; reviewedBy: string } & (
-    | { decision: SubmissionTier }
-    | { decision: SubmissionStatus.Rejected; rejectionReason: string }
+    { decision: SubmissionTier } | { decision: SubmissionStatus.Rejected; rejectionReason: string }
 );
 
 export type SubmissionReviewOutcome =

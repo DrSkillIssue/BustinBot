@@ -1,12 +1,10 @@
 import cron from "node-cron";
-import { MockAgent, setGlobalDispatcher } from "undici";
+import { setGlobalDispatcher } from "undici";
 import { afterEach, vi } from "vitest";
 import failOnConsole from "vitest-fail-on-console";
+import { offlineAgent } from "./firestoreEmulator.js";
 
-const offline = new MockAgent();
-offline.disableNetConnect();
-if (process.env.FIRESTORE_EMULATOR_HOST) offline.enableNetConnect(process.env.FIRESTORE_EMULATOR_HOST);
-setGlobalDispatcher(offline);
+setGlobalDispatcher(offlineAgent());
 
 failOnConsole({ shouldPrintMessage: true });
 

@@ -7,13 +7,10 @@ import {
     PermissionFlagsBits,
     type APIEmbed,
 } from "discord-api-types/v10";
-import { DateTime } from "luxon";
 import { describe, expect, type StoringFactories, test } from "../fixtures.js";
-import { componentsIn } from "../discord/harness.js";
 import {
     AS,
     IDS,
-    apiMember,
     apiMessage,
     apiUser,
     buttonInteraction,
@@ -70,9 +67,8 @@ describe("a movie poll", () => {
         const posted = discord
             .messagesSentTo(IDS.channel)
             .find((message) => message.content?.startsWith("📊 **Vote for the next movie night pick!**"));
-        expect(componentsIn(posted?.components).map((button) => button.customId)).toEqual([
-            "movie_vote_0",
-            "movie_vote_1",
+        expect(posted?.components).toMatchObject([
+            { components: [{ custom_id: "movie_vote_0" }, { custom_id: "movie_vote_1" }] },
         ]);
         expect(posted?.embeds?.map((embed) => embed.title)).toEqual(["Inception", "Arrival"]);
         const poll = await services.repos.movieRepo.getActivePoll();
@@ -142,10 +138,7 @@ describe("choosing the movie for movie night", () => {
         factories,
     }) => {
         await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }]);
-        await factories.movieEvent.create({
-            startTime: DateTime.now().plus({ days: 1 }).toJSDate(),
-            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
-        });
+        await factories.movieEvent.upcoming().create({ movie: { id: UNPICKED_MOVIE_ID, title: "TBD" } });
         await services.guilds.update(IDS.guild, { channels: { movieVC: VOICE } });
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
@@ -222,13 +215,22 @@ describe("/pickmovie", () => {
     }) => {
         await storeMovies(factories, [{ title: "Inception" }]);
         const command = await interact(chatInputInteraction("pickmovie", [], AS.movieAdmin));
-        const offered = componentsIn(discord.originalEdits(command)[0]?.components).map((button) => button.customId);
+        const [offered] = discord.originalEdits(command);
 
         const choose = await interact(buttonInteraction("movie_pick_choose", pickMessage, AS.movieAdmin));
         const random = await interact(buttonInteraction("movie_pick_random", pickMessage, AS.movieAdmin));
         const pollRandom = await interact(buttonInteraction("movie_poll_random", pickMessage, AS.movieAdmin));
 
-        expect(offered).toEqual(["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"]);
+        expect(offered?.components).toMatchObject([
+            {
+                components: [
+                    { custom_id: "movie_pick_choose" },
+                    { custom_id: "movie_pick_random" },
+                    { custom_id: "movie_poll_random" },
+                    { custom_id: "movie_poll_manual" },
+                ],
+            },
+        ]);
         expect(discord.modal(choose)?.custom_id).toBe("movie_pick_choose_modal");
         expect(discord.originalEdits(random)).toEqual([
             expect.objectContaining({
@@ -236,10 +238,14 @@ describe("/pickmovie", () => {
                 embeds: [expect.objectContaining({ title: "🎲 Inception" })],
             }),
         ]);
-        expect(componentsIn(discord.reply(pollRandom)?.components)).toMatchObject([
+        expect(discord.reply(pollRandom)?.components).toMatchObject([
             {
-                customId: "movie_poll_random_count",
-                options: [{ value: "2" }, { value: "3" }, { value: "4" }, { value: "5" }],
+                components: [
+                    {
+                        custom_id: "movie_poll_random_count",
+                        options: [{ value: "2" }, { value: "3" }, { value: "4" }, { value: "5" }],
+                    },
+                ],
             },
         ]);
     });
@@ -259,19 +265,14 @@ describe("/pickmovie", () => {
         );
         const confirm = await interact(buttonInteraction("movie_poll_manual_confirm", pickMessage, AS.movieAdmin));
 
-        expect(
-            componentsIn(discord.originalEdits(open)[0]?.components)[0]?.options?.map((option) => option.label),
-        ).toEqual(["1. Inception", "2. Arrival"]);
-        expect(
-            componentsIn(discord.originalEdits(open)[0]?.components).find(
-                (button) => button.customId === "movie_poll_manual_confirm",
-            ),
-        ).toMatchObject({ disabled: true });
-        expect(
-            componentsIn(discord.originalEdits(choose)[0]?.components).find(
-                (button) => button.customId === "movie_poll_manual_confirm",
-            ),
-        ).toMatchObject({ disabled: false });
+        expect(discord.originalEdits(open)[0]?.components).toMatchObject([
+            { components: [{ options: [{ label: "1. Inception" }, { label: "2. Arrival" }] }] },
+            { components: [{}, {}, { custom_id: "movie_poll_manual_confirm", disabled: true }, {}] },
+        ]);
+        expect(discord.originalEdits(choose)[0]?.components).toMatchObject([
+            {},
+            { components: [{}, {}, { custom_id: "movie_poll_manual_confirm", disabled: false }, {}] },
+        ]);
         expect(discord.originalEdits(confirm)).toEqual([
             expect.objectContaining({ content: "Poll confirmed and posted!" }),
         ]);
@@ -319,21 +320,29 @@ describe("/listmovies", () => {
         );
 
         expect(firstPage?.embeds?.map((embed) => embed.title)).toEqual(["1. Inception", "2. Arrival", "3. Heat"]);
-        expect(componentsIn(firstPage?.components).map((button) => button.customId)).toEqual([
-            "listmovies|start|0",
-            "listmovies|prev|-1",
-            "listmovies|next|1",
-            "listmovies|end|1",
+        expect(firstPage?.components).toMatchObject([
+            {
+                components: [
+                    { custom_id: "listmovies|start|0" },
+                    { custom_id: "listmovies|prev|-1" },
+                    { custom_id: "listmovies|next|1" },
+                    { custom_id: "listmovies|end|1" },
+                ],
+            },
         ]);
         expect(discord.callbacks(next)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         const [secondPage] = discord.originalEdits(next);
         expect(secondPage?.embeds?.map((embed) => embed.title)).toEqual(["4. Alien"]);
-        expect(
-            componentsIn(secondPage?.components).find((button) => button.customId === "listmovies|end|1"),
-        ).toMatchObject({ disabled: true });
-        expect(
-            componentsIn(secondPage?.components).find((button) => button.customId === "listmovies|prev|0"),
-        ).toMatchObject({ disabled: false });
+        expect(secondPage?.components).toMatchObject([
+            {
+                components: [
+                    {},
+                    { custom_id: "listmovies|prev|0", disabled: false },
+                    {},
+                    { custom_id: "listmovies|end|1", disabled: true },
+                ],
+            },
+        ]);
     });
 
     test("says the queue is empty when every movie has been watched", async ({ discord, interact, factories }) => {
@@ -357,12 +366,12 @@ describe("the movie list", () => {
         factories,
     }) => {
         await storeMovies(factories, [{ title: "Inception" }, { title: "Arrival" }]);
-        const someoneElse = { member: apiMember({ user: apiUser({ id: SnowflakeUtil.generate().toString() }) }) };
+        const someoneElse = { member: { user: { id: SnowflakeUtil.generate().toString() } } };
         const admin = {
-            member: apiMember({
-                user: apiUser({ id: SnowflakeUtil.generate().toString() }),
+            member: {
+                user: { id: SnowflakeUtil.generate().toString() },
                 permissions: String(PermissionFlagsBits.Administrator),
-            }),
+            },
         };
 
         const refused = await interact(
@@ -383,7 +392,7 @@ describe("the movie list", () => {
             chatInputInteraction(
                 "removemovie",
                 [{ type: ApplicationCommandOptionType.String, name: "title", value: "Arrival" }],
-                { member: apiMember({ user: apiUser({ id: SUBMITTER }) }) },
+                { member: { user: { id: SUBMITTER } } },
             ),
         );
 

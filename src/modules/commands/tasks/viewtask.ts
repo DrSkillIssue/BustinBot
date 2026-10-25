@@ -1,36 +1,39 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import type { Command } from '../../../models/Command.js';
-import { CommandModule, CommandRole } from '../../../models/Command.js';
-import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
-import { buildTaskInfoEmbed } from '../../tasks/TaskEmbeds.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import type { Command } from "../../../models/Command.js";
+import { CommandModule, CommandRole } from "../../../models/Command.js";
+import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
+import { buildTaskInfoEmbed } from "../../tasks/TaskEmbeds.js";
 
 const viewtask: Command = {
-    name: 'viewtask',
-    description: 'View details for a specific task by ID or name.',
+    name: "viewtask",
+    description: "View details for a specific task by ID or name.",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.Everyone],
 
     slashData: new SlashCommandBuilder()
-        .setName('viewtask')
-        .setDescription('View details for a specific task by ID or name.')
+        .setName("viewtask")
+        .setDescription("View details for a specific task by ID or name.")
         .addStringOption((option) =>
-            option
-                .setName('search')
-                .setDescription('Task ID or task name.')
-                .setRequired(true)
+            option.setName("search").setDescription("Task ID or task name.").setRequired(true),
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
         const taskRepo = services.repos.taskRepo;
 
-        const query = interaction.options.getString('search', true);
+        const query = interaction.options.getString("search", true);
         const tasks = await taskRepo.getAllTasks();
         if (!tasks.length) {
-            await interaction.editReply('No tasks were found in the database.');
+            await interaction.editReply("No tasks were found in the database.");
             return;
         }
 

@@ -1,16 +1,7 @@
 import { SnowflakeUtil } from "discord.js";
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, type StoringFactories, test } from "../fixtures.js";
-import { componentsIn } from "../discord/harness.js";
-import {
-    AS,
-    IDS,
-    apiMember,
-    apiMessage,
-    apiUser,
-    buttonInteraction,
-    chatInputInteraction,
-} from "../discord/payloads.js";
+import { AS, IDS, apiMessage, buttonInteraction, chatInputInteraction } from "../discord/payloads.js";
 import { tmdbMovie, tmdbSearch } from "../tmdb.js";
 import { movieFactory } from "../factories.js";
 
@@ -42,10 +33,14 @@ describe("/addmovie", () => {
             "The Matrix (1999)",
             "The Matrix Reloaded (2003)",
         ]);
-        expect(componentsIn(results?.components).map((component) => component.customId)).toEqual([
-            "addmovie|select|603",
-            "addmovie|select|604",
-            "addmovie|cancel",
+        expect(results?.components).toMatchObject([
+            {
+                components: [
+                    { custom_id: "addmovie|select|603" },
+                    { custom_id: "addmovie|select|604" },
+                    { custom_id: "addmovie|cancel" },
+                ],
+            },
         ]);
         expect(discord.callbacks(pick)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         expect(discord.originalEdits(pick)).toEqual([
@@ -119,7 +114,7 @@ describe("/addmovie", () => {
             chatInputInteraction(
                 "addmovie",
                 [{ type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" }],
-                { member: apiMember({ user: apiUser({ id: IDS.owner }) }) },
+                { member: { user: { id: IDS.owner } } },
             ),
         );
 

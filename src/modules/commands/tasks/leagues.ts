@@ -3,14 +3,14 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 
 const leagues: Command = {
-    name: 'leagues',
-    description: 'Toggle inclusion of Leagues tasks in polls and events.',
+    name: "leagues",
+    description: "Toggle inclusion of Leagues tasks in polls and events.",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.TaskAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('leagues')
-        .setDescription('Toggle Leagues tasks in polls and events on/off.'),
+        .setName("leagues")
+        .setDescription("Toggle Leagues tasks in polls and events on/off."),
 
     async execute({ interaction, services }) {
         if (!interaction) return;
@@ -33,14 +33,14 @@ const leagues: Command = {
         const newState = !current;
         await services.guilds.updateToggle(guildId, "toggles.leaguesEnabled", newState, userId);
 
-        const status = newState ? '**enabled**' : '**disabled**';
+        const status = newState ? "**enabled**" : "**disabled**";
 
         await interaction.editReply({
             content: `Leagues tasks have been ${status}.`,
         });
 
         console.log(`[Leagues Toggle] ${interaction.guild?.name ?? guildId}: ${status}`);
-    }
-}
+    },
+};
 
 export default leagues;

@@ -1,6 +1,7 @@
-import type { Client, VoiceState } from 'discord.js';
+import type { Client, VoiceState } from "discord.js";
+import { Duration } from "luxon";
 
-export const MIN_ATTENDANCE_MS = 30 * 60 * 1000; // 30 mins
+export const MIN_ATTENDANCE_MS = Duration.fromObject({ minutes: 30 }).toMillis();
 
 interface Session {
     joinedAt: number | null;
@@ -24,9 +25,11 @@ export class MovieAttendance {
         const sessions = new Map<string, Session>();
         for (const userId of memberIds) sessions.set(userId, { joinedAt: at.getTime(), totalMs: 0 });
         this.tracking = { eventId, channelId, sessions };
-        console.log(channelId
-            ? `[MovieAttendance] Tracking ${memberIds.length} member(s) in ${channelId} for ${eventId}.`
-            : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`);
+        console.log(
+            channelId
+                ? `[MovieAttendance] Tracking ${memberIds.length} member(s) in ${channelId} for ${eventId}.`
+                : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`,
+        );
     }
 
     voiceStateChanged(oldState: VoiceState, newState: VoiceState): void {

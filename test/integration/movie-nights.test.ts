@@ -4,11 +4,12 @@ import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { DateTime } from "luxon";
 import { type APIRole, InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
-import { componentsIn, type DiscordHarness, DiscordError } from "../discord/harness.js";
+import { type DiscordHarness } from "../discord/harness.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { createServiceContainer } from "../../src/core/services/ServiceFactory.js";
 import {
     AS,
+    DiscordError,
     IDS,
     apiMessage,
     apiRole,
@@ -46,8 +47,9 @@ async function setUpMovieNight(discord: DiscordHarness, services: ServiceContain
 async function storeNight(
     factories: StoringFactories,
     overrides: Parameters<StoringFactories["movieEvent"]["create"]>[0] = {},
+    nights: StoringFactories["movieEvent"] = factories.movieEvent,
 ): Promise<MovieEvent> {
-    return factories.movieEvent.create({
+    return nights.create({
         movie: { id: "movie-2", title: "Arrival", addedBy: SUBMITTER, runtime: 30 },
         voiceChannelId: VOICE,
         ...overrides,
@@ -56,14 +58,18 @@ async function storeNight(
 
 const ANNOUNCEMENT = SnowflakeUtil.generate().toString();
 
-async function storeTonight(factories: StoringFactories, overrides: Parameters<typeof storeNight>[1] = {}) {
+async function storePickedNight(
+    factories: StoringFactories,
+    nights: StoringFactories["movieEvent"],
+    overrides: Parameters<typeof storeNight>[1] = {},
+) {
     const movie = await factories.movie.create({
         id: "movie-2",
         title: "Arrival",
         addedBy: SUBMITTER,
         selectedAt: new Date(),
     });
-    await storeNight(factories, { startTime: DateTime.now().minus({ hours: 1 }).toJSDate(), movie, ...overrides });
+    await storeNight(factories, { movie, ...overrides }, nights);
 }
 
 describe("scheduling a movie night", () => {
@@ -75,24 +81,28 @@ describe("scheduling a movie night", () => {
         const command = await interact(chatInputInteraction("movienight", [], AS.movieAdmin));
 
         expect(discord.reply(command)?.content).toBe("📆 Choose a date for the next movie night:");
-        expect(componentsIn(discord.reply(command)?.components)).toMatchObject([
+        expect(discord.reply(command)?.components).toMatchObject([
             {
-                customId: "movienight-select-date",
-                options: [
-                    { label: "Fri, 6 Mar", value: "2026-03-06" },
-                    { label: "Sat, 7 Mar", value: "2026-03-07" },
-                    { label: "Sun, 8 Mar", value: "2026-03-08" },
-                    { label: "Mon, 9 Mar", value: "2026-03-09" },
-                    { label: "Tue, 10 Mar", value: "2026-03-10" },
-                    { label: "Wed, 11 Mar", value: "2026-03-11" },
-                    { label: "Thu, 12 Mar", value: "2026-03-12" },
-                    { label: "Fri, 13 Mar", value: "2026-03-13" },
-                    { label: "Sat, 14 Mar", value: "2026-03-14" },
-                    { label: "Sun, 15 Mar", value: "2026-03-15" },
-                    { label: "Mon, 16 Mar", value: "2026-03-16" },
-                    { label: "Tue, 17 Mar", value: "2026-03-17" },
-                    { label: "Wed, 18 Mar", value: "2026-03-18" },
-                    { label: "Thu, 19 Mar", value: "2026-03-19" },
+                components: [
+                    {
+                        custom_id: "movienight-select-date",
+                        options: [
+                            { label: "Fri, 6 Mar", value: "2026-03-06" },
+                            { label: "Sat, 7 Mar", value: "2026-03-07" },
+                            { label: "Sun, 8 Mar", value: "2026-03-08" },
+                            { label: "Mon, 9 Mar", value: "2026-03-09" },
+                            { label: "Tue, 10 Mar", value: "2026-03-10" },
+                            { label: "Wed, 11 Mar", value: "2026-03-11" },
+                            { label: "Thu, 12 Mar", value: "2026-03-12" },
+                            { label: "Fri, 13 Mar", value: "2026-03-13" },
+                            { label: "Sat, 14 Mar", value: "2026-03-14" },
+                            { label: "Sun, 15 Mar", value: "2026-03-15" },
+                            { label: "Mon, 16 Mar", value: "2026-03-16" },
+                            { label: "Tue, 17 Mar", value: "2026-03-17" },
+                            { label: "Wed, 18 Mar", value: "2026-03-18" },
+                            { label: "Thu, 19 Mar", value: "2026-03-19" },
+                        ],
+                    },
                 ],
             },
         ]);
@@ -103,7 +113,9 @@ describe("scheduling a movie night", () => {
 
         const form = discord.modal(pick);
         expect(form).toMatchObject({ custom_id: "movienight-time-2026-03-05", title: "Enter movie night time" });
-        expect(form?.components).toMatchObject([{ label: "Start time (UTC+0)", component: { custom_id: "start-time" } }]);
+        expect(form?.components).toMatchObject([
+            { label: "Start time (UTC+0)", component: { custom_id: "start-time" } },
+        ]);
     });
 
     test("announces it, stores it in place of the previous night, and ends the open poll an hour before", async ({
@@ -176,10 +188,7 @@ describe("scheduling a movie night", () => {
         await setUpMovieNight(discord, services);
         const date = "2026-03-07";
         const pollChannel = SnowflakeUtil.generate().toString();
-        await factories.moviePoll.create({
-            endsAt: now.plus({ hours: 1 }).toJSDate(),
-            channelId: pollChannel,
-        });
+        await factories.moviePoll.open().create({ channelId: pollChannel });
         discord.acceptMessages(IDS.channel);
 
         await interact(modalSubmitInteraction(`movienight-time-${date}`, { "start-time": "21:00" }));
@@ -316,19 +325,18 @@ describe("the movie night sweep", () => {
         const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
         vi.setSystemTime(now.toJSDate());
         await setUpMovieNight(discord, services);
-        const poll = await factories.moviePoll.create({
+        const poll = await factories.moviePoll.ended().create({
             options: [
                 movieFactory.build({ id: "movie-1", addedBy: SUBMITTER }),
                 movieFactory.build({ id: "movie-2", title: "Arrival", addedBy: SUBMITTER }),
             ],
-            endsAt: now.minus({ minutes: 1 }).toJSDate(),
             votes: { [present]: "movie-2", [joiner]: "movie-2", [leaver]: "movie-1" },
         });
         await storeNight(factories, {
             startTime: now.plus({ hours: 3 }).toJSDate(),
             movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
         });
-        discord.message(apiMessage({ id: poll.messageId }));
+        discord.serveMessage(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
         const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
@@ -429,14 +437,13 @@ describe("the movie night sweep", () => {
         const now = DateTime.fromISO("2026-03-05T12:00:00Z", { zone: "utc" });
         vi.setSystemTime(now.toJSDate());
         await discord.addGuild(apiOtherGuild());
-        const duePoll = moviePollFactory.build({
-            endsAt: now.minus({ minutes: 1 }).toJSDate(),
+        const duePoll = moviePollFactory.ended().build({
             votes: { [present]: "movie-2" },
             messageId: "",
             channelId: IDS.otherGuildChannel,
         });
         await otherGuild.repos.movieRepo.createPoll(duePoll);
-        await factories.moviePoll.create({ endsAt: now.plus({ hours: 1 }).toJSDate() });
+        await factories.moviePoll.open().create();
         discord.acceptMessages(IDS.otherGuildChannel);
         discord.acceptDirectMessages(apiUser());
 
@@ -457,7 +464,10 @@ describe("/endmovie", () => {
         services,
         factories,
     }) => {
-        await storeTonight(factories);
+        await storePickedNight(
+            factories,
+            factories.movieEvent.params({ startTime: DateTime.now().minus({ hours: 1 }).toJSDate() }),
+        );
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
 
@@ -497,7 +507,7 @@ describe("/closemoviepoll", () => {
                 [SnowflakeUtil.generate().toString()]: "movie-2",
             },
         });
-        discord.message(apiMessage({ id: poll.messageId }));
+        discord.serveMessage(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
         discord.acceptMessages(IDS.channel);
         discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
@@ -528,12 +538,9 @@ describe("/cancelmovie", () => {
         services,
         factories,
     }) => {
-        const poll = await factories.moviePoll.create({ endsAt: DateTime.now().plus({ days: 1 }).toJSDate() });
-        await storeTonight(factories, {
-            startTime: DateTime.now().plus({ days: 1 }).toJSDate(),
-            announcementMessageId: ANNOUNCEMENT,
-        });
-        for (const id of [poll.messageId, ANNOUNCEMENT]) discord.message(apiMessage({ id }));
+        const poll = await factories.moviePoll.open().create();
+        await storePickedNight(factories, factories.movieEvent.upcoming(), { announcementMessageId: ANNOUNCEMENT });
+        for (const id of [poll.messageId, ANNOUNCEMENT]) discord.serveMessage(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
         const command = await interact(chatInputInteraction("cancelmovie", [], AS.movieAdmin));
@@ -564,19 +571,14 @@ describe("/cancelmovie", () => {
         interact,
         factories,
     }) => {
-        await storeTonight(factories, {
-            startTime: DateTime.now().plus({ days: 1 }).toJSDate(),
-            announcementMessageId: ANNOUNCEMENT,
-        });
+        await storePickedNight(factories, factories.movieEvent.upcoming(), { announcementMessageId: ANNOUNCEMENT });
         discord.refuse("GET", `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`, DiscordError.unknownMessage);
         discord.acceptMessages(IDS.channel);
 
         await interact(chatInputInteraction("cancelmovie", [], AS.movieAdmin));
 
         expect(
-            discord
-                .requests()
-                .filter((request) => request.path === `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`),
+            discord.requests.filter((request) => request.path === `/channels/${IDS.channel}/messages/${ANNOUNCEMENT}`),
         ).toHaveLength(1);
 
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
@@ -588,7 +590,7 @@ describe("/cancelmovie", () => {
 describe("/currentmovie", () => {
     test("shows the scheduled night's movie, start time and host", async ({ discord, interact, factories }) => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
-        discord.user(host);
+        discord.serveUser(host);
         const night = await factories.movieEvent.create({
             movie: { title: "Arrival", overview: "Linguists meet visitors." },
             hostedBy: host.id,
@@ -623,7 +625,7 @@ describe("/currentmovie", () => {
         factories,
     }) => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
-        discord.user(host);
+        discord.serveUser(host);
         const night = await factories.movieEvent.create({
             movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
             hostedBy: host.id,

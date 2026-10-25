@@ -1,19 +1,27 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Client, type ButtonInteraction, type GuildTextBasedChannel } from 'discord.js';
-import type { Task } from '../../models/Task.js';
-import type { TaskPoll } from '../../models/TaskPoll.js';
-import { TaskCategory } from '../../models/Task.js';
-import { selectTasksForCategory } from './TaskSelector.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { buildTaskPollEmbed, getTaskPollIconFile } from './TaskEmbeds.js';
-import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
-import { configuredChannel } from '../../utils/ChannelUtils.js';
+import {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    type Client,
+    type ButtonInteraction,
+    type GuildTextBasedChannel,
+} from "discord.js";
+import { DateTime, Duration } from "luxon";
+import type { Task } from "../../models/Task.js";
+import type { TaskPoll } from "../../models/TaskPoll.js";
+import { TaskCategory } from "../../models/Task.js";
+import { selectTasksForCategory } from "./TaskSelector.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { buildTaskPollEmbed, getTaskPollIconFile } from "./TaskEmbeds.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
 
-const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
-const PROD_TASK_POLL_DURATION_MS = 24 * 60 * 60 * 1000;
-const DEV_TASK_POLL_DURATION_MS = 5 * 60 * 1000;
+const emojiNumbers = ["1️⃣", "2️⃣", "3️⃣"];
+const PROD_TASK_POLL_DURATION = Duration.fromObject({ hours: 24 });
+const DEV_TASK_POLL_DURATION = Duration.fromObject({ minutes: 5 });
 
-function getTaskPollDurationMs(): number {
-    return process.env.BOT_MODE === 'dev' ? DEV_TASK_POLL_DURATION_MS : PROD_TASK_POLL_DURATION_MS;
+function getTaskPollDuration(): Duration {
+    return process.env.BOT_MODE === "dev" ? DEV_TASK_POLL_DURATION : PROD_TASK_POLL_DURATION;
 }
 
 function buildVoteMapFromPoll(poll: Pick<TaskPoll, "options" | "votes">): Map<string, number> {
@@ -29,19 +37,19 @@ function buildVoteMapFromPoll(poll: Pick<TaskPoll, "options" | "votes">): Map<st
     return voteMap;
 }
 
-function buildPollMessage(poll: Omit<TaskPoll, 'id' | 'messageId'>) {
+function buildPollMessage(poll: Omit<TaskPoll, "id" | "messageId">) {
     const { category } = poll;
     const embed = buildTaskPollEmbed(
         category,
         poll.options,
         buildVoteMapFromPoll(poll),
-        poll.isActive ? { endsAt: poll.endsAt } : { isClosed: true }
+        poll.isActive ? { endsAt: poll.endsAt } : { isClosed: true },
     );
     const buttons = poll.options.map((task, i) =>
         new ButtonBuilder()
             .setCustomId(`vote_${category}_${task.id}`)
             .setLabel(`${emojiNumbers[i]} ${task.shortName ?? `Task ${i + 1}`}`)
-            .setStyle(ButtonStyle.Secondary)
+            .setStyle(ButtonStyle.Secondary),
     );
     const files = getTaskPollIconFile(category);
 
@@ -52,13 +60,10 @@ function buildPollMessage(poll: Omit<TaskPoll, 'id' | 'messageId'>) {
     };
 }
 
-export async function handleTaskPollVoteInteraction(
-    interaction: ButtonInteraction,
-    services: ServiceContainer
-) {
+export async function handleTaskPollVoteInteraction(interaction: ButtonInteraction, services: ServiceContainer) {
     await interaction.deferReply({ flags: 1 << 6 });
 
-    const [, categoryRaw, voteId] = interaction.customId.split('_');
+    const [, categoryRaw, voteId] = interaction.customId.split("_");
     const category = Object.values(TaskCategory).find((value) => value === categoryRaw);
     if (!category || !voteId) {
         await interaction.editReply({ content: "Invalid poll vote option." });
@@ -121,32 +126,28 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
 
     const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
 
-    const categories: TaskCategory[] = [
-        TaskCategory.PvM,
-        TaskCategory.Skilling,
-        TaskCategory.MinigameMisc,
-    ];
+    const categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
 
     if (leaguesEnabled) {
         categories.push(TaskCategory.Leagues);
     }
 
-    const channel = await configuredChannel(client, services, 'taskChannel');
+    const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return;
 
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
-    const mention = role ? `<@&${role.id}>` : '';
+    const mention = role ? `<@&${role.id}>` : "";
     if (!role) {
         console.warn(`[TaskPoll] Task user role not configured or not found.`);
     }
     await channel.send(
         withSuppressedMentions(
             { content: `${mention} **New task polls are live!** Cast your votes for each category below:` },
-            suppressMentions
-        )
+            suppressMentions,
+        ),
     );
 
     for (const category of categories) {
@@ -158,15 +159,15 @@ export async function postTaskPollForCategory(
     client: Client,
     services: ServiceContainer,
     category: TaskCategory,
-    channelOverride?: GuildTextBasedChannel
+    channelOverride?: GuildTextBasedChannel,
 ) {
-    const channel = channelOverride ?? (await configuredChannel(client, services, 'taskChannel'));
+    const channel = channelOverride ?? (await configuredChannel(client, services, "taskChannel"));
     if (!channel) return;
 
     const repo = services.repos.taskRepo;
 
     const allTasks: Task[] = await repo.getAllTasks();
-    const taskData = allTasks.filter(t => t.category === category);
+    const taskData = allTasks.filter((t) => t.category === category);
     if (taskData.length < 3) {
         console.warn(`[TaskPoll] Not enough tasks to create a poll for category ${category}`);
         return;
@@ -179,13 +180,13 @@ export async function postTaskPollForCategory(
     }
 
     const createdAt = new Date();
-    const draft: Omit<TaskPoll, 'id' | 'messageId'> = {
+    const draft: Omit<TaskPoll, "id" | "messageId"> = {
         type: "task",
         category,
         options: selectedTasks,
         channelId: channel.id,
         createdAt,
-        endsAt: new Date(createdAt.getTime() + getTaskPollDurationMs()),
+        endsAt: DateTime.fromJSDate(createdAt).plus(getTaskPollDuration()).toJSDate(),
         isActive: true,
         votes: {},
     };

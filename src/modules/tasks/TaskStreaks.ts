@@ -1,3 +1,4 @@
+import { DateTime, Duration } from "luxon";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
@@ -22,37 +23,14 @@ const APPROVED_STATUSES = new Set<SubmissionStatus>([
     SubmissionStatus.Gold,
 ]);
 
-const PERIOD_GAP_TOLERANCE_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PERIOD_GAP_TOLERANCE = Duration.fromObject({ hours: 6 });
 
 function isConsecutive(prevEnd: Date, nextStart: Date): boolean {
-    const gapMs = nextStart.getTime() - prevEnd.getTime();
-    return gapMs >= 0 && gapMs <= PERIOD_GAP_TOLERANCE_MS;
+    const gap = DateTime.fromJSDate(nextStart).diff(DateTime.fromJSDate(prevEnd));
+    return gap.toMillis() >= 0 && gap <= PERIOD_GAP_TOLERANCE;
 }
 
-function formatUnit(value: number, unit: string): string {
-    return `${value} ${unit}${value === 1 ? "" : "s"}`;
-}
-
-export function formatDuration(ms: number): string {
-    if (ms <= 0) return "less than a minute";
-
-    const totalMinutes = Math.ceil(ms / 60000);
-    const days = Math.floor(totalMinutes / 1440);
-    const hours = Math.floor((totalMinutes % 1440) / 60);
-    const minutes = totalMinutes % 60;
-
-    const parts: string[] = [];
-    if (days > 0) parts.push(formatUnit(days, "day"));
-    if (hours > 0 && parts.length < 2) parts.push(formatUnit(hours, "hour"));
-    if (minutes > 0 && parts.length < 2) parts.push(formatUnit(minutes, "minute"));
-
-    return parts.join(" ");
-}
-
-export async function getCurrentTaskPeriod(
-    repo: ITaskRepository,
-    now: Date = new Date()
-): Promise<TaskPeriod | null> {
+export async function getCurrentTaskPeriod(repo: ITaskRepository, now: Date = new Date()): Promise<TaskPeriod | null> {
     const latestEvent = await repo.getLatestTaskEvent();
     if (!latestEvent) return null;
 
@@ -66,21 +44,20 @@ export async function getCurrentTaskPeriod(
 }
 
 // A failed lookup is passed on rather than read as "no events", which would keep a broken streak alive
-async function hasTaskEventsBetween(
-    repo: ITaskRepository,
-    start: Date,
-    end: Date
-): Promise<boolean> {
+async function hasTaskEventsBetween(repo: ITaskRepository, start: Date, end: Date): Promise<boolean> {
     if (start.getTime() > end.getTime()) return false;
     const events = await repo.getTaskEventsBetween(start, end);
     return events.length > 0;
 }
 
-function buildSummary(base: {
-    currentStreak: number;
-    longestStreak: number;
-    hasCompletedCurrentPeriod: boolean;
-}, extras?: { currentPeriod?: TaskPeriod; lastCompletedPeriodEnd?: Date; }): TaskStreakSummary {
+function buildSummary(
+    base: {
+        currentStreak: number;
+        longestStreak: number;
+        hasCompletedCurrentPeriod: boolean;
+    },
+    extras?: { currentPeriod?: TaskPeriod; lastCompletedPeriodEnd?: Date },
+): TaskStreakSummary {
     const summary: TaskStreakSummary = {
         currentStreak: base.currentStreak,
         longestStreak: base.longestStreak,
@@ -101,7 +78,7 @@ function buildSummary(base: {
 export async function calculateTaskStreakSummary(
     userId: string,
     repo: ITaskRepository,
-    now: Date = new Date()
+    now: Date = new Date(),
 ): Promise<TaskStreakSummary> {
     const currentPeriod = await getCurrentTaskPeriod(repo, now);
 
@@ -115,7 +92,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined
+            currentPeriod ? { currentPeriod } : undefined,
         );
     }
 
@@ -148,9 +125,7 @@ export async function calculateTaskStreakSummary(
         }
     }
 
-    const periods = Array.from(periodMap.values()).sort(
-        (a, b) => a.end.getTime() - b.end.getTime()
-    );
+    const periods = Array.from(periodMap.values()).sort((a, b) => a.end.getTime() - b.end.getTime());
 
     if (periods.length === 0) {
         return buildSummary(
@@ -159,7 +134,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined
+            currentPeriod ? { currentPeriod } : undefined,
         );
     }
 
@@ -171,9 +146,8 @@ export async function calculateTaskStreakSummary(
         const previous = i > 0 ? periods[i - 1] : null;
 
         if (previous) {
-            const gapStart = new Date(previous.end.getTime() + 1);
-            const gapEnd = new Date(period.start.getTime());
-            const hasGapEvents = await hasTaskEventsBetween(repo, gapStart, gapEnd);
+            const gapStart = DateTime.fromJSDate(previous.end).plus({ milliseconds: 1 }).toJSDate();
+            const hasGapEvents = await hasTaskEventsBetween(repo, gapStart, period.start);
             const shouldContinue = isConsecutive(previous.end, period.start) || !hasGapEvents;
             run = shouldContinue ? run + 1 : 1;
         } else {
@@ -192,7 +166,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined
+            currentPeriod ? { currentPeriod } : undefined,
         );
     }
 
@@ -207,9 +181,8 @@ export async function calculateTaskStreakSummary(
             currentStreak = currentRun;
             hasCompletedCurrentPeriod = true;
         } else {
-            const gapStart = new Date(lastCompleted.end.getTime() + 1);
-            const gapEnd = new Date(currentPeriod.start.getTime());
-            const hasGapEvents = await hasTaskEventsBetween(repo, gapStart, gapEnd);
+            const gapStart = DateTime.fromJSDate(lastCompleted.end).plus({ milliseconds: 1 }).toJSDate();
+            const hasGapEvents = await hasTaskEventsBetween(repo, gapStart, currentPeriod.start);
             if (isConsecutive(lastCompleted.end, currentPeriod.start) || !hasGapEvents) {
                 currentStreak = runLengthByEnd.get(lastCompleted.end.getTime()) ?? 0;
             } else {
@@ -229,6 +202,6 @@ export async function calculateTaskStreakSummary(
         {
             ...(currentPeriod ? { currentPeriod } : {}),
             lastCompletedPeriodEnd: lastCompleted.end,
-        }
+        },
     );
 }

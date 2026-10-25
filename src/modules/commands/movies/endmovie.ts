@@ -6,16 +6,22 @@ import type { ServiceContainer } from "../../../core/services/ServiceContainer.j
 import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 const endmovie: Command = {
-    name: 'endmovie',
-    description: 'Manually end the current movie night and archive the movie.',
+    name: "endmovie",
+    description: "Manually end the current movie night and archive the movie.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.MovieAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('endmovie')
-        .setDescription('Manually end the current movie night and archive the movie.'),
+        .setName("endmovie")
+        .setDescription("Manually end the current movie night and archive the movie."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -34,7 +40,7 @@ const endmovie: Command = {
         }
 
         await interaction.editReply(result.message);
-    }
+    },
 };
 
 export default endmovie;

@@ -1,6 +1,13 @@
-import { ApplicationCommandOptionType, ChannelType, InteractionContextType, InteractionResponseType, MessageFlags, type APIApplicationCommandAutocompleteDMInteraction, type APIApplicationCommandInteractionDataOption } from "discord-api-types/v10";
-import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
-import { componentsIn, PRIVATE_DEFERRAL } from "../discord/harness.js";
+import {
+    ApplicationCommandOptionType,
+    ChannelType,
+    InteractionContextType,
+    InteractionResponseType,
+    MessageFlags,
+    type APIApplicationCommandAutocompleteDMInteraction,
+    type APIApplicationCommandInteractionDataOption,
+} from "discord-api-types/v10";
+import { describe, expect, vi, storeRunningEvent, test } from "../fixtures.js";
 import {
     apiMessage,
     apiUser,
@@ -11,6 +18,7 @@ import {
     apiAttachment,
     IDS,
     modalSubmitInteraction,
+    PRIVATE_DEFERRAL,
 } from "../discord/payloads.js";
 import { Skill, TaskCategory, TaskType } from "../../src/models/Task.js";
 import { SnowflakeUtil } from "discord.js";
@@ -30,20 +38,7 @@ const completer = SnowflakeUtil.generate().toString();
 const voter = SnowflakeUtil.generate().toString();
 const form = { taskName: "Kill {amount} Vorkath", shortName: "Vorkath", type: "kc", amounts: "5, 10/150000" };
 
-async function storeRunningEvent(factories: StoringFactories, overrides = {}) {
-    const task = await factories.task.create({
-        id: "PVM001",
-        category: TaskCategory.PvM,
-        taskName: "Kill {amount} Zulrah",
-    });
-    return factories.taskEvent.running().create({
-        id: "PVM001-week",
-        task,
-        messageId: eventMessage,
-        channelId: IDS.channel,
-        ...overrides,
-    });
-}
+const runningEvent = { id: "PVM001-week", messageId: eventMessage };
 
 describe("/listtasks", () => {
     test("pages through a category's tasks with buttons that keep working", async ({
@@ -52,7 +47,10 @@ describe("/listtasks", () => {
         factories,
     }) => {
         for (let number = 1; number <= 26; number++) {
-            await factories.task.create({ id: `MIN${String(number).padStart(3, "0")}`, category: TaskCategory.MinigameMisc });
+            await factories.task.create({
+                id: `MIN${String(number).padStart(3, "0")}`,
+                category: TaskCategory.MinigameMisc,
+            });
         }
         await factories.task.create({ id: "PVM001", category: TaskCategory.PvM });
 
@@ -72,20 +70,28 @@ describe("/listtasks", () => {
         });
         expect(firstPage?.embeds?.[0]?.description).toContain("MIN025");
         expect(firstPage?.embeds?.[0]?.description).not.toContain("MIN026");
-        expect(componentsIn(firstPage?.components).map((button) => button.customId)).toEqual([
-            "listtasks|Minigame/Misc|start|0",
-            "listtasks|Minigame/Misc|prev|-1",
-            "listtasks|Minigame/Misc|next|1",
-            "listtasks|Minigame/Misc|end|1",
+        expect(firstPage?.components).toMatchObject([
+            {
+                components: [
+                    { custom_id: "listtasks|Minigame/Misc|start|0" },
+                    { custom_id: "listtasks|Minigame/Misc|prev|-1" },
+                    { custom_id: "listtasks|Minigame/Misc|next|1" },
+                    { custom_id: "listtasks|Minigame/Misc|end|1" },
+                ],
+            },
         ]);
         expect(discord.callbacks(next)).toEqual([{ type: InteractionResponseType.DeferredMessageUpdate }]);
         const [secondPage] = discord.originalEdits(next);
         expect(secondPage?.embeds?.[0]).toMatchObject({ footer: { text: "Page 2/2 • 26 tasks" } });
         expect(secondPage?.embeds?.[0]?.description).toContain("MIN026");
         expect(secondPage?.embeds?.[0]?.description).not.toContain("MIN025");
-        expect(
-            componentsIn(secondPage?.components).find((button) => button.customId === "listtasks|Minigame/Misc|end|1"),
-        ).toMatchObject({ disabled: true });
+        expect(secondPage?.components).toMatchObject([
+            {
+                components: expect.arrayContaining([
+                    expect.objectContaining({ custom_id: "listtasks|Minigame/Misc|end|1", disabled: true }),
+                ]),
+            },
+        ]);
     });
 
     test("shows every category on one page without buttons when the tasks fit, in aligned columns", async ({
@@ -306,22 +312,20 @@ describe("the update task form", () => {
         factories,
     }) => {
         const tasks = services.repos.taskRepo;
-        await storeRunningEvent(factories);
+        await storeRunningEvent(factories, runningEvent);
         await factories.taskSubmission.create({ id: "approved", userId: completer, taskEventId: "PVM001-week" });
         await tasks.reviewSubmission({
             submissionId: "approved",
             reviewedBy: IDS.user,
             decision: SubmissionStatus.Bronze,
         });
-        await factories.taskPoll.create({
-            id: pollMessage,
+        await factories.taskPoll.open().create({
             messageId: pollMessage,
             category: TaskCategory.PvM,
             options: [taskFactory.build({ id: "PVM001" }), taskFactory.build({ id: "PVM002" })],
             votes: { [voter]: "PVM001" },
-            endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
         });
-        for (const id of [eventMessage, pollMessage]) discord.message(apiMessage({ id }));
+        for (const id of [eventMessage, pollMessage]) discord.serveMessage(apiMessage({ id }));
         discord.acceptMessageEdits(IDS.channel);
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", form));
@@ -354,6 +358,7 @@ describe("the update task form", () => {
 
     test("leaves an event that hasn't started yet alone", async ({ discord, interact, services, factories }) => {
         await storeRunningEvent(factories, {
+            ...runningEvent,
             startTime: DateTime.now().plus({ days: 1 }).toJSDate(),
             endTime: DateTime.now().plus({ days: 8 }).toJSDate(),
         });
@@ -374,7 +379,7 @@ describe("the update task form", () => {
         services,
         factories,
     }) => {
-        await storeRunningEvent(factories);
+        await storeRunningEvent(factories, runningEvent);
 
         const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, type: "Kills" }));
 
@@ -386,8 +391,13 @@ describe("the update task form", () => {
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
     });
 
-    test("changes nothing when the amounts aren't three whole numbers", async ({ discord, interact, services, factories }) => {
-        await storeRunningEvent(factories);
+    test("changes nothing when the amounts aren't three whole numbers", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await storeRunningEvent(factories, runningEvent);
 
         const submit = await interact(
             modalSubmitInteraction("update_task_modal_PVM001", { ...form, amounts: "5, lots, 1.5" }),
@@ -395,7 +405,8 @@ describe("the update task form", () => {
 
         expect(discord.originalEdits(submit)).toEqual([
             expect.objectContaining({
-                content: "The amounts must be three whole numbers for bronze, silver and gold, e.g. 5, 10, 20. Nothing was changed.",
+                content:
+                    "The amounts must be three whole numbers for bronze, silver and gold, e.g. 5, 10, 20. Nothing was changed.",
             }),
         ]);
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({
@@ -469,7 +480,11 @@ describe("/updatetask", () => {
         ]);
     });
 
-    test("suggests tasks matching what the member types, each filling in its ID", async ({ discord, interact, factories }) => {
+    test("suggests tasks matching what the member types, each filling in its ID", async ({
+        discord,
+        interact,
+        factories,
+    }) => {
         await factories.task.create({ id: "PVM001", taskName: "Kill {amount} Zulrah", shortName: "Zulrah" });
         await factories.task.create({ id: "PVM002", taskName: "Kill {amount} Vorkath", shortName: "Vorkath" });
 
@@ -512,7 +527,11 @@ describe("/updatetask", () => {
 
     test("suggests nothing in DMs, where the command doesn't run", async ({ discord, interact, factories }) => {
         await factories.task.create({ id: "PVM001" });
-        const { guild_id: _guildId, member: _member, ...typing } = autocompleteInteraction("updatetask", [
+        const {
+            guild_id: _guildId,
+            member: _member,
+            ...typing
+        } = autocompleteInteraction("updatetask", [
             { type: ApplicationCommandOptionType.String, name: "id", value: "zulrah", focused: true },
         ]);
         const inDm: APIApplicationCommandAutocompleteDMInteraction = {
@@ -545,10 +564,16 @@ describe("/newtask", () => {
     }) => {
         await factories.task.create({ id: "PVM063", category: TaskCategory.PvM });
 
-        const command = await interact(chatInputInteraction("newtask", [
-            ...options(TaskCategory.PvM, TaskType.KC),
-            { type: ApplicationCommandOptionType.String, name: "skill", value: Skill.Slayer },
-        ], AS.taskAdmin));
+        const command = await interact(
+            chatInputInteraction(
+                "newtask",
+                [
+                    ...options(TaskCategory.PvM, TaskType.KC),
+                    { type: ApplicationCommandOptionType.String, name: "skill", value: Skill.Slayer },
+                ],
+                AS.taskAdmin,
+            ),
+        );
 
         expect(discord.callbacks(command)).toHaveLength(1);
         const modal = discord.modal(command);
@@ -562,7 +587,9 @@ describe("/newtask", () => {
     });
 
     test("asks for an ID when the category has no tasks to number from", async ({ discord, interact }) => {
-        const command = await interact(chatInputInteraction("newtask", options(TaskCategory.Leagues, TaskType.Other), AS.taskAdmin));
+        const command = await interact(
+            chatInputInteraction("newtask", options(TaskCategory.Leagues, TaskType.Other), AS.taskAdmin),
+        );
 
         expect(discord.modal(command)?.components[3]).toMatchObject({
             description: "No Leagues tasks to number from yet, so give one",
@@ -570,7 +597,12 @@ describe("/newtask", () => {
         });
     });
 
-    test("saves the task under the next ID, so it is found straight away", async ({ discord, interact, services, factories }) => {
+    test("saves the task under the next ID, so it is found straight away", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         await factories.task.create({ id: "PVM063", category: TaskCategory.PvM });
         await services.repos.taskRepo.getTaskSearch();
 
@@ -592,11 +624,15 @@ describe("/newtask", () => {
             amtGold: 1000,
             weight: 50,
         });
-        expect((await services.repos.taskRepo.getTaskSearch()).search("vorkath").map((result) => result.item.id)).toEqual(["PVM064"]);
+        expect(
+            (await services.repos.taskRepo.getTaskSearch()).search("vorkath").map((result) => result.item.id),
+        ).toEqual(["PVM064"]);
     });
 
     test("saves the task under a typed ID", async ({ discord, interact, services }) => {
-        const submit = await interact(modalSubmitInteraction("new_task_modal|Leagues|Other|", { ...form, id: " LEA001 " }));
+        const submit = await interact(
+            modalSubmitInteraction("new_task_modal|Leagues|Other|", { ...form, id: " LEA001 " }),
+        );
 
         expect(discord.originalEdits(submit)).toEqual([
             expect.objectContaining({ content: "Task **LEA001** created successfully." }),
@@ -616,20 +652,32 @@ describe("/newtask", () => {
         expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
     });
 
-    test("saves nothing when the amounts aren't three whole numbers", async ({ discord, interact, services, factories }) => {
+    test("saves nothing when the amounts aren't three whole numbers", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
         await factories.task.create({ id: "PVM063", category: TaskCategory.PvM });
 
-        const submit = await interact(modalSubmitInteraction("new_task_modal|PvM|KC|", { ...form, amounts: "5, lots, 1.5" }));
+        const submit = await interact(
+            modalSubmitInteraction("new_task_modal|PvM|KC|", { ...form, amounts: "5, lots, 1.5" }),
+        );
 
         expect(discord.originalEdits(submit)).toEqual([
             expect.objectContaining({
-                content: "The amounts must be three whole numbers for bronze, silver and gold, e.g. 5, 10, 20. Nothing was saved.",
+                content:
+                    "The amounts must be three whole numbers for bronze, silver and gold, e.g. 5, 10, 20. Nothing was saved.",
             }),
         ]);
         expect(await services.repos.taskRepo.getTaskById("PVM064")).toBeNull();
     });
 
-    test("saves nothing when the ID is left blank for a category with no tasks", async ({ discord, interact, services }) => {
+    test("saves nothing when the ID is left blank for a category with no tasks", async ({
+        discord,
+        interact,
+        services,
+    }) => {
         const submit = await interact(modalSubmitInteraction("new_task_modal|Leagues|Other|", form));
 
         expect(discord.originalEdits(submit)).toEqual([

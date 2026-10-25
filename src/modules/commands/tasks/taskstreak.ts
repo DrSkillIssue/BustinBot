@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { calculateTaskStreakSummary, formatDuration } from "../../tasks/TaskStreaks.js";
+import { calculateTaskStreakSummary } from "../../tasks/TaskStreaks.js";
 import { packageVersion } from "../../../utils/version.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
@@ -15,7 +15,13 @@ const taskstreak: Command = {
         .setName("taskstreak")
         .setDescription("View your current task streak and streak deadline."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -46,18 +52,21 @@ const taskstreak: Command = {
         }
         let deadlineLine = "No active task period right now.";
         if (summary.currentPeriod) {
-            const remainingMs = Math.max(summary.currentPeriod.end.getTime() - now.getTime(), 0);
             const absoluteEnd = time(summary.currentPeriod.end, TimestampStyles.LongDateTime);
+            const relativeEnd = time(summary.currentPeriod.end, TimestampStyles.RelativeTime);
             if (summary.hasCompletedCurrentPeriod) {
-                deadlineLine = `✅ Streak kept active for this period. Period ends ${absoluteEnd} (${formatDuration(remainingMs)} remaining).`;
+                deadlineLine = `✅ Streak kept active for this period. Period ends ${absoluteEnd} (${relativeEnd}).`;
             } else {
-                deadlineLine = `⏳ Submit before ${absoluteEnd} (${formatDuration(remainingMs)} remaining) to preserve your streak.`;
+                deadlineLine = `⏳ Submit before ${absoluteEnd} (${relativeEnd}) to preserve your streak.`;
             }
         }
 
         const embed = new EmbedBuilder()
             .setColor(0xa60000)
-            .setAuthor({ name: `${interaction.user.username}'s Task Streak`, iconURL: interaction.user.displayAvatarURL() })
+            .setAuthor({
+                name: `${interaction.user.username}'s Task Streak`,
+                iconURL: interaction.user.displayAvatarURL(),
+            })
             .setDescription("Track your weekly task streak progress.")
             .addFields(
                 { name: "🔥 Current Streak", value: `${displayCurrent}`, inline: true },
@@ -67,7 +76,7 @@ const taskstreak: Command = {
             .setFooter({ text: `BustinBot ${packageVersion} • Developed by dossyb` });
 
         await interaction.editReply({ embeds: [embed] });
-    }
+    },
 };
 
 export default taskstreak;

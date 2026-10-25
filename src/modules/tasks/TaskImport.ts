@@ -68,7 +68,7 @@ export function parseTasksCsv(csv: string): Task[] {
 
 export async function importTasks(
     repo: Pick<ITaskRepository, "getAllTasks" | "seedTasks">,
-    tasks: Task[]
+    tasks: Task[],
 ): Promise<TaskImportResult> {
     const existingIds = new Set((await repo.getAllTasks()).map((task) => task.id));
     const newTasks = tasks.filter((task) => !existingIds.has(task.id));

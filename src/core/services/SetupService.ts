@@ -36,7 +36,7 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
         },
         setupComplete: {
             movie: true,
-        }
+        },
     }),
     task: (selections) => ({
         roles: {
@@ -50,7 +50,7 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
         ...(selections.taskPeriodEvents ? { taskSettings: { periodEvents: Number(selections.taskPeriodEvents) } } : {}),
         setupComplete: {
             task: true,
-        }
+        },
     }),
 };
 
@@ -77,12 +77,7 @@ export class SetupService {
         if (!selections) return [...REQUIRED_FIELDS[type]];
         return REQUIRED_FIELDS[type].filter((field) => !selections[field]);
     }
-    async persist(
-        type: SetupType,
-        guildService: GuildService,
-        guildId: string,
-        selections: SelectionMap
-    ) {
+    async persist(type: SetupType, guildService: GuildService, guildId: string, selections: SelectionMap) {
         const builder = PAYLOAD_BUILDERS[type];
         const payload = builder(selections);
 

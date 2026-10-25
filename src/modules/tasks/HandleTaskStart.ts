@@ -1,17 +1,17 @@
-import { randomUUID } from 'node:crypto';
-import type { Client, GuildTextBasedChannel } from 'discord.js';
-import { DateTime } from 'luxon';
-import { buildTaskEventEmbed } from './TaskEmbeds.js';
-import type { TaskEvent } from '../../models/TaskEvent.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { TaskCategory } from '../../models/Task.js';
-import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
-import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
-import { refreshTaskPollMessage } from './HandleTaskPoll.js';
-import { configuredChannel } from '../../utils/ChannelUtils.js';
+import { randomUUID } from "node:crypto";
+import type { Client, GuildTextBasedChannel } from "discord.js";
+import { DateTime } from "luxon";
+import { buildTaskEventEmbed } from "./TaskEmbeds.js";
+import type { TaskEvent } from "../../models/TaskEvent.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { TaskCategory } from "../../models/Task.js";
+import { registerPeriodicTaskEvent } from "./TaskLeaderboards.js";
+import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
+import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
 
 function generateTaskEventId(taskId: string): string {
-    return `${taskId}-${DateTime.utc().toFormat('yyyyLLdd')}-${randomUUID().slice(0, 8)}`;
+    return `${taskId}-${DateTime.utc().toFormat("yyyyLLdd")}-${randomUUID().slice(0, 8)}`;
 }
 
 export async function refreshTaskEventMessage(client: Client, event: TaskEvent): Promise<void> {
@@ -19,7 +19,9 @@ export async function refreshTaskEventMessage(client: Client, event: TaskEvent):
 
     const channel = await client.channels.fetch(event.channelId).catch(() => null);
     if (!channel?.isTextBased()) {
-        throw new Error(`Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`);
+        throw new Error(
+            `Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`,
+        );
     }
 
     const message = await channel.messages.fetch(event.messageId);
@@ -37,33 +39,34 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
     }
     const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
 
-    const categories: TaskCategory[] = [
-        TaskCategory.PvM,
-        TaskCategory.Skilling,
-        TaskCategory.MinigameMisc
-    ];
+    const categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
 
     if (leaguesEnabled) categories.push(TaskCategory.Leagues);
 
     const sharedKeyword = await keywords.selectKeyword(`weekly-${Date.now()}`);
 
-    const channel = await configuredChannel(client, services, 'taskChannel');
+    const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return;
 
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
-    const mention = role ? `<@&${role.id}>` : '';
+    const mention = role ? `<@&${role.id}>` : "";
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
     if (!role) {
         console.warn(`[TaskStart] Task user role not configured or not found.`);
     }
 
-    await channel.send(withSuppressedMentions({
-        content:
-            `${mention} **The new tasks are live!**\n` +
-            `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`
-    }, suppressMentions));
+    await channel.send(
+        withSuppressedMentions(
+            {
+                content:
+                    `${mention} **The new tasks are live!**\n` +
+                    `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`,
+            },
+            suppressMentions,
+        ),
+    );
 
     for (const category of categories) {
         await startTaskEventForCategory(client, services, category, sharedKeyword, channel);
@@ -75,11 +78,11 @@ export async function startTaskEventForCategory(
     services: ServiceContainer,
     category: TaskCategory,
     sharedKeyword: string,
-    channelOverride?: GuildTextBasedChannel
+    channelOverride?: GuildTextBasedChannel,
 ): Promise<void> {
     const { repos, taskEvents } = services;
 
-    const channel = channelOverride ?? (await configuredChannel(client, services, 'taskChannel'));
+    const channel = channelOverride ?? (await configuredChannel(client, services, "taskChannel"));
     if (!channel) return;
 
     const pollData =
@@ -97,8 +100,8 @@ export async function startTaskEventForCategory(
         voteCounts[votedTaskId] = (voteCounts[votedTaskId] ?? 0) + 1;
     }
 
-    const maxVotes = Math.max(...pollData.options.map(opt => voteCounts[opt.id] ?? 0));
-    const topTasks = pollData.options.filter(opt => (voteCounts[opt.id] ?? 0) === maxVotes);
+    const maxVotes = Math.max(...pollData.options.map((opt) => voteCounts[opt.id] ?? 0));
+    const topTasks = pollData.options.filter((opt) => (voteCounts[opt.id] ?? 0) === maxVotes);
 
     // Deterministically select winner; fall back to first in poll order for ties
     const winningTask = topTasks[0];
@@ -106,7 +109,9 @@ export async function startTaskEventForCategory(
 
     const winnerLabel = winningTask.taskName ?? winningTask.id;
     if (topTasks.length > 1) {
-        console.log(`[TaskStart] Tie detected in ${category}: ${topTasks.length} tasks tied with ${maxVotes} votes. Selected winner by poll order: ${winnerLabel}`);
+        console.log(
+            `[TaskStart] Tie detected in ${category}: ${topTasks.length} tasks tied with ${maxVotes} votes. Selected winner by poll order: ${winnerLabel}`,
+        );
     } else {
         console.log(`[TaskStart] Winner for ${category}: ${winnerLabel} (${maxVotes} votes)`);
     }
@@ -136,7 +141,7 @@ export async function startTaskEventForCategory(
         completionCounts: {
             bronze: 0,
             silver: 0,
-            gold: 0
+            gold: 0,
         },
         completedUserIds: [],
         createdAt: now.toJSDate(),

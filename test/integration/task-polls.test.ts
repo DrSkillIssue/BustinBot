@@ -1,17 +1,8 @@
 import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
-import { DateTime, Duration } from "luxon";
+import { Duration } from "luxon";
 import { describe, expect, type StoringFactories, storePollableTasks, test, vi } from "../fixtures.js";
-import { componentsIn } from "../discord/harness.js";
-import {
-    IDS,
-    apiMember,
-    apiMessage,
-    apiUser,
-    buttonInteraction,
-    AS,
-    chatInputInteraction,
-} from "../discord/payloads.js";
+import { IDS, apiMessage, buttonInteraction, AS, chatInputInteraction } from "../discord/payloads.js";
 import { taskFactory, taskPollFactory } from "../factories.js";
 import { TaskCategory } from "../../src/models/Task.js";
 import { type TaskPoll } from "../../src/models/TaskPoll.js";
@@ -21,17 +12,12 @@ import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskSta
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
 async function storeOpenPoll(factories: StoringFactories, overrides: Partial<TaskPoll> = {}): Promise<TaskPoll> {
-    const messageId = overrides.messageId ?? SnowflakeUtil.generate().toString();
-    return factories.taskPoll.create({
-        id: messageId,
-        messageId,
+    return factories.taskPoll.open().create({
         options: [
             taskFactory.build({ id: "PVM001", shortName: "Zulrah" }),
             taskFactory.build({ id: "PVM002", shortName: "Vorkath" }),
             taskFactory.build({ id: "PVM003", shortName: "Hydra" }),
         ],
-        createdAt: DateTime.now().minus({ hours: 1 }).toJSDate(),
-        endsAt: DateTime.now().plus({ hours: 1 }).toJSDate(),
         ...overrides,
     });
 }
@@ -51,7 +37,7 @@ describe("posting the weekly task polls", () => {
         expect(announcement?.content).toContain("**New task polls are live!**");
         expect(polls).toHaveLength(3);
         for (const poll of polls) {
-            expect(componentsIn(poll.components)).toHaveLength(3);
+            expect(poll.components).toMatchObject([{ components: [{}, {}, {}] }]);
             expect(poll.files).toEqual(["category_icon.png"]);
         }
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
@@ -138,7 +124,7 @@ describe("voting in a task poll", () => {
         for (const voter of voters) {
             const click = await interact(
                 buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId }), {
-                    member: apiMember({ user: apiUser({ id: voter }) }),
+                    member: { user: { id: voter } },
                 }),
             );
             expect(discord.originalEdits(click)).toEqual([
@@ -156,10 +142,7 @@ describe("voting in a task poll", () => {
         factories,
     }) => {
         const closed = await storeOpenPoll(factories, { isActive: false });
-        const expired = await storeOpenPoll(factories, {
-            messageId: SnowflakeUtil.generate().toString(),
-            endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(),
-        });
+        const expired = await factories.taskPoll.ended().create();
 
         for (const poll of [closed, expired]) {
             const click = await interact(
@@ -203,13 +186,13 @@ describe("closing a task poll", () => {
         for (const task of poll.options) await factories.task.create(task);
         discord.acceptMessages(IDS.channel);
         discord.acceptMessageEdits(IDS.channel);
-        discord.message(apiMessage({ id: poll.messageId }));
+        discord.serveMessage(apiMessage({ id: poll.messageId }));
 
         await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "keyword");
 
         expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.isActive).toBe(false);
         const [closedMessage] = discord.messageEdits(IDS.channel, poll.messageId);
-        expect(componentsIn(closedMessage?.components)).toEqual([]);
+        expect(closedMessage?.components).toEqual([]);
     });
 });
 

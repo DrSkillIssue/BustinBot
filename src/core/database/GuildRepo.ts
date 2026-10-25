@@ -10,11 +10,7 @@ function isDevMode(): boolean {
 }
 
 function getDevGuildId(): string {
-    return (
-        process.env.DISCORD_GUILD_ID_DEV ??
-        process.env.DISCORD_GUILD_ID ??
-        DEV_FALLBACK_GUILD_ID
-    );
+    return process.env.DISCORD_GUILD_ID_DEV ?? process.env.DISCORD_GUILD_ID ?? DEV_FALLBACK_GUILD_ID;
 }
 
 function isAllowedGuild(guildId: string): boolean {
@@ -25,7 +21,7 @@ export class GuildRepository implements IGuildRepository {
     constructor(private readonly db: Firestore) {}
 
     private get collection() {
-        return this.db.collection('guilds').withConverter(guildConverter);
+        return this.db.collection("guilds").withConverter(guildConverter);
     }
 
     async getGuild(guildId: string): Promise<Guild | null> {
@@ -61,7 +57,7 @@ export class GuildRepository implements IGuildRepository {
                 ...data,
                 updatedAt: new Date(),
             },
-            { merge: true }
+            { merge: true },
         );
     }
 

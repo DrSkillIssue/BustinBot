@@ -1,31 +1,30 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import type { Command } from '../../../models/Command.js';
+import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { checkCanAddMovie, presentMovieSelection } from "../../movies/MovieSelector.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const addmovie: Command = {
-    name: 'addmovie',
-    description: 'Add a movie to the watchlist by searching TMDb.',
+    name: "addmovie",
+    description: "Add a movie to the watchlist by searching TMDb.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.Everyone],
 
     slashData: new SlashCommandBuilder()
-        .setName('addmovie')
-        .setDescription('Add a movie to the watchlist.')
-        .addStringOption(option =>
-            option.setName('title')
-                .setDescription('The movie title to search for.')
-                .setRequired(true)
+        .setName("addmovie")
+        .setDescription("Add a movie to the watchlist.")
+        .addStringOption((option) =>
+            option.setName("title").setDescription("The movie title to search for.").setRequired(true),
         )
-        .addIntegerOption(option =>
-            option.setName('year')
-                .setDescription('(Optional) Release year of the movie')
-                .setRequired(false)
+        .addIntegerOption((option) =>
+            option.setName("year").setDescription("(Optional) Release year of the movie").setRequired(false),
         ),
 
-    async execute({ interaction, services }: {
-        interaction?: ChatInputCommandInteraction<'raw' | 'cached'>;
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
         services: ServiceContainer;
     }) {
         if (!interaction) return;

@@ -1,4 +1,10 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, type Role, type Guild as DiscordGuild } from "discord.js";
+import {
+    SlashCommandBuilder,
+    type ChatInputCommandInteraction,
+    EmbedBuilder,
+    type Role,
+    type Guild as DiscordGuild,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import type { Guild as GuildConfig, GuildRoles } from "../../../models/Guild.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -17,18 +23,16 @@ const CHAMPION_ROLE_COLORS = {
 
 function resolveRoleByInput(
     guild: DiscordGuild,
-    input: string
+    input: string,
 ): { role: Role | null; isIdLookup: boolean; error?: string } {
     const trimmed = input.trim();
     const idMatch = trimmed.match(ROLE_ID_MATCH);
     if (idMatch) {
         const id = idMatch[1] ?? idMatch[2];
-        return { role: id ? guild.roles.cache.get(id) ?? null : null, isIdLookup: true };
+        return { role: id ? (guild.roles.cache.get(id) ?? null) : null, isIdLookup: true };
     }
 
-    const matches = guild.roles.cache.filter(
-        (role) => role.name.toLowerCase() === trimmed.toLowerCase()
-    );
+    const matches = guild.roles.cache.filter((role) => role.name.toLowerCase() === trimmed.toLowerCase());
 
     if (matches.size > 1) {
         return {
@@ -52,7 +56,7 @@ function resolveChampionField(value: number): { key: ChampionKey; label: string 
 
 function resolveChampionPlacement(
     roleId: string | undefined,
-    roles: GuildConfig["roles"] | undefined
+    roles: GuildConfig["roles"] | undefined,
 ): { key: ChampionKey; label: string; value: number } | null {
     if (!roleId || !roles) return null;
     if (roles.taskChampionFirst === roleId) return { key: "taskChampionFirst", label: "1st", value: 1 };
@@ -70,57 +74,50 @@ const taskroles: Command = {
     slashData: new SlashCommandBuilder()
         .setName("taskroles")
         .setDescription("Manage task milestone and champion roles.")
-        .addSubcommand((sub) =>
-            sub.setName("list").setDescription("List task roles.")
-        )
+        .addSubcommand((sub) => sub.setName("list").setDescription("List task roles."))
         .addSubcommand((sub) =>
             sub
                 .setName("add")
                 .setDescription("Add a task role.")
                 .addStringOption((opt) =>
-                    opt.setName("role").setDescription("Role name or ID (mention also works).").setRequired(true)
+                    opt.setName("role").setDescription("Role name or ID (mention also works).").setRequired(true),
                 )
                 .addStringOption((opt) =>
                     opt
                         .setName("type")
                         .setDescription("Role type.")
                         .setRequired(true)
-                        .addChoices(
-                            { name: "Milestone", value: "milestone" },
-                            { name: "Champion", value: "champion" }
-                        )
+                        .addChoices({ name: "Milestone", value: "milestone" }, { name: "Champion", value: "champion" }),
                 )
                 .addIntegerOption((opt) =>
                     opt
                         .setName("value")
                         .setDescription("Milestone threshold or champion placement (1-3).")
-                        .setRequired(true)
-                )
+                        .setRequired(true),
+                ),
         )
         .addSubcommand((sub) =>
             sub
                 .setName("edit")
                 .setDescription("Edit an existing task role.")
                 .addStringOption((opt) =>
-                    opt.setName("role").setDescription("Existing role name or ID.").setRequired(true)
+                    opt.setName("role").setDescription("Existing role name or ID.").setRequired(true),
                 )
                 .addStringOption((opt) =>
-                    opt.setName("newrole").setDescription("New role name or ID.").setRequired(true)
+                    opt.setName("newrole").setDescription("New role name or ID.").setRequired(true),
                 )
                 .addIntegerOption((opt) =>
                     opt
                         .setName("value")
                         .setDescription("Milestone threshold or champion placement (1-3).")
-                        .setRequired(true)
-                )
+                        .setRequired(true),
+                ),
         )
         .addSubcommand((sub) =>
             sub
                 .setName("delete")
                 .setDescription("Delete a task role.")
-                .addStringOption((opt) =>
-                    opt.setName("role").setDescription("Role name or ID.").setRequired(true)
-                )
+                .addStringOption((opt) => opt.setName("role").setDescription("Role name or ID.").setRequired(true)),
         )
         .addSubcommand((sub) =>
             sub
@@ -131,33 +128,32 @@ const taskroles: Command = {
                         .setName("type")
                         .setDescription("Role type.")
                         .setRequired(true)
-                        .addChoices(
-                            { name: "Milestone", value: "milestone" },
-                            { name: "Champion", value: "champion" }
-                        )
+                        .addChoices({ name: "Milestone", value: "milestone" }, { name: "Champion", value: "champion" }),
                 )
                 .addBooleanOption((opt) =>
-                    opt.setName("enabled").setDescription("Whether the role type is active.").setRequired(true)
-                )
+                    opt.setName("enabled").setDescription("Whether the role type is active.").setRequired(true),
+                ),
         )
         .addSubcommand((sub) =>
             sub
                 .setName("grant")
                 .setDescription("Grant a role to a user.")
                 .addUserOption((opt) =>
-                    opt.setName("user").setDescription("User to grant the role to.").setRequired(true)
+                    opt.setName("user").setDescription("User to grant the role to.").setRequired(true),
                 )
-                .addRoleOption((opt) =>
-                    opt.setName("role").setDescription("Role to grant.").setRequired(true)
-                )
+                .addRoleOption((opt) => opt.setName("role").setDescription("Role to grant.").setRequired(true)),
         )
         .addSubcommand((sub) =>
-            sub
-                .setName("init")
-                .setDescription("Sync task roles with server roles and grant them to eligible users.")
+            sub.setName("init").setDescription("Sync task roles with server roles and grant them to eligible users."),
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>; services: ServiceContainer }) {
+    async execute({
+        interaction,
+        services,
+    }: {
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
+        services: ServiceContainer;
+    }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
@@ -193,7 +189,7 @@ const taskroles: Command = {
                 current.length > 0
                     ? current.map((milestone) => {
                           const roleName = milestone.roleId
-                              ? guild.roles.cache.get(milestone.roleId)?.name ?? milestone.label
+                              ? (guild.roles.cache.get(milestone.roleId)?.name ?? milestone.label)
                               : milestone.label;
                           return `- ${roleName} — ${milestone.requiredSubmissions} submissions`;
                       })
@@ -204,7 +200,9 @@ const taskroles: Command = {
                 { label: "2nd", roleId: guildConfig.roles?.taskChampionSecond },
                 { label: "3rd", roleId: guildConfig.roles?.taskChampionThird },
             ].map((entry) => {
-                const roleName = entry.roleId ? guild.roles.cache.get(entry.roleId)?.name ?? "Missing role" : "Not set";
+                const roleName = entry.roleId
+                    ? (guild.roles.cache.get(entry.roleId)?.name ?? "Missing role")
+                    : "Not set";
                 return `- ${entry.label} — ${roleName}`;
             });
 
@@ -218,7 +216,7 @@ const taskroles: Command = {
                         "",
                         `**Champion Roles** (${championEnabled ? "Enabled" : "Disabled"})`,
                         ...championRoles,
-                    ].join("\n")
+                    ].join("\n"),
                 );
 
             await interaction.editReply({ embeds: [embed] });
@@ -268,7 +266,7 @@ const taskroles: Command = {
                 }
 
                 const placeholderIndex = current.findIndex(
-                    (item) => !item.roleId && item.label.toLowerCase() === role.name.toLowerCase()
+                    (item) => !item.roleId && item.label.toLowerCase() === role.name.toLowerCase(),
                 );
                 const placeholder = current[placeholderIndex];
 
@@ -324,14 +322,15 @@ const taskroles: Command = {
 
             const milestoneIndex = current.findIndex(
                 (item) =>
-                    item.roleId === role.id ||
-                    (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase())
+                    item.roleId === role.id || (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase()),
             );
             const milestone = current[milestoneIndex];
             const championPlacement = resolveChampionPlacement(role.id, guildConfig.roles);
 
             if (milestone && championPlacement) {
-                await interaction.editReply({ content: "That role is configured as both milestone and champion. Please resolve manually." });
+                await interaction.editReply({
+                    content: "That role is configured as both milestone and champion. Please resolve manually.",
+                });
                 return;
             }
 
@@ -442,13 +441,14 @@ const taskroles: Command = {
 
             const milestoneIndex = current.findIndex(
                 (item) =>
-                    item.roleId === role.id ||
-                    (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase())
+                    item.roleId === role.id || (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase()),
             );
             const championPlacement = resolveChampionPlacement(role.id, guildConfig.roles);
 
             if (milestoneIndex !== -1 && championPlacement) {
-                await interaction.editReply({ content: "That role is configured as both milestone and champion. Please resolve manually." });
+                await interaction.editReply({
+                    content: "That role is configured as both milestone and champion. Please resolve manually.",
+                });
                 return;
             }
 
@@ -466,7 +466,8 @@ const taskroles: Command = {
                     return false;
                 }
             };
-            const keptNote = " It is no longer a task role, but I couldn't delete it from the server. Check my permissions, or delete it yourself.";
+            const keptNote =
+                " It is no longer a task role, but I couldn't delete it from the server. Check my permissions, or delete it yourself.";
 
             if (milestoneIndex !== -1) {
                 const removed = current.splice(milestoneIndex, 1)[0];
@@ -474,7 +475,9 @@ const taskroles: Command = {
                 await services.guilds.update(guildId, { taskSettings: { milestoneRoles: current } });
                 const deleted = await deleteFromDiscord(`Removed task milestone role ${label}`);
                 await interaction.editReply({
-                    content: deleted ? `Deleted milestone role **${label}**.` : `Removed milestone role **${label}**.${keptNote}`,
+                    content: deleted
+                        ? `Deleted milestone role **${label}**.`
+                        : `Removed milestone role **${label}**.${keptNote}`,
                 });
                 return;
             }
@@ -579,18 +582,21 @@ const taskroles: Command = {
 
             for (const milestone of updatedMilestones) {
                 const desiredName = milestone.label;
-                let role = milestone.roleId ? guild.roles.cache.get(milestone.roleId) ?? null : null;
+                let role = milestone.roleId ? (guild.roles.cache.get(milestone.roleId) ?? null) : null;
 
                 if (!role) {
                     const matches = guild.roles.cache.filter(
-                        (candidate) => candidate.name.toLowerCase() === desiredName.toLowerCase()
+                        (candidate) => candidate.name.toLowerCase() === desiredName.toLowerCase(),
                     );
                     role = matches.first() ?? null;
                 }
 
                 if (!role) {
                     try {
-                        role = await guild.roles.create({ name: desiredName, colors: { primaryColor: NEUTRAL_ROLE_COLOR } });
+                        role = await guild.roles.create({
+                            name: desiredName,
+                            colors: { primaryColor: NEUTRAL_ROLE_COLOR },
+                        });
                     } catch (err) {
                         console.warn("[TaskRoles] Failed to create milestone role:", err);
                         continue;
@@ -627,18 +633,21 @@ const taskroles: Command = {
             const roleUpdates: GuildRoles = {};
             for (const definition of championDefinitions) {
                 const configuredId = guildConfig.roles?.[definition.key];
-                let role = configuredId ? guild.roles.cache.get(configuredId) ?? null : null;
+                let role = configuredId ? (guild.roles.cache.get(configuredId) ?? null) : null;
 
                 if (!role) {
                     const matches = guild.roles.cache.filter(
-                        (candidate) => candidate.name.toLowerCase() === definition.label.toLowerCase()
+                        (candidate) => candidate.name.toLowerCase() === definition.label.toLowerCase(),
                     );
                     role = matches.first() ?? null;
                 }
 
                 if (!role) {
                     try {
-                        role = await guild.roles.create({ name: definition.label, colors: { primaryColor: definition.color } });
+                        role = await guild.roles.create({
+                            name: definition.label,
+                            colors: { primaryColor: definition.color },
+                        });
                     } catch (err) {
                         console.warn("[TaskRoles] Failed to create champion role:", err);
                         continue;
@@ -668,9 +677,9 @@ const taskroles: Command = {
                 await services.guilds.update(guildId, updates);
             }
 
-            const milestoneRoles = resolveMilestones(
-                (milestoneChanged ? updatedMilestones : current).slice()
-            ).sort((a, b) => a.requiredSubmissions - b.requiredSubmissions);
+            const milestoneRoles = resolveMilestones((milestoneChanged ? updatedMilestones : current).slice()).sort(
+                (a, b) => a.requiredSubmissions - b.requiredSubmissions,
+            );
 
             if (milestoneEnabled && milestoneRoles.length > 0) {
                 const users = await userRepo.getAllUsers();
@@ -710,11 +719,7 @@ const taskroles: Command = {
             };
 
             if (!championEnabled) {
-                const removalTargets = [
-                    championRoleIds.first,
-                    championRoleIds.second,
-                    championRoleIds.third,
-                ];
+                const removalTargets = [championRoleIds.first, championRoleIds.second, championRoleIds.third];
                 for (const roleId of removalTargets) {
                     if (!roleId) continue;
                     const role = guild.roles.cache.get(roleId);
@@ -768,7 +773,7 @@ const taskroles: Command = {
         }
 
         await interaction.editReply({ content: "Unknown taskroles option." });
-    }
+    },
 };
 
 export default taskroles;
