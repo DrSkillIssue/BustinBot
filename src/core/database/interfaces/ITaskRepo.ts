@@ -2,7 +2,7 @@ import type { Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import type { TaskSubmission } from "../../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
-import type { TaskFeedback } from "../../../models/TaskFeedback.js";
+import type { TaskFeedback, TaskFeedbackOutcome } from "../../../models/TaskFeedback.js";
 import type { TaskCategory } from "../../../models/Task.js";
 
 export interface ITaskRepository {
@@ -10,14 +10,13 @@ export interface ITaskRepository {
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
     getTasksByCategory(category: string): Promise<Task[]>;
-    getRandomTasks(limit?: number, category?: string): Promise<Task[]>;
-    incrementWeight(id: string, amount?: number): Promise<void>;
 
     // Task polls
     createTaskPoll(poll: TaskPoll): Promise<void>;
     getTaskPollById(pollId: string): Promise<TaskPoll | null>;
     getActiveTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
     getLatestTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
+    updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void>;
     closeTaskPoll(pollId: string): Promise<void>;
     clearTaskPolls(): Promise<void>;
 
@@ -26,6 +25,7 @@ export interface ITaskRepository {
     getLatestTaskEvent(): Promise<TaskEvent | null>;
     getTaskEventById(id: string): Promise<TaskEvent | null>;
     getTaskEventsBetween(start: Date, end: Date): Promise<TaskEvent[]>;
+    updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void>;
     addCompletedUser(taskEventId: string, userId: string): Promise<void>;
     removeCompletedUser(taskEventId: string, userId: string): Promise<void>;
 
@@ -42,8 +42,7 @@ export interface ITaskRepository {
     ): Promise<void>;
 
     // Feedback
-    addFeedback(feedback: TaskFeedback): Promise<void>;
-    getFeedbackForTask(taskId: string, eventId?: string): Promise<TaskFeedback[]>;
+    recordFeedback(feedback: Omit<TaskFeedback, "id">): Promise<TaskFeedbackOutcome>;
 
     // Utilities
     deleteAllTasks(): Promise<void>;

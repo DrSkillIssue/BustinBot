@@ -1,16 +1,57 @@
+import assert from "node:assert";
 import { DateTime } from "luxon";
+import cron from "node-cron";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import { beforeEach, describe, expect, test, vi } from "../fixtures.js";
+import { beforeEach, describe, expect, storePollableTasks, test, vi } from "../fixtures.js";
 import { IDS, AS, chatInputInteraction } from "../discord/payloads.js";
+import { TaskCategory } from "../../src/models/Task.js";
 import {
     getNextEventDate,
     getNextPollDate,
     getNextPrizeDrawDate,
     initTaskScheduler,
+    stopTaskScheduler,
+    taskSchedulerJobs,
 } from "../../src/modules/tasks/TaskScheduler.js";
+import { guildFactory } from "../factories.js";
 
 const atMinute = (minute: number): Date =>
     DateTime.now().set({ hour: 12, minute, second: 0, millisecond: 0 }).toJSDate();
+
+describe("task scheduler", () => {
+    test("keeps each guild's jobs separate, and scheduling again replaces a guild's jobs instead of adding more", async ({
+        discord,
+        services,
+        otherGuild,
+    }) => {
+        await initTaskScheduler(discord.client, services);
+        await initTaskScheduler(discord.client, otherGuild);
+        await initTaskScheduler(discord.client, services);
+
+        expect(taskSchedulerJobs(IDS.guild).size).toBe(5);
+        expect(taskSchedulerJobs(IDS.otherGuild).size).toBe(5);
+        expect(cron.getTasks().size).toBe(10);
+
+        await stopTaskScheduler(IDS.guild);
+
+        expect(taskSchedulerJobs(IDS.guild).size).toBe(0);
+        expect(taskSchedulerJobs(IDS.otherGuild).size).toBe(5);
+    });
+    test("logs a job that fails under the job's name", async ({ discord, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        await initTaskScheduler(discord.client, services);
+        // The emulator can't be made to fail one read, so the guild read fails the way an unreachable Firestore fails it
+        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        vi.spyOn(services.guilds, "get").mockRejectedValueOnce(unavailable);
+
+        const poll = taskSchedulerJobs(IDS.guild).get("poll");
+        assert(poll);
+
+        await expect(poll.execute()).rejects.toBe(unavailable);
+
+        expect(error).toHaveBeenCalledWith(`[taskScheduler:${IDS.guild}:poll]`, unavailable);
+    });
+});
 
 describe("the dev-mode task cycle", () => {
     beforeEach(() => {
@@ -28,6 +69,131 @@ describe("the dev-mode task cycle", () => {
             atMinute(7),
             atMinute(15),
         ]);
+    });
+
+    test("posts the polls the minute before each 7-minute mark and starts their tasks on the mark", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await storePollableTasks(factories);
+        await services.repos.keywordRepo.addKeyword("Bustin");
+        discord.acceptMessages(IDS.channel);
+        discord.acceptMessageEdits(IDS.channel);
+        await initTaskScheduler(discord.client, services);
+        const job = taskSchedulerJobs(IDS.guild).get("test");
+        assert(job);
+
+        vi.setSystemTime(atMinute(6));
+        await job.execute();
+        const categories = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
+        const polls = await Promise.all(
+            categories.map((category) => services.repos.taskRepo.getActiveTaskPollByCategory(category)),
+        );
+        expect(polls).toEqual(categories.map((category) => expect.objectContaining({ category, isActive: true })));
+        expect(await services.repos.taskRepo.getLatestTaskEvent()).toBeNull();
+
+        vi.setSystemTime(atMinute(7));
+        await job.execute();
+        const started = await services.repos.taskRepo.getTaskEventsBetween(
+            atMinute(7),
+            DateTime.fromJSDate(atMinute(7)).plus({ weeks: 2 }).toJSDate(),
+        );
+        expect(started.map((event) => event.task.id).sort()).toEqual(polls.map((poll) => poll?.options[0]?.id).sort());
+    });
+
+    test("draws the prize one minute after every other 7-minute mark", async ({ discord, services }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await initTaskScheduler(discord.client, services);
+        const job = taskSchedulerJobs(IDS.guild).get("test");
+        assert(job);
+
+        vi.setSystemTime(atMinute(8));
+        await job.execute();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
+
+        vi.setSystemTime(atMinute(15));
+        await job.execute();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([
+            expect.objectContaining({ totalEntries: 0 }),
+        ]);
+        expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
+    });
+
+    test("does nothing on the other minutes", async ({ discord, services, factories }) => {
+        await storePollableTasks(factories);
+        await initTaskScheduler(discord.client, services);
+
+        vi.setSystemTime(atMinute(2));
+        const job = taskSchedulerJobs(IDS.guild).get("test");
+        assert(job);
+        await job.execute();
+
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
+        expect(discord.requests()).toEqual([]);
+    });
+});
+
+describe("/tasktoggle schedule", () => {
+    test("starts this guild's task jobs and saves the toggle", async ({ discord, interact, services }) => {
+        const interaction = await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
+        ]);
+        expect(taskSchedulerJobs(IDS.guild).size).toBe(5);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskScheduler).toBe(true);
+    });
+
+    test("stops only this guild's task jobs when switched off", async ({ discord, interact, otherGuild, services }) => {
+        await initTaskScheduler(discord.client, otherGuild);
+        await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+                AS.botAdmin,
+            ),
+        );
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "⏹️ Task scheduler **disabled** and stopped for this guild." }),
+        ]);
+        expect(taskSchedulerJobs(IDS.guild).size).toBe(0);
+        expect(taskSchedulerJobs(IDS.otherGuild).size).toBe(5);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskScheduler).toBe(false);
+    });
+
+    test("works for a guild stored without any toggles", async ({ discord, interact, db }) => {
+        const { toggles: _toggles, ...withoutToggles } = guildFactory.build();
+        await db.doc(`guilds/${IDS.guild}`).set(withoutToggles);
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "schedule" }],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "✅ Task scheduler **enabled** and started for this guild." }),
+        ]);
+        expect(taskSchedulerJobs(IDS.guild).size).toBe(5);
     });
 });
 

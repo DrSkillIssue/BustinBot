@@ -1,17 +1,20 @@
+import { randomUUID } from 'node:crypto';
 import { Client, TextChannel } from 'discord.js';
+import { DateTime } from 'luxon';
 import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { TaskCategory } from '../../models/Task.js';
 import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
+import { refreshTaskPollMessage } from './HandleTaskPoll.js';
 
 function generateTaskEventId(taskId: string): string {
     const now = new Date();
     const yyyy = now.getUTCFullYear();
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(now.getUTCDate()).padStart(2, '0');
-    return `${taskId}-${yyyy}${mm}${dd}`;
+    return `${taskId}-${yyyy}${mm}${dd}-${randomUUID().slice(0, 8)}`;
 }
 
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {
@@ -147,13 +150,14 @@ export async function startTaskEventForCategory(
 
     const taskEventId = generateTaskEventId(task.id);
 
+    const now = DateTime.utc();
     const event: TaskEvent = {
         id: taskEventId,
         task,
         category,
         keyword: sharedKeyword,
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
+        startTime: now.toJSDate(),
+        endTime: now.plus({ weeks: 1 }).toJSDate(),
         amounts: {
             bronze: task.amtBronze,
             silver: task.amtSilver,
@@ -165,7 +169,7 @@ export async function startTaskEventForCategory(
             gold: 0
         },
         completedUserIds: [],
-        createdAt: new Date(),
+        createdAt: now.toJSDate(),
     };
 
     const { embeds, components, files } = buildTaskEventEmbed(event);
@@ -175,7 +179,14 @@ export async function startTaskEventForCategory(
     event.messageId = sentMessage.id;
     event.channelId = (channel as TextChannel).id;
 
-    await taskEvents.storeTaskEvent(event);
+    try {
+        await taskEvents.storeTaskEvent(event);
+    } catch (err) {
+        await sentMessage.delete().catch((deleteErr) => {
+            console.warn(`[TaskStart] Failed to remove the post for unsaved event ${taskEventId}:`, deleteErr);
+        });
+        throw err;
+    }
 
     try {
         await registerPeriodicTaskEvent(services, taskEventId);
@@ -185,6 +196,11 @@ export async function startTaskEventForCategory(
 
     if (pollData.id) {
         await repos.taskRepo.closeTaskPoll(pollData.id);
+        try {
+            await refreshTaskPollMessage(client, { ...pollData, isActive: false });
+        } catch (err) {
+            console.warn(`[TaskStart] Failed to show the ${category} poll as closed:`, err);
+        }
     }
 
     console.log(`[TaskStart] Task event posted for ${category} (${taskEventId})`);

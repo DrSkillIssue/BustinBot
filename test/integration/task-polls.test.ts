@@ -1,11 +1,21 @@
+import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
-import { DateTime } from "luxon";
+import { DateTime, Duration } from "luxon";
 import { describe, expect, type StoringFactories, storePollableTasks, test } from "../fixtures.js";
 import { componentsIn } from "../discord/harness.js";
-import { IDS, apiMessage, buttonInteraction, AS, chatInputInteraction } from "../discord/payloads.js";
+import {
+    IDS,
+    apiMember,
+    apiMessage,
+    apiUser,
+    buttonInteraction,
+    AS,
+    chatInputInteraction,
+} from "../discord/payloads.js";
 import { taskFactory, taskPollFactory } from "../factories.js";
 import { TaskCategory } from "../../src/models/Task.js";
 import { type TaskPoll } from "../../src/models/TaskPoll.js";
+import { postAllTaskPolls } from "../../src/modules/tasks/HandleTaskPoll.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
@@ -24,6 +34,36 @@ async function storeOpenPoll(factories: StoringFactories, overrides: Partial<Tas
         ...overrides,
     });
 }
+
+describe("posting the weekly task polls", () => {
+    test("announces them and posts one open poll per category, each stored with its options", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await storePollableTasks(factories);
+        discord.acceptMessages(IDS.channel);
+
+        await postAllTaskPolls(discord.client, services);
+
+        const [announcement, ...polls] = discord.messagesSentTo(IDS.channel);
+        expect(announcement?.content).toContain("**New task polls are live!**");
+        expect(polls).toHaveLength(3);
+        for (const poll of polls) {
+            expect(componentsIn(poll.components)).toHaveLength(3);
+            expect(poll.files).toEqual(["category_icon.png"]);
+        }
+        for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
+            const stored = await services.repos.taskRepo.getActiveTaskPollByCategory(category);
+            assert(stored);
+            expect(stored.options).toHaveLength(3);
+            expect(stored).toMatchObject({ isActive: true, channelId: IDS.channel, id: stored.messageId });
+            expect(stored.endsAt.getTime() - stored.createdAt.getTime()).toBe(
+                Duration.fromObject({ hours: 24 }).toMillis(),
+            );
+        }
+    });
+});
 
 describe("voting in a task poll", () => {
     test("records the vote, redraws the poll with it and thanks the member", async ({
@@ -46,6 +86,73 @@ describe("voting in a task poll", () => {
         const [redrawn] = discord.messageEdits(IDS.channel, poll.messageId);
         expect(redrawn?.embeds?.[0]?.description).toContain("**1 vote**");
         expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
+    });
+
+    test("lets a member change their vote without counting them twice", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const poll = await storeOpenPoll(factories);
+        discord.acceptMessageEdits(IDS.channel);
+
+        await interact(buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId })));
+        await interact(buttonInteraction(`vote_${poll.category}_PVM003`, apiMessage({ id: poll.messageId })));
+
+        expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({ [IDS.user]: "PVM003" });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ taskPollsVoted: 1 });
+    });
+
+    test("keeps counting every vote on a poll posted before the bot restarted", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const poll = await storeOpenPoll(factories);
+        discord.acceptMessageEdits(IDS.channel);
+        const voters = [
+            SnowflakeUtil.generate().toString(),
+            SnowflakeUtil.generate().toString(),
+            SnowflakeUtil.generate().toString(),
+        ];
+
+        for (const voter of voters) {
+            const click = await interact(
+                buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId }), {
+                    member: apiMember({ user: apiUser({ id: voter }) }),
+                }),
+            );
+            expect(discord.originalEdits(click)).toEqual([
+                expect.objectContaining({ content: "Thank you for your vote!" }),
+            ]);
+        }
+
+        expect(Object.keys((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes ?? {})).toEqual(voters);
+    });
+
+    test("refuses votes once the poll has closed or its time is up", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const closed = await storeOpenPoll(factories, { isActive: false });
+        const expired = await storeOpenPoll(factories, {
+            messageId: SnowflakeUtil.generate().toString(),
+            endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(),
+        });
+
+        for (const poll of [closed, expired]) {
+            const click = await interact(
+                buttonInteraction(`vote_${poll.category}_PVM001`, apiMessage({ id: poll.messageId })),
+            );
+            expect(discord.originalEdits(click)).toEqual([
+                expect.objectContaining({ content: "This poll has closed." }),
+            ]);
+            expect((await services.repos.taskRepo.getTaskPollById(poll.id))?.votes).toEqual({});
+        }
     });
 
     test("refuses a vote from an outdated button or for an option the poll doesn't have", async ({
@@ -107,6 +214,27 @@ describe("/taskpoll", () => {
 });
 
 describe("/leagues", () => {
+    test("switching Leagues on adds a Leagues poll to the next task polls", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", false, IDS.user);
+        await storePollableTasks(factories, Object.values(TaskCategory));
+        discord.acceptMessages(IDS.channel);
+
+        const command = await interact(chatInputInteraction("leagues", [], AS.taskAdmin));
+        await postAllTaskPolls(discord.client, services);
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({ content: "Leagues tasks have been **enabled**." }),
+        ]);
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.Leagues)).toMatchObject({
+            isActive: true,
+        });
+    });
+
     test("switches Leagues back off", async ({ discord, interact, services }) => {
         await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", true, IDS.user);
 

@@ -1,5 +1,5 @@
 import { ButtonInteraction } from 'discord.js';
-import type { TaskFeedback } from '../../models/TaskFeedback.js';
+import type { TaskFeedbackOutcome } from '../../models/TaskFeedback.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 
 export async function handleTaskFeedback(interaction: ButtonInteraction, repo: ITaskRepository) {
@@ -51,39 +51,16 @@ export async function handleTaskFeedback(interaction: ButtonInteraction, repo: I
             return;
         }
 
-        const userId = interaction.user.id;
-        let task = await repo.getTaskById(taskId);
-
-        if (!task) {
-            await interaction.editReply({ content: 'Task not found.' });
-            return;
-        }
-
-        const allFeedback = await repo.getFeedbackForTask(taskId);
-        const existing = allFeedback.find(
-            (entry) => entry.userId === userId && entry.taskId === taskId
-        );
-        let message: string;
-
-        if (!existing) {
-            // First time vote
-            const feedback: TaskFeedback = { id: Date.now().toString(), taskId, eventId, userId, vote: direction };
-            await repo.addFeedback(feedback);
-            await repo.incrementWeight(taskId, direction === "up" ? +1 : -1);
-            message = 'Thanks for your feedback!';
-        } else if (existing.vote === direction) {
-            // Same vote again
-            message = `You already gave this task a ${direction === 'up' ? '👍' : '👎'} for this event.`;
-        } else {
-            // Changed vote
-            existing.vote = direction;
-            await repo.addFeedback(existing); 
-            await repo.incrementWeight(taskId, direction === "up" ? +2 : -2);
-            message = "Feedback updated!";
-        }
-        await interaction.editReply({ content: message });
+        const outcome = await repo.recordFeedback({ taskId, eventId, userId: interaction.user.id, vote: direction });
+        const replies: Record<TaskFeedbackOutcome, string> = {
+            added: 'Thanks for your feedback!',
+            changed: 'Feedback updated!',
+            unchanged: `You already gave this task a ${direction === 'up' ? '👍' : '👎'}.`,
+            taskNotFound: 'Task not found.',
+        };
+        await interaction.editReply({ content: replies[outcome] });
     } catch (err) {
-        console.error('[TaskFeedback] File error:', err);
-        await interaction.editReply({ content: 'Error reading task data.' });
+        console.error('[TaskFeedback] Failed to record feedback:', err);
+        await interaction.editReply({ content: "Couldn't record your feedback. Please try again." });
     }
 }

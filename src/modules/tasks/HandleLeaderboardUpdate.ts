@@ -14,29 +14,18 @@ import {
     resolvePeriodicProgress,
     shouldFinalizePeriodicLeaderboard,
 } from "./TaskLeaderboards.js";
-import type { TaskLeaderboard, TaskLeaderboardEntry, TaskTierCounts } from "../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardEntry, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveTaskChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
-    const guildId = services.guildId;
-    if (!guildId) return null;
-
-    const guildConfig = await services.guilds.get(guildId);
-    if (!guildConfig) return null;
-
-    const guild = await client.guilds.fetch(guildId);
-    const channelId = guildConfig.channels?.taskChannel;
-    if (channelId) {
-        const fetched = await guild.channels.fetch(channelId);
-        if (fetched && isTextChannel(fetched)) {
-            return fetched;
-        }
+    const guildConfig = await services.guilds.get(services.guildId);
+    const channelId = guildConfig?.channels?.taskChannel;
+    const channel = channelId ? await client.channels.fetch(channelId).catch(() => null) : null;
+    if (!channel || !isTextChannel(channel)) {
+        console.warn("[LeaderboardUpdate] Task channel not found for leaderboard update.");
+        return null;
     }
-
-    const fallback = client.channels.cache.find(
-        (channel): channel is TextChannel => isTextChannel(channel) && "name" in channel && channel.name === "weekly-task"
-    );
-    return fallback ?? null;
+    return channel;
 }
 
 async function resolveTaskUserMention(services: ServiceContainer): Promise<string | null> {
@@ -338,18 +327,18 @@ async function buildFinalLeaderboardEmbed(
 export async function postWeeklyLeaderboardSnapshot(
     client: Client,
     services: ServiceContainer
-): Promise<void> {
+): Promise<boolean> {
     const repo = services.repos.taskLeaderboardRepo;
 
     try {
         await ensureTaskLeaderboardsInitialized(services);
     } catch (err) {
         console.warn("[LeaderboardUpdate] Leaderboard initialisation failed:", err);
-        return;
+        return false;
     }
 
     const leaderboard = await repo.getLeaderboard("periodic");
-    if (!leaderboard?.period) return;
+    if (!leaderboard?.period) return false;
 
     const ranked = buildRankedPeriodicEntries(leaderboard.points);
     const topTen = ranked.slice(0, 10);
@@ -371,35 +360,30 @@ export async function postWeeklyLeaderboardSnapshot(
         });
 
     const channel = await resolveTaskChannel(client, services);
-    if (!channel) {
-        console.warn("[LeaderboardUpdate] Task channel not found for leaderboard update.");
-        return;
-    }
+    if (!channel) return false;
 
     await channel.send({ embeds: [embed] });
+    return true;
 }
 
 export async function postFinalLeaderboardSnapshot(
     client: Client,
     services: ServiceContainer
-): Promise<void> {
+): Promise<boolean> {
     const repo = services.repos.taskLeaderboardRepo;
 
     try {
         await ensureTaskLeaderboardsInitialized(services);
     } catch (err) {
         console.warn("[LeaderboardUpdate] Leaderboard initialisation failed:", err);
-        return;
+        return false;
     }
 
     const leaderboard = await repo.getLeaderboard("periodic");
-    if (!leaderboard?.period) return;
+    if (!leaderboard?.period) return false;
 
     const channel = await resolveTaskChannel(client, services);
-    if (!channel) {
-        console.warn("[LeaderboardUpdate] Task channel not found for leaderboard update.");
-        return;
-    }
+    if (!channel) return false;
 
     const hasCurrentEvents = leaderboard.period.eventIds.length > 0;
     const fallbackToCompleted = !hasCurrentEvents && !!leaderboard.completedPeriod;
@@ -426,7 +410,7 @@ export async function postFinalLeaderboardSnapshot(
         );
         const mention = await resolveTaskUserMention(services);
         await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
-        return;
+        return true;
     }
 
     const progress = await resolvePeriodicProgress(services, leaderboard.period);
@@ -445,6 +429,7 @@ export async function postFinalLeaderboardSnapshot(
     });
     const mention = await resolveTaskUserMention(services);
     await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
+    return true;
 }
 
 export async function postPeriodicLeaderboardUpdate(
@@ -470,44 +455,8 @@ export async function postPeriodicLeaderboardUpdate(
     const { ready, leaderboard: latest } = await shouldFinalizePeriodicLeaderboard(services);
     const activeLeaderboard = latest ?? leaderboard;
 
-    if (ready && latest) {
-        const rankedAll = buildRankedPeriodicEntries(latest.points);
-        const placements = resolvePeriodicPlacements(
-            rankedAll.map((entry) => ({
-                userId: entry.userId,
-                points: entry.points,
-            }))
-        );
-
-        await awardTaskChampionRoles(client, services, placements);
-
-        const channel = await resolveTaskChannel(client, services);
-        if (!channel) {
-            console.warn("[LeaderboardUpdate] Task channel not found for leaderboard update.");
-            return;
-        }
-
-        const finalTopTen = rankedAll.slice(0, 10);
-
-        if (!latest.period) {
-            console.warn("[LeaderboardUpdate] Period data missing during finalisation.");
-            return;
-        }
-
-        const progress = await resolvePeriodicProgress(services, latest.period);
-        const finalEmbed = await buildFinalLeaderboardEmbed(client, services, latest, placements, finalTopTen, undefined, {
-            periodLabel: resolvePeriodicLabel(latest.period?.length),
-            footer: {
-                elapsed: progress.elapsed,
-                total: progress.total,
-            },
-            tierCounts: latest.tierCounts ?? {},
-        });
-        const mention = await resolveTaskUserMention(services);
-        await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
-
-        await notifyChampionWinners(client, services, placements);
-        await finalizePeriodicLeaderboard(services, latest, placements.winners);
+    if (ready && latest?.period) {
+        await finaliseAndAnnounce(client, services, latest, latest.period);
         return;
     }
 
@@ -538,12 +487,34 @@ export async function postPeriodicLeaderboardUpdate(
         });
 
     const channel = await resolveTaskChannel(client, services);
-    if (!channel) {
-        console.warn("[LeaderboardUpdate] Task channel not found for leaderboard update.");
-        return;
-    }
+    if (!channel) return;
 
     await channel.send({ embeds: [embed] });
+}
+
+async function finaliseAndAnnounce(client: Client, services: ServiceContainer, latest: TaskLeaderboard, period: TaskLeaderboardPeriod): Promise<void> {
+    const progress = await resolvePeriodicProgress(services, period);
+    const finalised = await finalizePeriodicLeaderboard(services, period.index);
+    if (!finalised) {
+        console.warn(`[LeaderboardUpdate] Period ${period.index} had already ended.`);
+        return;
+    }
+    const { completed, placements } = finalised;
+
+    await awardTaskChampionRoles(client, services, placements, completed.index);
+
+    const channel = await resolveTaskChannel(client, services);
+    if (channel) {
+        const finalEmbed = await buildFinalLeaderboardEmbed(client, services, latest, placements, rankPeriodicEntries(completed.topTen ?? []), undefined, {
+            periodLabel: resolvePeriodicLabel(period.length),
+            footer: { elapsed: progress.elapsed, total: progress.total },
+            tierCounts: completed.tierCounts ?? {},
+        });
+        const mention = await resolveTaskUserMention(services);
+        await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
+    }
+
+    await notifyChampionWinners(client, services, placements);
 }
 
 export async function warnPendingLeaderboardFinalization(
@@ -585,15 +556,17 @@ export async function warnPendingLeaderboardFinalization(
     const channelId = guildConfig.channels?.taskVerification;
     if (!channelId) return;
 
-    const guild = await client.guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel || !channel.isTextBased()) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !isTextChannel(channel)) {
+        console.warn(`[LeaderboardUpdate] Task verification channel ${channelId} not found; pending submissions not announced.`);
+        return;
+    }
 
     const adminRoleId = guildConfig.roles?.taskAdmin;
     const mention = adminRoleId ? `<@&${adminRoleId}>` : "Task Admins";
     const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
 
-    await (channel as TextChannel).send(withSuppressedMentions({
+    await channel.send(withSuppressedMentions({
         content: `${mention} There are ${pendingTotal} pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`
     }, suppressMentions));
 }

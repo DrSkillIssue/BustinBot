@@ -1,7 +1,7 @@
 import type { Client, Guild } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPendingPeriod, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardCompletedPeriod, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPendingPeriod, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
@@ -478,43 +478,52 @@ export async function shouldFinalizePeriodicLeaderboard(
     return { ready: true, leaderboard };
 }
 
+export interface FinalisedPeriod {
+    completed: TaskLeaderboardCompletedPeriod;
+    placements: PeriodicPlacements;
+}
+
 export async function finalizePeriodicLeaderboard(
     services: ServiceContainer,
-    leaderboard: TaskLeaderboard,
-    winners: TaskLeaderboardEntry[]
-): Promise<void> {
+    periodIndex: number
+): Promise<FinalisedPeriod | null> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!leaderboard.period) return;
 
-    const now = new Date().toISOString();
-    const nextIndex = leaderboard.period.index + 1;
     const nextLength = await resolvePeriodLength(services);
-    const finalTopTen = buildRankedPeriodicEntries(leaderboard.points)
-        .slice(0, 10)
-        .map((entry) => ({ userId: entry.userId, points: entry.points }));
 
-    const pendingPeriod = leaderboard.pendingPeriod;
+    return repo.updateLeaderboardWith("periodic", (leaderboard) => {
+        if (!leaderboard?.period || leaderboard.period.index !== periodIndex) return null;
 
-    await repo.updateLeaderboard("periodic", {
-        completedPeriod: {
+        const now = new Date().toISOString();
+        const ranked = buildRankedPeriodicEntries(leaderboard.points).map((entry) => ({ userId: entry.userId, points: entry.points }));
+        const placements = resolvePeriodicPlacements(ranked);
+        const completed: TaskLeaderboardCompletedPeriod = {
             index: leaderboard.period.index,
             eventIds: leaderboard.period.eventIds,
             endedAt: now,
-            topThree: winners,
-            topTen: finalTopTen,
+            topThree: placements.winners,
+            topTen: ranked.slice(0, 10),
             tierCounts: leaderboard.tierCounts ?? {},
-        },
-        period: {
-            ...leaderboard.period,
-            eventIds: pendingPeriod?.period.eventIds ?? [],
-            startedAt: pendingPeriod?.period.startedAt ?? now,
-            index: nextIndex,
-            length: pendingPeriod?.period.length ?? nextLength,
-        },
-        points: pendingPeriod?.points ?? {},
-        tierCounts: pendingPeriod?.tierCounts ?? {},
-        pendingPeriod: null,
-        updatedAt: now,
+        };
+        const pendingPeriod = leaderboard.pendingPeriod;
+
+        return {
+            update: {
+                completedPeriod: completed,
+                period: {
+                    ...leaderboard.period,
+                    eventIds: pendingPeriod?.period.eventIds ?? [],
+                    startedAt: pendingPeriod?.period.startedAt ?? now,
+                    index: leaderboard.period.index + 1,
+                    length: pendingPeriod?.period.length ?? nextLength,
+                },
+                points: pendingPeriod?.points ?? {},
+                tierCounts: pendingPeriod?.tierCounts ?? {},
+                pendingPeriod: null,
+                updatedAt: now,
+            },
+            result: { completed, placements },
+        };
     });
 }
 
@@ -611,6 +620,7 @@ export async function awardTaskChampionRoles(
     client: Client,
     services: ServiceContainer,
     placements: PeriodicPlacements,
+    periodIndex: number,
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
 
@@ -711,11 +721,8 @@ export async function awardTaskChampionRoles(
         second: placements.second.map((entry) => entry.userId),
         third: placements.third.map((entry) => entry.userId),
         awardedAt: new Date().toISOString(),
+        periodIndex,
     };
-
-    if (leaderboard.period?.index !== undefined) {
-        championsUpdate.periodIndex = leaderboard.period.index;
-    }
 
     await repo.updateLeaderboard("periodic", {
         champions: championsUpdate,

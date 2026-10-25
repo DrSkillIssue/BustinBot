@@ -81,6 +81,15 @@ describe("KeywordSelector", () => {
             });
         }
     });
+
+    test("never repeats the keyword used last when there are only a few", async ({ services, factories }) => {
+        for (const random of [0, 0.5, 0.99]) {
+            await storeKeywordsUsedInOrder(factories, ["alpha", "bravo", "charlie"]);
+            vi.spyOn(Math, "random").mockReturnValue(random);
+
+            expect(await services.keywords.selectKeyword("event-next")).not.toBe("alpha");
+        }
+    });
 });
 
 describe("KeywordRepository", () => {

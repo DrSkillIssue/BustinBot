@@ -1,7 +1,6 @@
 import type { IPrizeDrawRepository } from '../../core/database/interfaces/IPrizeDrawRepo.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import type { PrizeDraw } from '../../models/PrizeDraw.js';
-import { TaskCategory } from '../../models/Task.js';
 import type { TaskSubmission } from '../../models/TaskSubmission.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import { buildPrizeDrawEmbed } from './TaskEmbeds.js';
@@ -65,8 +64,8 @@ async function getCarryOverSubmissions(
     if (!previousDraw) return [];
 
     const previousDrawEnd = parseDateInput(previousDraw.end);
-    const previousDrawRolledAt = parseDateInput(previousDraw.rolledAt ?? null);
-    if (!previousDrawEnd || !previousDrawRolledAt) return [];
+    const previousSnapshotTakenAt = parseDateInput(previousDraw.snapshotTakenAt);
+    if (!previousDrawEnd || !previousSnapshotTakenAt) return [];
 
     const previousEventIds = previousDraw.taskEventIds ?? [];
     if (!previousEventIds.length) return [];
@@ -84,9 +83,9 @@ async function getCarryOverSubmissions(
             if (!submittedAt || !reviewedAt) return false;
 
             const submittedBeforeOrAtPreviousWindowEnd = submittedAt.getTime() <= previousDrawEnd.getTime();
-            const reviewedAfterPreviousRoll = reviewedAt.getTime() > previousDrawRolledAt.getTime();
+            const reviewedAfterPreviousSnapshot = reviewedAt.getTime() > previousSnapshotTakenAt.getTime();
 
-            return submittedBeforeOrAtPreviousWindowEnd && reviewedAfterPreviousRoll;
+            return submittedBeforeOrAtPreviousWindowEnd && reviewedAfterPreviousSnapshot;
         });
 }
 
@@ -94,14 +93,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     const now = new Date();
     const [start, end] = getPeriodRange(now, DEFAULT_PERIOD_DAYS);
 
-    const rawEvents = await taskRepo.getTaskEventsBetween(start, end);
-    const qualifyingEvents = rawEvents
-        .filter(event => {
-            const eventEnd = event.endTime;
-            const endsAfterStart = eventEnd.getTime() >= start.getTime();
-            const endsBeforeOrAtNow = eventEnd.getTime() <= end.getTime();
-            return endsAfterStart && endsBeforeOrAtNow;
-        });
+    const qualifyingEvents = await taskRepo.getTaskEventsBetween(start, now);
 
     if (!qualifyingEvents.length) {
         console.warn('[PrizeDraw] No task events found in range for snapshot.');
@@ -204,7 +196,7 @@ export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, sna
     snapshot.winnerId = winnerId || '';
     snapshot.rolledAt = new Date().toISOString();
 
-    await prizeRepo.setWinners(snapshot.id, {} as Record<TaskCategory, string[]>, winnerId);
+    await prizeRepo.setWinner(snapshot.id, winnerId);
     console.log(`[PrizeDraw] Winner for ${snapshotId}: ${winnerId}`);
 
     const userRepo = services.repos.userRepo;
@@ -275,32 +267,20 @@ export async function announcePrizeDrawWinner(
         snapshot.tierCounts
     );
 
-    let channel: TextChannel | undefined;
     const taskChannelId = guildConfig.channels?.taskChannel;
-    if (taskChannelId) {
-        const fetched = await guild.channels.fetch(taskChannelId);
-        if (fetched && isTextChannel(fetched)) {
-            channel = fetched;
-        }
-    }
-
-    if (!channel) {
-        channel = client.channels.cache.find(
-            (c): c is TextChannel => isTextChannel(c) && "name" in c && c.name === 'weekly-task'
-        );
-    }
-
-    if (!channel) {
+    const fetched = taskChannelId
+        ? await guild.channels.fetch(taskChannelId).catch((err) => {
+            console.warn(`[PrizeDraw] Can't reach the task channel ${taskChannelId}:`, err);
+            return null;
+        })
+        : null;
+    if (!fetched || !isTextChannel(fetched)) {
         console.warn(`[PrizeDraw] Announcement channel not found.`);
         return false;
     }
+    const channel: TextChannel = fetched;
 
-    if (suppressMentions) {
-        await channel.send(withSuppressedMentions({ content: `${mention}` }, true));
-    } else {
-        await channel.send(`${mention}`);
-    }
-    await channel.send({ ...embedData });
+    await channel.send(withSuppressedMentions({ ...embedData, ...(mention ? { content: mention } : {}) }, suppressMentions));
     console.log(`[PrizeDraw] Winner embed sent to #${channel.name}`);
 
     // Send the winner a DM

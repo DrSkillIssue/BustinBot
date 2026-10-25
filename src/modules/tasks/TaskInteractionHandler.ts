@@ -9,7 +9,8 @@ import {
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
-import { hasActiveTaskPollCollector, handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonPage } from "./TaskList.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -18,16 +19,19 @@ export async function handleTaskInteraction(
 ) {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
-            // Live polls use in-memory collectors. Persisted fallback handles post-restart votes.
-            if (hasActiveTaskPollCollector(interaction.message.id)) {
-                return;
-            }
-
             await handleTaskPollVoteInteraction(interaction, services);
             return;
         }
 
-        if (interaction.customId.startsWith("task-feedback|")) {
+        if (interaction.customId.startsWith(TASK_LIST_BUTTON)) {
+            const { category, page } = taskListButtonPage(interaction.customId);
+            await interaction.deferUpdate();
+            await interaction.editReply(await buildTaskListPage(services, category, page));
+            return;
+        }
+
+        // Buttons posted before 2025-11-03 use the older task-feedback-up-<task>-<event> ids
+        if (interaction.customId.startsWith("task-feedback|") || interaction.customId.startsWith("task-feedback-")) {
             return handleTaskFeedback(interaction, services.tasks.repository);
         }
 
@@ -42,6 +46,7 @@ export async function handleTaskInteraction(
                 });
                 await interaction.editReply(payload);
             } catch (err) {
+                console.error("[TaskInteractions] Failed to build the leaderboard:", err);
                 try {
                     await interaction.editReply({
                         content: "Leaderboard initialisation failed. Please use /reportbug if it continues.",

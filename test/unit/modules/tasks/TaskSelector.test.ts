@@ -20,6 +20,17 @@ describe("pickWeightedRandom", () => {
         expect(picks.filter((id) => id === "common").length / picks.length).toBeCloseTo(0.75, 1);
     });
 
+    test("never picks a task weighted zero while another task is left", () => {
+        vi.spyOn(Math, "random").mockReturnValue(0);
+        const tasks = [
+            taskFactory.build({ id: "voted-out", weight: 0 }),
+            taskFactory.build({ id: "normal", weight: 50 }),
+        ];
+
+        expect(pickWeightedRandom(tasks, 1).map((task) => task.id)).toEqual(["normal"]);
+        expect(pickWeightedRandom(tasks, 2).map((task) => task.id)).toEqual(["normal", "voted-out"]);
+    });
+
     test("picks each task at most once", () => {
         seedRandom(3);
         const tasks = Array.from({ length: 5 }, (_, index) => taskFactory.build({ id: `PVM00${index}` }));
@@ -65,6 +76,22 @@ describe("selectTasksForCategory", () => {
 
         expect(skills).toHaveLength(3);
         expect(new Set(skills).size).toBe(3);
+    });
+
+    test("offers every skill equally often", () => {
+        seedRandom(42);
+        const offered = new Map<string | undefined, number>();
+        const polls = 4000;
+
+        for (let poll = 0; poll < polls; poll++) {
+            for (const task of selectTasksForCategory(TaskCategory.Skilling, skilling)) {
+                offered.set(task.skill, (offered.get(task.skill) ?? 0) + 1);
+            }
+        }
+
+        for (const skill of [Skill.Woodcutting, Skill.Fishing, Skill.Mining, Skill.Cooking]) {
+            expect((offered.get(skill) ?? 0) / polls).toBeCloseTo(0.75, 1);
+        }
     });
 
     test("offers nothing for a category without tasks, saying so", () => {

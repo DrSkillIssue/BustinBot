@@ -65,19 +65,15 @@ export async function getCurrentTaskPeriod(
     };
 }
 
+// A failed lookup is passed on rather than read as "no events", which would keep a broken streak alive
 async function hasTaskEventsBetween(
     repo: ITaskRepository,
     start: Date,
     end: Date
 ): Promise<boolean> {
     if (start.getTime() > end.getTime()) return false;
-    try {
-        const events = await repo.getTaskEventsBetween(start, end);
-        return events.length > 0;
-    } catch (err) {
-        console.warn(`[TaskStreaks] Failed to load task events between ${start.toISOString()} and ${end.toISOString()}:`, err);
-        return false;
-    }
+    const events = await repo.getTaskEventsBetween(start, end);
+    return events.length > 0;
 }
 
 function buildSummary(base: {
@@ -137,11 +133,9 @@ export async function calculateTaskStreakSummary(
 
     for (const submission of approvedSubmissions) {
         const event = eventMap.get(submission.taskEventId);
-        if (!event?.startTime || !event.endTime) continue;
+        if (!event) continue;
 
         const submittedAt = submission.submittedAt ?? submission.createdAt;
-        if (!(submittedAt instanceof Date)) continue;
-
         if (submittedAt.getTime() > event.endTime.getTime()) continue;
 
         const endKey = event.endTime.getTime();

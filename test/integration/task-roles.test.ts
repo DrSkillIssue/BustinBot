@@ -1,11 +1,12 @@
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { RESTJSONErrorCodes, ApplicationCommandOptionType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
-import { describe, expect, test } from "../fixtures.js";
-import { type DiscordHarness } from "../discord/harness.js";
+import { describe, expect, test, vi } from "../fixtures.js";
+import { type DiscordHarness, DiscordError } from "../discord/harness.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { IDS, apiGuildMember, apiRole, apiUser, AS, chatInputInteraction } from "../discord/payloads.js";
 import { milestoneRoleFactory } from "../factories.js";
 import { applyTaskMilestoneRoles } from "../../src/modules/tasks/TaskMilestones.js";
+import { awardTaskChampionRoles } from "../../src/modules/tasks/TaskLeaderboards.js";
 
 const member = SnowflakeUtil.generate().toString();
 async function setUpMilestoneRoles(discord: DiscordHarness, services: ServiceContainer) {
@@ -47,6 +48,73 @@ describe("milestone roles", () => {
                 content: "You have earned the **Task Enthusiast** role for completing 25 tasks!",
             }),
         ]);
+    });
+
+    test("still give the role to a member who doesn't accept DMs", async ({ discord, services, factories }) => {
+        const { participant } = await setUpMilestoneRoles(discord, services);
+        await factories.userStats.create({ userId: member, tasksCompletedGold: 6 });
+        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
+        discord.refuseDirectMessages(apiUser({ id: member }));
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await applyTaskMilestoneRoles(discord.client, services, member);
+
+        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${participant.id}`]);
+        expect(warn).toHaveBeenCalledWith(
+            `[TaskMilestones] Granted Task Participant to ${member} but couldn't DM them:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.CannotSendMessagesToThisUser }),
+        );
+    });
+});
+
+describe("champion roles", () => {
+    test("pass from last period's champions to this period's, and count each win", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const first = apiRole({ name: "Task Champion (1st)" });
+        const second = apiRole({ name: "Task Champion (2nd)" });
+        for (const role of [first, second]) await discord.addRole(IDS.guild, role);
+        await services.guilds.update(IDS.guild, {
+            roles: { taskChampionFirst: first.id, taskChampionSecond: second.id },
+        });
+        const previousChampion = SnowflakeUtil.generate().toString();
+        const runnerUp = SnowflakeUtil.generate().toString();
+        const endedPeriod = 3;
+        await factories.periodicLeaderboard.create({
+            period: { index: endedPeriod + 1 },
+            champions: { first: [previousChampion] },
+        });
+        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: previousChampion }), roles: [first.id] }));
+        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: member }) }));
+        discord.member(IDS.guild, apiGuildMember({ user: apiUser({ id: runnerUp }) }));
+
+        await awardTaskChampionRoles(
+            discord.client,
+            services,
+            {
+                first: [{ userId: member, points: 10 }],
+                second: [{ userId: runnerUp, points: 8 }],
+                third: [],
+                winners: [
+                    { userId: member, points: 10 },
+                    { userId: runnerUp, points: 8 },
+                ],
+            },
+            endedPeriod,
+        );
+
+        expect(discord.memberRoleChanges("DELETE")).toEqual([`${previousChampion}:${first.id}`]);
+        expect(discord.memberRoleChanges("PUT")).toEqual([`${member}:${first.id}`, `${runnerUp}:${second.id}`]);
+        expect(await services.repos.userRepo.getUserById(member)).toMatchObject({ taskChampionFirsts: 1 });
+        expect(await services.repos.userRepo.getUserById(runnerUp)).toMatchObject({ taskChampionSeconds: 1 });
+        expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.champions).toMatchObject({
+            first: [member],
+            second: [runnerUp],
+            third: [],
+            periodIndex: endedPeriod,
+        });
     });
 });
 
@@ -122,6 +190,33 @@ describe("/taskroles add", () => {
         );
     });
 
+    test("rejects a milestone threshold of zero without creating a role", async ({ discord, interact }) => {
+        discord.guildRoles();
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "add",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "role", value: "Task Legend" },
+                            { type: ApplicationCommandOptionType.String, name: "type", value: "milestone" },
+                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 0 },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Milestone thresholds must be greater than 0." }),
+        ]);
+        expect(discord.rolesCreated(IDS.guild)).toEqual([]);
+    });
+
     test("sets an existing role as a champion role", async ({ discord, interact, services }) => {
         const gold = apiRole({ name: "Gold Champion" });
         discord.guildRoles([gold]);
@@ -148,6 +243,33 @@ describe("/taskroles add", () => {
             expect.objectContaining({ content: "Set 1st place champion role to **Gold Champion**." }),
         ]);
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.roles.taskChampionFirst).toBe(gold.id);
+    });
+
+    test("rejects a champion placement other than 1 to 3 without creating a role", async ({ discord, interact }) => {
+        discord.guildRoles();
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "add",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "role", value: "Fourth Place" },
+                            { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
+                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 4 },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Champion placement must be 1, 2, or 3." }),
+        ]);
+        expect(discord.rolesCreated(IDS.guild)).toEqual([]);
     });
 });
 
@@ -267,6 +389,39 @@ describe("/taskroles delete", () => {
         expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([
             milestoneRoleFactory.build({ roleId: master.id, label: master.name, requiredSubmissions: 100 }),
         ]);
+    });
+
+    test("says so when Discord won't delete the role it stopped using", async ({ discord, interact, services }) => {
+        const gold = apiRole({ name: "Gold Champion" });
+        discord.guildRoles([gold]);
+        await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
+        discord.refuse("DELETE", `/guilds/${IDS.guild}/roles/${gold.id}`, DiscordError.missingPermissions);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "delete",
+                        options: [{ type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` }],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({
+                content:
+                    "Removed champion role **Gold Champion** (1st). It is no longer a task role, but I couldn't delete it from the server. Check my permissions, or delete it yourself.",
+            }),
+        ]);
+        expect(warn).toHaveBeenCalledWith(
+            "[TaskRoles] Failed to delete task role:",
+            expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
+        );
     });
 });
 
@@ -432,5 +587,23 @@ describe("/taskroles init", () => {
             taskChampionSecond: champions.second.id,
             taskChampionThird: champions.third.id,
         });
+    });
+});
+
+describe("/taskroles with an option it doesn't know", () => {
+    test("answers instead of leaving the reply pending", async ({ discord, interact }) => {
+        discord.guildRoles();
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "rename" }],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Unknown taskroles option." }),
+        ]);
     });
 });

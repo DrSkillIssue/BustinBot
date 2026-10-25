@@ -1,14 +1,24 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
-import { PRIVATE_DEFERRAL } from "../discord/harness.js";
-import { IDS, AS, chatInputInteraction } from "../discord/payloads.js";
+import { DiscordError, PRIVATE_DEFERRAL } from "../discord/harness.js";
+import { IDS, NAMES, apiUser, AS, chatInputInteraction } from "../discord/payloads.js";
 import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
-import { generatePrizeDrawSnapshot, rollWinnerForSnapshot } from "../../src/modules/tasks/HandlePrizeDraw.js";
+import {
+    announcePrizeDrawWinner,
+    generatePrizeDrawSnapshot,
+    rollWinnerForSnapshot,
+} from "../../src/modules/tasks/HandlePrizeDraw.js";
+import { runPrizeDrawJob } from "../../src/modules/tasks/TaskScheduler.js";
 import assert from "node:assert";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 
-const [winner, second] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
+const [winner, second, third, fourth] = [
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+];
 
 async function storeEvent(
     factories: StoringFactories,
@@ -78,6 +88,95 @@ describe("a prize draw snapshot", () => {
             totalEntries: 0,
         });
     });
+
+    test("leaves out a task event that is still running", async ({ services, factories }) => {
+        await storeEvent(factories, "finished", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+        await storeEvent(factories, "running", DateTime.now().plus({ hours: 1 }), [
+            { userId: second, status: SubmissionStatus.Gold },
+        ]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 1 },
+            taskEventIds: ["finished"],
+        });
+    });
+
+    test("carries over approvals the previous draw's snapshot missed", async ({ services, factories }) => {
+        const previousEnd = DateTime.now().minus({ days: 21 });
+        const previousSnapshot = previousEnd.plus({ days: 1 });
+        await factories.prizeDraw.create({
+            ...yesterdaysDraw,
+            id: "previous",
+            start: previousEnd.minus({ days: 14 }).toJSDate().toISOString(),
+            end: previousEnd.toJSDate().toISOString(),
+            snapshotTakenAt: previousSnapshot.toJSDate().toISOString(),
+            rolledAt: previousSnapshot.plus({ days: 1 }).toJSDate().toISOString(),
+            taskEventIds: ["previous-event"],
+        });
+        await storeEvent(factories, "previous-event", previousEnd, [
+            {
+                userId: second,
+                status: SubmissionStatus.Silver,
+                submittedAt: previousEnd.minus({ days: 1 }).toJSDate(),
+                reviewedAt: previousSnapshot.plus({ hours: 1 }).toJSDate(),
+            },
+            {
+                userId: third,
+                status: SubmissionStatus.Gold,
+                submittedAt: previousEnd.minus({ days: 1 }).toJSDate(),
+                reviewedAt: previousEnd.minus({ hours: 1 }).toJSDate(),
+            },
+            {
+                userId: fourth,
+                status: SubmissionStatus.Bronze,
+                submittedAt: previousEnd.plus({ days: 1 }).toJSDate(),
+                reviewedAt: previousEnd.plus({ days: 2 }).toJSDate(),
+            },
+        ]);
+        await storeEvent(factories, "current-event", DateTime.now().minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+
+        const draw = await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo);
+
+        expect(draw.participants).toEqual({ [winner]: 1, [second]: 1 });
+        expect(draw.taskEventIds).toEqual(expect.arrayContaining(["current-event", "previous-event"]));
+    });
+
+    test("carries over only from the most recent rolled draw", async ({ services, factories }) => {
+        const members = { older: SnowflakeUtil.generate().toString(), latest: SnowflakeUtil.generate().toString() };
+        for (const [id, endDaysAgo] of [
+            ["older", 42],
+            ["latest", 21],
+        ] as const) {
+            const end = DateTime.now().minus({ days: endDaysAgo });
+            await factories.prizeDraw.create({
+                ...yesterdaysDraw,
+                id,
+                start: end.minus({ days: 14 }).toJSDate().toISOString(),
+                end: end.toJSDate().toISOString(),
+                snapshotTakenAt: end.plus({ days: 1 }).toJSDate().toISOString(),
+                rolledAt: end.plus({ days: 2 }).toJSDate().toISOString(),
+                taskEventIds: [`${id}-event`],
+            });
+            await storeEvent(factories, `${id}-event`, end, [
+                {
+                    userId: members[id],
+                    status: SubmissionStatus.Bronze,
+                    submittedAt: end.minus({ days: 1 }).toJSDate(),
+                    reviewedAt: end.plus({ hours: 36 }).toJSDate(),
+                },
+            ]);
+        }
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        expect(
+            (await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants,
+        ).toEqual({ [members.latest]: 1 });
+        expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
+    });
 });
 
 describe("rolling a prize draw", () => {
@@ -101,6 +200,98 @@ describe("rolling a prize draw", () => {
             rolledAt: expect.any(String),
         });
         expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskPrizesWon: 1 });
+    });
+});
+
+describe("announcing a prize draw winner", () => {
+    test("posts one message mentioning the task role with the winner's embed, and congratulates the winner", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
+        discord.acceptMessages(IDS.channel);
+        const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
+
+        expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(true);
+
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({
+                content: `<@&${IDS.roles.taskUser}>`,
+                embeds: [expect.objectContaining({ thumbnail: { url: "attachment://task_prize.png" } })],
+                files: ["task_prize.png"],
+            }),
+        ]);
+        expect(discord.messagesSentTo(dm)).toEqual([
+            expect.objectContaining({
+                content: expect.stringContaining(
+                    `You've won the latest OSRS community tasks prize draw in **${NAMES.guild}**`,
+                ),
+            }),
+        ]);
+    });
+
+    test("still posts the winner's embed when no task role is configured", async ({ discord, services, factories }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await services.guilds.update(IDS.guild, { roles: { taskUser: "" } });
+        await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
+        discord.acceptMessages(IDS.channel);
+        discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
+
+        expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(true);
+
+        const [posted] = discord.messagesSentTo(IDS.channel);
+        expect(posted?.embeds).toHaveLength(1);
+        expect(posted).not.toHaveProperty("content");
+        expect(warn).toHaveBeenCalledWith("[PrizeDraw] Task user role not configured or not found.");
+    });
+
+    test("reports that the task channel can't be reached instead of posting anywhere else", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        await factories.prizeDraw.create({ ...yesterdaysDraw, winnerId: winner });
+        discord.user(apiUser({ id: winner, username: "lucky" }));
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(false);
+
+        expect(warn).toHaveBeenCalledWith("[PrizeDraw] Announcement channel not found.");
+        expect(discord.requests().filter((request) => request.method === "POST")).toEqual([]);
+    });
+});
+
+describe("the scheduled prize draw job", () => {
+    const drawTuesday = DateTime.fromISO("2026-10-13T00:00:00Z", { zone: "utc" });
+
+    test("draws and announces a winner on a prize draw week", async ({ discord, services, factories }) => {
+        vi.setSystemTime(drawTuesday.toJSDate());
+        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+        discord.acceptMessages(IDS.channel);
+        const dm = discord.acceptDirectMessages(apiUser({ id: winner, username: "lucky" }));
+
+        await runPrizeDrawJob(discord.client, services);
+
+        const [draw] = await services.repos.prizeRepo.getAllPrizeDraws();
+        expect(draw).toMatchObject({ winnerId: winner, totalEntries: 1 });
+        expect(discord.messagesSentTo(IDS.channel)).toHaveLength(1);
+        expect(discord.messagesSentTo(dm)).toHaveLength(1);
+    });
+
+    test("does nothing on the weeks between draws", async ({ discord, services, factories }) => {
+        vi.setSystemTime(drawTuesday.plus({ weeks: 1 }).toJSDate());
+        await storeEvent(factories, "pvm", drawTuesday.minus({ days: 2 }), [
+            { userId: winner, status: SubmissionStatus.Gold },
+        ]);
+
+        await runPrizeDrawJob(discord.client, services);
+
+        expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
     });
 });
 
@@ -189,6 +380,29 @@ describe("/taskdraw", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `No eligible entries found for **${draw.id}**.` }),
         ]);
+    });
+
+    test("announces a rolled winner", async ({ discord, interact, factories }) => {
+        const draw = await factories.prizeDraw.create({ entries: [IDS.user], totalEntries: 1, winnerId: IDS.user });
+        discord.acceptMessages(IDS.channel);
+        const dm = discord.acceptDirectMessages(apiUser({ id: IDS.user }));
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskdraw",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "action", value: "announce" },
+                    { type: ApplicationCommandOptionType.String, name: "snapshot_id", value: draw.id },
+                ],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: `Announcement sent for **${draw.id}**.` }),
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)).toHaveLength(1);
+        expect(discord.messagesSentTo(dm)).toHaveLength(1);
     });
 
     test("says so when the winner can't be announced", async ({ discord, interact, factories }) => {

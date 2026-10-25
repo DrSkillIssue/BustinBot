@@ -1,7 +1,8 @@
 import { ApplicationCommandOptionType, InteractionResponseType } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, type StoringFactories, storeWeeks, test } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, storeWeeks, test } from "../fixtures.js";
+import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { type DiscordHarness } from "../discord/harness.js";
 import {
@@ -108,6 +109,72 @@ describe("the weekly leaderboard update", () => {
         expect(embed?.footer?.text).toBe("Task events elapsed: 1/4");
     });
 
+    test(
+        "ends the period once however many runs see it finished: champions, final standings and congratulations",
+        async ({ discord, services, factories }) => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+                "week-1",
+                "week-2",
+                "week-3",
+                "week-4",
+            ]);
+            const period = { index: 3, length: 4, eventIds: events };
+            await storePeriodic(factories, { points: { [winner]: 9, [runnerUp]: 6, [third]: 1 }, period });
+            const { roles, dms } = await setUpChampions(discord, services);
+            discord.acceptMessages(IDS.channel);
+
+            await Promise.all([
+                postPeriodicLeaderboardUpdate(discord.client, services),
+                postPeriodicLeaderboardUpdate(discord.client, services),
+            ]);
+
+            const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+            expect(stored).toMatchObject({
+                points: {},
+                period: { index: period.index + 1, eventIds: [] },
+                completedPeriod: {
+                    index: period.index,
+                    topThree: [
+                        { userId: winner, points: 9 },
+                        { userId: runnerUp, points: 6 },
+                        { userId: third, points: 1 },
+                    ],
+                },
+                champions: { first: [winner], second: [runnerUp], third: [third], periodIndex: period.index },
+            });
+            expect(discord.memberRoleChanges("PUT").sort()).toEqual(
+                [`${winner}:${roles.first.id}`, `${runnerUp}:${roles.second.id}`, `${third}:${roles.third.id}`].sort(),
+            );
+            expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
+            const finals = discord
+                .messagesSentTo(IDS.channel)
+                .filter((message) => message.embeds?.[0]?.title === "🏆 Final Leaderboard Standings");
+            expect(finals).toHaveLength(1);
+            expect(finals[0]?.embeds?.[0]?.fields).toEqual([
+                { name: "Our Task Champions", value: "🥇 member1\n🥈 member2\n🥉 member3" },
+                {
+                    name: "Final Top 10",
+                    value: [
+                        "```",
+                        "Rank Name    Pts B S G",
+                        "🥇   member1   9 0 0 0",
+                        "🥈   member2   6 0 0 0",
+                        "🥉   member3   1 0 0 0",
+                        "```",
+                    ].join("\n"),
+                },
+            ]);
+            expect(discord.messagesSentTo(dms.winner)).toEqual([
+                expect.objectContaining({
+                    content: `🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **${NAMES.guild}**.\nYou have been awarded the **Task Champion (1st)** role to flex.`,
+                }),
+            ]);
+            expect(warn).toHaveBeenCalledWith(`[LeaderboardUpdate] Period ${period.index} had already ended.`);
+        },
+        CONCURRENT_TRANSACTION_TIMEOUT_MS,
+    );
+
     test("awards the roles found by their default names when none are set, without naming them in the DM", async ({
         discord,
         services,
@@ -181,6 +248,24 @@ describe("TaskLeaderboards initialisation", () => {
             points: {},
             period: { length: 4, eventIds: [], index: firstPeriod },
         });
+    });
+});
+
+describe("the leaderboard buttons", () => {
+    test("log why the leaderboard couldn't be built and tell the member", async ({ discord, interact, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        // The emulator can't be made to fail one read, so the leaderboard read fails the way an unreachable Firestore fails it
+        const unavailable = Object.assign(new Error("14 UNAVAILABLE: No connection established"), { code: 14 });
+        vi.spyOn(services.repos.taskLeaderboardRepo, "getLeaderboard").mockRejectedValueOnce(unavailable);
+
+        const click = await interact(buttonInteraction("task-leaderboard|lifetime"));
+
+        expect(discord.originalEdits(click)).toEqual([
+            expect.objectContaining({
+                content: "Leaderboard initialisation failed. Please use /reportbug if it continues.",
+            }),
+        ]);
+        expect(error).toHaveBeenCalledWith("[TaskInteractions] Failed to build the leaderboard:", unavailable);
     });
 });
 
