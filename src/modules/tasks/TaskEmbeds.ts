@@ -5,7 +5,7 @@ import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
 import { TaskInstructions } from "./TaskInstructions.js";
 
-const assetIconDir = path.resolve(process.cwd(), 'assets/icons');
+const assetIconDir = path.join(import.meta.dirname, '../../../assets/icons');
 const categoryIcons: Record<TaskCategory, string> = {
     [TaskCategory.PvM]: path.join(assetIconDir, 'task_pvm.png'),
     [TaskCategory.Skilling]: path.join(assetIconDir, 'task_skilling.png'),

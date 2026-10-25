@@ -29,8 +29,11 @@ async function createAndSendMoviePoll(
         return;
     }
 
-    const guildConfig = await services.guilds.requireConfig(interaction);
-    if (!guildConfig) return;
+    const guildConfig = await services.guilds.get(interaction.guildId!);
+    if (!guildConfig) {
+        await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
+        return;
+    }
 
     const guild = await client.guilds.fetch(interaction.guildId!);
     const guildRoles = guildConfig.roles ?? {};

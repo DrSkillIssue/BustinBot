@@ -8,6 +8,7 @@ import { KeywordSelector } from "../../modules/tasks/KeywordSelector.js";
 import { MovieRepository } from "../database/MovieRepo.js";
 import { GuildRepository } from "../database/GuildRepo.js";
 import { GuildService } from "./GuildService.js";
+import { SetupService } from "./SetupService.js";
 import type { ServiceContainer } from "./ServiceContainer.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { UserRepository } from "../database/UserRepo.js";
@@ -34,6 +35,7 @@ export function createServiceContainer(db: Firestore, guildId: string, botStats:
         taskEvents,
         keywords,
         guilds,
+        setup: new SetupService(),
         repos: { taskRepo, prizeRepo, movieRepo, keywordRepo, guildRepo, userRepo, taskLeaderboardRepo },
     };
 

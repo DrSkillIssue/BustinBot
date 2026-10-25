@@ -2,10 +2,14 @@ import { ApplicationCommandOptionType, InteractionResponseType } from "discord-a
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, type StoringFactories, storeWeeks, test } from "../fixtures.js";
+import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
+import { type DiscordHarness } from "../discord/harness.js";
 import {
     AS,
     IDS,
+    NAMES,
     apiGuildMember,
+    apiRole,
     apiUser,
     chatInputInteraction,
     buttonInteraction,
@@ -23,7 +27,11 @@ import {
 } from "../../src/modules/tasks/TaskLeaderboards.js";
 import { periodicLeaderboardFactory } from "../factories.js";
 
-const [winner, runnerUp] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
+const [winner, runnerUp, third] = [
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+    SnowflakeUtil.generate().toString(),
+];
 
 async function storePeriodic(
     factories: StoringFactories,
@@ -31,6 +39,33 @@ async function storePeriodic(
 ): Promise<void> {
     await factories.periodicLeaderboard.create(overrides);
     await factories.lifetimeLeaderboard.create();
+}
+
+async function setUpChampions(discord: DiscordHarness, services: ServiceContainer, { configured = true } = {}) {
+    const roles = {
+        first: apiRole({ name: "Task Champion (1st)" }),
+        second: apiRole({ name: "Task Champion (2nd)" }),
+        third: apiRole({ name: "Task Champion (3rd)" }),
+    };
+    for (const role of Object.values(roles)) await discord.addRole(IDS.guild, role);
+    await services.guilds.update(IDS.guild, {
+        roles: {
+            taskChampionFirst: configured ? roles.first.id : "",
+            taskChampionSecond: configured ? roles.second.id : "",
+            taskChampionThird: configured ? roles.third.id : "",
+        },
+    });
+    const placed = (userId: string, name: string) => {
+        const user = apiUser({ id: userId, username: name, global_name: name });
+        discord.member(IDS.guild, apiGuildMember({ user }));
+        return discord.acceptDirectMessages(user);
+    };
+    const dms = {
+        winner: placed(winner, "member1"),
+        runnerUp: placed(runnerUp, "member2"),
+        third: placed(third, "member3"),
+    };
+    return { roles, dms };
 }
 
 describe("the weekly leaderboard update", () => {
@@ -71,6 +106,31 @@ describe("the weekly leaderboard update", () => {
             { name: "Period Progress", value: "Week 2 of 4" },
         ]);
         expect(embed?.footer?.text).toBe("Task events elapsed: 1/4");
+    });
+
+    test("awards the roles found by their default names when none are set, without naming them in the DM", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
+        await storePeriodic(factories, { points: { [winner]: 9 }, period: { length: 4, eventIds: events } });
+        const { roles, dms } = await setUpChampions(discord, services, { configured: false });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        expect(discord.memberRoleChanges("PUT")).toEqual([`${winner}:${roles.first.id}`]);
+        expect(discord.messagesSentTo(dms.winner)).toEqual([
+            expect.objectContaining({
+                content: `🏆 Congratulations! You placed **1st** on the periodic task leaderboard in **${NAMES.guild}**.\nYour placement has been recorded by the task admins.`,
+            }),
+        ]);
     });
 });
 

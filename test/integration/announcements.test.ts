@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
     ComponentType,
+    InteractionResponseType,
     MessageFlags,
     ApplicationCommandOptionType,
     ChannelType,
@@ -10,7 +11,7 @@ import {
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../fixtures.js";
 import { PRIVATE_DEFERRAL, DiscordError } from "../discord/harness.js";
-import { AS, IDS, chatInputInteraction, apiResolvedChannel } from "../discord/payloads.js";
+import { AS, IDS, chatInputInteraction, apiMember, apiResolvedChannel } from "../discord/payloads.js";
 import { packageVersion } from "../../src/utils/version.js";
 import { SnowflakeUtil } from "discord.js";
 
@@ -49,6 +50,44 @@ describe("/announce", () => {
             }),
         ]);
     });
+
+    test("is refused to members who are not bot admins", async ({ discord, interact }) => {
+        const interaction = await interact(chatInputInteraction("announce"));
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+
+    test("tells the admin when no announcement channel is configured", async ({ discord, interact, services }) => {
+        await services.guilds.update(IDS.guild, { channels: { announcements: "" } });
+
+        const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Announcement channel not configured. Please run `/setup` first." }),
+        ]);
+    });
+
+    test("tells the admin when the configured channel can't be reached", async ({ discord, interact, services }) => {
+        await services.guilds.update(IDS.guild, { channels: { announcements: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+
+        const interaction = await interact(chatInputInteraction("announce", [], AS.botAdmin));
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({
+                content: `I can't reach the announcement channel <#${IDS.missingChannel}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`,
+            }),
+        ]);
+    });
 });
 
 describe("/sendas", () => {
@@ -74,6 +113,31 @@ describe("/sendas", () => {
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: `Message sent in <#${IDS.channel}>.` }),
         ]);
+    });
+
+    test("is refused to members who are not bot admins", async ({ discord, interact }) => {
+        const interaction = await interact(
+            chatInputInteraction(
+                "sendas",
+                [
+                    { type: ApplicationCommandOptionType.Channel, name: "channel", value: IDS.channel },
+                    { type: ApplicationCommandOptionType.String, name: "message", value: "Hello" },
+                ],
+                { member: apiMember() },
+                { channels: { [IDS.channel]: apiResolvedChannel() } },
+            ),
+        );
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
     });
 
     test("reports once when Discord won't post the message", async ({ discord, interact }) => {

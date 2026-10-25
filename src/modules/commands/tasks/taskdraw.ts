@@ -35,14 +35,15 @@ const taskdraw: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
+        // Acknowledge before any database work, which may take longer than Discord waits
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const prizeRepo = services.repos.prizeRepo;
         const taskRepo = services.repos.taskRepo;
 
         const action = interaction.options.getString('action', true);
         const snapshotId = interaction.options.getString('snapshot_id') ?? '';
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-
-        await interaction.deferReply({ flags: 1 << 6 });
 
         try {
             if (action === 'snapshot') {

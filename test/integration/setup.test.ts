@@ -1,13 +1,18 @@
 import { SnowflakeUtil } from "discord.js";
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test as base, beforeEach, vi } from "../fixtures.js";
+import { PRIVATE_DEFERRAL, componentsIn } from "../discord/harness.js";
+import { routeInteraction } from "../../src/core/events/routeInteraction.js";
 import {
+    AS,
     IDS,
+    NAMES,
     buttonInteraction,
     channelSelectInteraction,
     modalSubmitInteraction,
     roleSelectInteraction,
     stringSelectInteraction,
+    chatInputInteraction,
 } from "../discord/payloads.js";
 import { guildFactory } from "../factories.js";
 import { GuildService } from "../../src/core/services/GuildService.js";
@@ -34,6 +39,74 @@ const test = base
 const guildId = IDS.guild;
 const admin = SnowflakeUtil.generate().toString();
 const newGuild = SnowflakeUtil.generate().toString();
+
+describe("the setup commands", () => {
+    test("/setup acknowledges privately first, then offers the channel pickers showing the current channels", async ({
+        discord,
+        interact,
+    }) => {
+        const interaction = await interact(chatInputInteraction("setup", [], AS.botAdmin));
+
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            { customId: "setup_announce", placeholder: `Channel for bot announcements (Current: #${NAMES.channel})` },
+            { customId: "setup_log", placeholder: "Channel for errors and logs (Current: None)" },
+            { customId: "setup_archive", placeholder: "Channel for archived posts (Current: None)" },
+            { customId: "setup_timezone" },
+            { customId: "setup_confirm" },
+            { customId: "setup_cancel" },
+        ]);
+    });
+
+    test("/moviesetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
+        discord,
+        interact,
+    }) => {
+        const interaction = await interact(chatInputInteraction("moviesetup", [], AS.botAdmin));
+
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            {
+                customId: "moviesetup_admin_role",
+                placeholder: `Role for movie admin commands (Current: @${NAMES.roles.movieAdmin})`,
+            },
+            { customId: "moviesetup_user_role", placeholder: "Role notified for movie nights (Current: None)" },
+            {
+                customId: "moviesetup_channel",
+                placeholder: `Channel for movie night announcements (Current: #${NAMES.channel})`,
+            },
+            { customId: "moviesetup_voice_channel", placeholder: "Voice channel for movie nights (Current: None)" },
+            { customId: "moviesetup_confirm" },
+            { customId: "moviesetup_cancel" },
+        ]);
+    });
+
+    test("/tasksetup acknowledges privately first, then offers the role and channel pickers showing the current choices", async ({
+        discord,
+        interact,
+    }) => {
+        const interaction = await interact(chatInputInteraction("tasksetup", [], AS.botAdmin));
+
+        expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
+        expect(componentsIn(discord.originalEdits(interaction)[0]?.components)).toMatchObject([
+            {
+                customId: "tasksetup_admin_role",
+                placeholder: `Role for approving submissions (Current: @${NAMES.roles.taskAdmin})`,
+            },
+            {
+                customId: "tasksetup_user_role",
+                placeholder: `Role notified about tasks (Current: @${NAMES.roles.taskUser})`,
+            },
+            { customId: "tasksetup_channel", placeholder: `Channel for task posts (Current: #${NAMES.channel})` },
+            {
+                customId: "tasksetup_verification_channel",
+                placeholder: `Channel for managing submissions (Current: #${NAMES.channel})`,
+            },
+            { customId: "tasksetup_confirm" },
+            { customId: "tasksetup_cancel" },
+        ]);
+    });
+});
 
 describe("/setup choices", () => {
     test("saves the chosen channels and marks the core setup complete", async ({ discord, interact, services }) => {
@@ -93,6 +166,44 @@ describe("/setup choices", () => {
                 data: expect.objectContaining({ content: "Please select: announcements, botLog, botArchive" }),
             }),
         ]);
+    });
+
+    test("keeps one guild's choices separate from another's", async ({ discord, interact, otherGuild, commands }) => {
+        await interact(channelSelectInteraction("setup_announce", [CHANNELS.announce]));
+
+        const confirmElsewhere = await discord.dispatch(
+            buttonInteraction("setup_confirm", undefined, { guild_id: IDS.otherGuild }),
+        );
+        await routeInteraction(confirmElsewhere, discord.client, commands, otherGuild);
+
+        expect(discord.callbacks(confirmElsewhere)).toEqual([
+            expect.objectContaining({
+                data: expect.objectContaining({ content: "Please select: announcements, botLog, botArchive" }),
+            }),
+        ]);
+    });
+
+    test("opens the timezone form and saves a recognised zone", async ({ discord, interact, services }) => {
+        const button = await interact(buttonInteraction("setup_timezone"));
+        expect(discord.modal(button)?.custom_id).toBe("setup_timezone_modal");
+
+        const submit = await interact(
+            modalSubmitInteraction("setup_timezone_modal", { timezone_input: "Australia/Melbourne" }),
+        );
+
+        expect(discord.callbacks(submit)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: expect.stringContaining("Timezone set to **Australia/Melbourne**"),
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+        expect(await services.repos.guildRepo.getGuild(IDS.guild)).toMatchObject({
+            timezone: "Australia/Melbourne",
+            channels: guildFactory.build().channels,
+        });
     });
 
     test("rejects a timezone it does not recognise", async ({ discord, interact, services }) => {
@@ -212,6 +323,54 @@ describe("GuildService", () => {
 
         expect((await guilds.get(guildId))?.timezone).toBe("UTC");
         expect((await guilds.refresh(guildId))?.timezone).toBe("Europe/London");
+    });
+
+    test("merges an update onto the stored guild when it is not cached", async ({ repo, guilds }) => {
+        await repo.initGuild(guildId, guildFactory.build());
+
+        await guilds.update(guildId, { timezone: "Australia/Melbourne" });
+
+        expect(await repo.getGuild(guildId)).toMatchObject({
+            timezone: "Australia/Melbourne",
+            roles: guildFactory.build().roles,
+            channels: guildFactory.build().channels,
+            setupComplete: guildFactory.build().setupComplete,
+        });
+    });
+
+    test("keeps every other toggle and setting when one toggle changes", async ({ repo, guilds }) => {
+        await repo.initGuild(
+            guildId,
+            guildFactory.build({
+                toggles: { taskScheduler: false, leaguesEnabled: true, taskLeaderboard: false },
+                timezone: "Australia/Melbourne",
+            }),
+        );
+        await guilds.get(guildId);
+
+        await guilds.updateToggle(guildId, "toggles.taskScheduler", true, admin);
+
+        const expected = {
+            toggles: { taskScheduler: true, leaguesEnabled: true, taskLeaderboard: false },
+            timezone: "Australia/Melbourne",
+        };
+        expect(await guilds.get(guildId)).toMatchObject({ ...expected, updatedBy: admin });
+        expect(await repo.getGuild(guildId)).toMatchObject(expected);
+    });
+
+    test("keeps existing toggles when other settings are updated", async ({ repo, guilds }) => {
+        await repo.initGuild(
+            guildId,
+            guildFactory.build({ toggles: { taskScheduler: true, leaguesEnabled: false, taskLeaderboard: false } }),
+        );
+
+        await guilds.update(guildId, { timezone: "Europe/London" });
+
+        expect((await repo.getGuild(guildId))?.toggles).toEqual({
+            taskScheduler: true,
+            leaguesEnabled: false,
+            taskLeaderboard: false,
+        });
     });
 
     test("loads every guild into the cache", async ({ repo, guilds, db }) => {

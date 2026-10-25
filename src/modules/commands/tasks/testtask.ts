@@ -21,16 +21,18 @@ const testtask: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
-        const filePath = path.resolve(process.cwd(), 'data/tasks.json');
+        await interaction.deferReply({ flags: 1 << 6 });
+
+        const filePath = path.join(import.meta.dirname, '../../../../data/tasks.json');
         const taskData: Task[] = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
         if (!taskData.length) {
-            await interaction.reply({ content: "No tasks available.", flags: 1 << 6 });
+            await interaction.editReply({ content: "No tasks available." });
             return;
         }
         const randomTask = taskData[Math.floor(Math.random() * taskData.length)];
         if (!randomTask) {
-            await interaction.reply({ content: 'Failed to retrieve a random task.', flags: 1 << 6 });
+            await interaction.editReply({ content: 'Failed to retrieve a random task.' });
             return;
         }
         const selectedAmount = randomTask.amounts?.length ? randomTask.amounts[Math.floor(Math.random() * randomTask?.amounts.length)] : undefined;
@@ -63,7 +65,7 @@ const testtask: Command = {
 
         await channel.send({ embeds, components });
         await services.taskEvents.storeTaskEvent(event);
-        await interaction.reply({ content: 'Test task event posted!', flags: 1 << 6 });
+        await interaction.editReply({ content: 'Test task event posted!' });
     },
 };
 

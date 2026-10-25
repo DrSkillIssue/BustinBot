@@ -106,6 +106,19 @@ describe("/taskpoll", () => {
     });
 });
 
+describe("/leagues", () => {
+    test("switches Leagues back off", async ({ discord, interact, services }) => {
+        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", true, IDS.user);
+
+        const command = await interact(chatInputInteraction("leagues", [], AS.taskAdmin));
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({ content: "Leagues tasks have been **disabled**." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.leaguesEnabled).toBe(false);
+    });
+});
+
 describe("TaskRepository polls", () => {
     test("finds the active poll and the latest poll for a category", async ({ services }) => {
         await services.repos.taskRepo.createTaskPoll(

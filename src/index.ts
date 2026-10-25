@@ -5,14 +5,12 @@ import { loadCommands } from './core/services/CommandService.js';
 import { createFirestore } from './core/database/firestore.js';
 import { startBot } from './bot.js';
 import { clientOptions } from './clientOptions.js';
-import { getDirname } from './utils/PathUtils.js';
-const dirname = getDirname(import.meta.url);
 const isDryRun = process.argv.includes('--dryrun') || process.argv.includes('--dry-run');
 
 // Load environment variables (only for global secrets)
 config();
 
-const commandsDir = path.join(dirname, 'modules', 'commands');
+const commandsDir = path.join(import.meta.dirname, 'modules', 'commands');
 const isDevMode = process.env.BOT_MODE === 'dev';
 
 function resolveCommandSync(): { token: string; clientId: string } | null {
@@ -57,12 +55,28 @@ async function main(): Promise<void> {
     // Create Discord client with required intents
     const client = new Client(clientOptions);
 
-    await startBot(client, {
-        db: createFirestore(),
+    const db = createFirestore();
+    const shutdown = await startBot(client, {
+        db,
         commandsDir,
         fallbackGuildId: process.env.DISCORD_GUILD_ID ?? null,
         commandSync: resolveCommandSync(),
     });
+
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+        process.once(signal, () => {
+            console.log(`[Shutdown] ${signal} received; stopping BustinBot.`);
+            shutdown()
+                .then(() => db.terminate())
+                .then(
+                    () => process.exit(0),
+                    (err) => {
+                        console.error('[Shutdown] BustinBot did not stop cleanly:', err);
+                        process.exit(1);
+                    }
+                );
+        });
+    }
 
     await client.login(loginToken);
 }

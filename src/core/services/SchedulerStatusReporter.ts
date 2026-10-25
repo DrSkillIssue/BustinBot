@@ -1,4 +1,5 @@
 import { DateTime } from "luxon";
+import cron from "node-cron";
 import type { ServiceContainer } from "./ServiceContainer.js";
 import { getNextPollDate, getNextEventDate, getNextPrizeDrawDate } from "../../modules/tasks/TaskScheduler.js";
 
@@ -41,14 +42,7 @@ export class SchedulerStatusReporter {
         console.log(`Scheduled new ${type}: ${time.toUTCString()}`);
     }
 
-    static scheduleDailyLog(services: ServiceContainer) {
-        const now = DateTime.utc();
-        const nextMidnight = now.plus({ days: 1 }).startOf("day");
-        const delay = nextMidnight.diff(now).as("milliseconds");
-
-        setTimeout(() => {
-            this.logAllUpcoming(services);
-            setInterval(() => this.logAllUpcoming(services), 24 * 60 * 60 * 1000);
-        }, delay);
+    static scheduleDailyLog(services: ServiceContainer): void {
+        cron.schedule("0 0 * * *", () => this.logAllUpcoming(services), { timezone: "UTC", name: "daily-schedule-log" });
     }
 }

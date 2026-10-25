@@ -1,9 +1,10 @@
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "../fixtures.js";
 import {
     chatInputInteraction,
     AS,
     apiAttachment,
+    modalSubmitInteraction,
 } from "../discord/payloads.js";
 import { TaskCategory } from "../../src/models/Task.js";
 
@@ -12,6 +13,8 @@ const CSV = [
     "PVM001,Kill {amount} Zulrah,PvM,KC,,10,25,50,,Zulrah,TRUE",
     "PVM002,Kill {amount} Vorkath,PvM,KC,,5,10,20,,Vorkath,FALSE",
 ].join("\n");
+
+const form = { taskName: "Kill {amount} Vorkath", shortName: "Vorkath", type: "kc", amounts: "5, 10/150000" };
 
 describe("/listtasks", () => {
     test("shows every category on one page without buttons when the tasks fit, in aligned columns", async ({
@@ -150,6 +153,38 @@ describe("/importtasks", () => {
 
         expect(discord.originalEdits(interaction)).toEqual([
             expect.objectContaining({ content: "Please upload a valid CSV file." }),
+        ]);
+    });
+});
+
+describe("the update task form", () => {
+    test("answers when the task no longer exists", async ({ discord, interact }) => {
+        const submit = await interact(modalSubmitInteraction("update_task_modal_PVM404", form));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "Could not find task with ID **PVM404**." }),
+        ]);
+    });
+});
+
+describe("/updatetask", () => {
+    test("replies privately when the task does not exist", async ({ discord, interact }) => {
+        const interaction = await interact(
+            chatInputInteraction(
+                "updatetask",
+                [{ type: ApplicationCommandOptionType.String, name: "id", value: "NOPE" }],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "No task found with ID **NOPE**.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
         ]);
     });
 });

@@ -72,7 +72,7 @@ const announce: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const announcementsPath = path.resolve(process.cwd(), "data/announcements.json");
+        const announcementsPath = path.join(import.meta.dirname, "../../../../data/announcements.json");
         if (!fs.existsSync(announcementsPath)) {
             await interaction.editReply({
                 content: "announcements.json not found.",
@@ -92,7 +92,7 @@ const announce: Command = {
         }
 
         // Get announcement channel
-        const guildConfig = await services.guilds.requireConfig(interaction);
+        const guildConfig = await services.guilds.get(interaction.guildId!);
         const channelId = guildConfig?.channels?.announcements;
         if (!channelId) {
             await interaction.editReply({
@@ -103,7 +103,9 @@ const announce: Command = {
 
         const fetchedChannel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
         if (!fetchedChannel || !fetchedChannel.isTextBased()) {
-            await interaction.editReply({ content: "Announcement channel not configured. Please run `/setup` first."});
+            await interaction.editReply({
+                content: `I can't reach the announcement channel <#${channelId}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`,
+            });
             return;
         }
         const channel = fetchedChannel;

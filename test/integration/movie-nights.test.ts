@@ -112,6 +112,16 @@ describe("scheduling a movie night", () => {
         ]);
         expect(await services.repos.movieRepo.getActiveEvent()).toBeNull();
     });
+
+    test("asks for /setup when the guild has no configuration", async ({ discord, interact, db }) => {
+        await db.doc(`guilds/${IDS.guild}`).delete();
+
+        const submit = await interact(modalSubmitInteraction("movienight-time-2026-03-05", { "start-time": "20:30" }));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "Guild configuration not found. Please run `/setup` first." }),
+        ]);
+    });
 });
 
 describe("/endmovie", () => {

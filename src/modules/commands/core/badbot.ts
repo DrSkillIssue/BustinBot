@@ -14,6 +14,7 @@ const badbot: Command = {
 
     async execute({ interaction, message, services }) {
         const emoji = '😭';
+        await interaction?.deferReply();
         await services.botStats.incrementBadBot();
         const count = services.botStats.getBadBotCount();
 
@@ -26,7 +27,7 @@ const badbot: Command = {
             }
             console.log(`${message.author.username} made BustinBot feel bad!`);
         } else if (interaction) {
-            await interaction.reply(`${emoji} ${reply}`);
+            await interaction.editReply(`${emoji} ${reply}`);
             console.log(`${interaction.user.username} made BustinBot feel bad!`);
         }
     },

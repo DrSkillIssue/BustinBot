@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
+import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, test, vi } from "../fixtures.js";
-import { IDS } from "../discord/payloads.js";
+import { IDS, AS, chatInputInteraction } from "../discord/payloads.js";
 import {
     getNextEventDate,
     getNextPollDate,
@@ -27,5 +28,35 @@ describe("the dev-mode task cycle", () => {
             atMinute(7),
             atMinute(15),
         ]);
+    });
+});
+
+describe("/tasktoggle leaderboard", () => {
+    test("switches periodic leaderboard automation off and back on", async ({ discord, interact, services }) => {
+        await services.guilds.updateToggle(IDS.guild, "toggles.taskLeaderboard", true, IDS.user);
+
+        const off = await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
+                AS.botAdmin,
+            ),
+        );
+        expect(discord.originalEdits(off)).toEqual([
+            expect.objectContaining({ content: "🧊 Periodic leaderboard automation **disabled** (read-only mode)." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskLeaderboard).toBe(false);
+
+        const on = await interact(
+            chatInputInteraction(
+                "tasktoggle",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "leaderboard" }],
+                AS.botAdmin,
+            ),
+        );
+        expect(discord.originalEdits(on)).toEqual([
+            expect.objectContaining({ content: "🏆 Periodic leaderboard automation **enabled**." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.toggles.taskLeaderboard).toBe(true);
     });
 });

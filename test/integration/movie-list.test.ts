@@ -1,8 +1,31 @@
 import { SnowflakeUtil } from "discord.js";
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, InteractionResponseType } from "discord-api-types/v10";
 import { describe, expect, test } from "../fixtures.js";
-import { AS, chatInputInteraction } from "../discord/payloads.js";
+import { AS, IDS, chatInputInteraction } from "../discord/payloads.js";
 import { tmdbSearch } from "../tmdb.js";
+import { movieFactory } from "../factories.js";
+
+describe("/addmovie", () => {
+    test("is refused until the bot is set up", async ({ discord, interact, db }) => {
+        await db.doc(`guilds/${IDS.guild}`).delete();
+
+        const command = await interact(
+            chatInputInteraction("addmovie", [
+                { type: ApplicationCommandOptionType.String, name: "title", value: "The Matrix" },
+            ]),
+        );
+
+        expect(discord.callbacks(command)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content:
+                        "The bot has not been set up yet. Please run `/setup` first to configure the core channels.",
+                }),
+            },
+        ]);
+    });
+});
 
 describe("/viewmovie", () => {
     test("shows the closest match to a misspelt title, with who added it", async ({ discord, interact, factories }) => {
@@ -75,5 +98,21 @@ describe("/testmovie", () => {
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No movie found for **zzzz**." }),
         ]);
+    });
+});
+
+describe("MovieRepository movies", () => {
+    test("stores a movie whose optional TMDb details are missing", async ({ services }) => {
+        await services.repos.movieRepo.upsertMovie(
+            movieFactory.build({
+                id: "arrival",
+                title: "Arrival",
+                director: undefined,
+                runtime: undefined,
+                posterUrl: undefined,
+            }),
+        );
+
+        expect(await services.repos.movieRepo.getMovieById("arrival")).toMatchObject({ title: "Arrival" });
     });
 });

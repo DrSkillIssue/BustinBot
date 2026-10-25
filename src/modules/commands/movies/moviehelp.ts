@@ -17,7 +17,12 @@ const moviehelp: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guildConfig = await services.guilds.requireConfig(interaction);
+        const guildConfig = await services.guilds.get(interaction.guildId!);
+        if (!guildConfig) {
+            await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
+            return;
+        }
+
         const guild = interaction.guild!;
         const member = interaction.member as GuildMember;
 

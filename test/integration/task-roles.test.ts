@@ -151,6 +151,125 @@ describe("/taskroles add", () => {
     });
 });
 
+describe("/taskroles edit", () => {
+    test("renames a milestone role and changes its threshold", async ({ discord, interact, services }) => {
+        const expert = apiRole({ name: "Task Expert" });
+        discord.guildRoles([expert]);
+        await services.guilds.update(IDS.guild, {
+            taskSettings: {
+                milestoneRoles: [
+                    milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 50 }),
+                ],
+            },
+        });
+        discord.roleEdited(IDS.guild, { ...expert, name: "Task Pro" });
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "edit",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
+                            { type: ApplicationCommandOptionType.String, name: "newrole", value: "Task Pro" },
+                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 60 },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Updated milestone role **Task Pro** (60)." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([
+            {
+                ...milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 60 }),
+                label: "Task Pro",
+            },
+        ]);
+    });
+
+    test("moves a champion role to another placement", async ({ discord, interact, services }) => {
+        const gold = apiRole({ name: "Gold Champion" });
+        discord.guildRoles([gold]);
+        await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "edit",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${gold.id}>` },
+                            { type: ApplicationCommandOptionType.String, name: "newrole", value: "Gold Champion" },
+                            { type: ApplicationCommandOptionType.Integer, name: "value", value: 2 },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Updated champion role **Gold Champion** to 2nd place." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.roles).toMatchObject({
+            taskChampionFirst: "",
+            taskChampionSecond: gold.id,
+        });
+    });
+});
+
+describe("/taskroles delete", () => {
+    test("removes a milestone role from the settings and deletes it from the server", async ({
+        discord,
+        interact,
+        services,
+    }) => {
+        const expert = apiRole({ name: "Task Expert" });
+        const master = apiRole({ name: "Task Master" });
+        discord.guildRoles([expert, master]);
+        await services.guilds.update(IDS.guild, {
+            taskSettings: {
+                milestoneRoles: [
+                    milestoneRoleFactory.build({ roleId: expert.id, label: expert.name, requiredSubmissions: 50 }),
+                    milestoneRoleFactory.build({ roleId: master.id, label: master.name, requiredSubmissions: 100 }),
+                ],
+            },
+        });
+        discord.roleDeleted(IDS.guild, expert.id);
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "delete",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "role", value: `<@&${expert.id}>` },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Deleted milestone role **Task Expert**." }),
+        ]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.milestoneRoles).toEqual([
+            milestoneRoleFactory.build({ roleId: master.id, label: master.name, requiredSubmissions: 100 }),
+        ]);
+    });
+});
+
 describe("/taskroles toggle", () => {
     test("disables milestone roles", async ({ discord, interact, services }) => {
         discord.guildRoles();
@@ -180,6 +299,49 @@ describe("/taskroles toggle", () => {
                 (role) => !role.enabled,
             ),
         ).toBe(true);
+    });
+
+    test("disables champion roles and takes them off the current champions", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const gold = apiRole({ name: "Gold Champion" });
+        discord.guildRoles([gold]);
+        await services.guilds.update(IDS.guild, { roles: { taskChampionFirst: gold.id } });
+        await factories.periodicLeaderboard.create({ champions: { first: [member] } });
+        discord.member(
+            IDS.guild,
+            apiGuildMember({ user: apiUser({ id: member, username: "champ" }), roles: [gold.id] }),
+        );
+
+        const interaction = await interact(
+            chatInputInteraction(
+                "taskroles",
+                [
+                    {
+                        type: ApplicationCommandOptionType.Subcommand,
+                        name: "toggle",
+                        options: [
+                            { type: ApplicationCommandOptionType.String, name: "type", value: "champion" },
+                            { type: ApplicationCommandOptionType.Boolean, name: "enabled", value: false },
+                        ],
+                    },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(interaction)).toEqual([
+            expect.objectContaining({ content: "Disabled champion roles." }),
+        ]);
+        expect(discord.memberRoleChanges("DELETE")).toEqual([`${member}:${gold.id}`]);
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.taskSettings?.championRoles).toEqual({
+            first: false,
+            second: false,
+            third: false,
+        });
     });
 });
 

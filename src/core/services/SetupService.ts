@@ -1,3 +1,4 @@
+import type { Guild as DiscordGuild } from "discord.js";
 import type { GuildService } from "./GuildService.js";
 
 type SetupType = "core" | "movie" | "task";
@@ -68,20 +69,16 @@ export class SetupService {
         current[key] = value;
         map.set(userId, current);
     }
-
     getSelections(type: SetupType, userId: string): SelectionMap | undefined {
         return this.selections[type].get(userId);
     }
-
     clearSelections(type: SetupType, userId: string) {
         this.selections[type].delete(userId);
     }
-
     getMissingFields(type: SetupType, selections?: SelectionMap): string[] {
         if (!selections) return [...REQUIRED_FIELDS[type]];
         return REQUIRED_FIELDS[type].filter((field) => !selections[field]);
     }
-
     async persist(
         type: SetupType,
         guildService: GuildService,
@@ -115,7 +112,6 @@ export class SetupService {
                 ...(payload.roles as Record<string, string>),
             };
         }
-
         // Persist full merged payload
         console.log("[SetupService] Payload being sent to GuildService.update:", JSON.stringify(payload, null, 2));
         await guildService.update(guildId, payload);
@@ -123,7 +119,12 @@ export class SetupService {
 
         console.log(`[SetupService] Persisted ${type} setup for ${guildId}`);
     }
-
 }
 
-export const setupService = new SetupService();
+export function channelLabel(guild: DiscordGuild, channelId: string | undefined): string {
+    return channelId ? `#${guild.channels.cache.get(channelId)?.name ?? channelId}` : "None";
+}
+
+export function roleLabel(guild: DiscordGuild, roleId: string | undefined): string {
+    return roleId ? `@${guild.roles.cache.get(roleId)?.name ?? roleId}` : "None";
+}

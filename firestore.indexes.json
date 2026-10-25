@@ -1,16 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "taskSubmissions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "taskEventId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "reviewedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "taskPolls",
       "queryScope": "COLLECTION",
       "fields": [
@@ -37,4 +27,3 @@
   ],
   "fieldOverrides": []
 }
-

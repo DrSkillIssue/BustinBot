@@ -6,12 +6,14 @@ import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
 
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
+    await interaction.deferReply({ flags: 1 << 6 });
+
     const repo = services.repos.taskRepo;
 
     const taskId = interaction.customId.replace('update_task_modal_', '');
     const task = await repo.getTaskById(taskId);
     if (!task) {
-        await interaction.reply({ content: `Could not find task with ID **${taskId}**.`, flags: 1 << 6 });
+        await interaction.editReply({ content: `Could not find task with ID **${taskId}**.` });
         return;
     }
 
@@ -69,8 +71,5 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
         }
     }
 
-    await interaction.reply({
-        content: `Task **${taskId}** updated successfully.`,
-        flags: 1 << 6
-    });
+    await interaction.editReply({ content: `Task **${taskId}** updated successfully.` });
 }

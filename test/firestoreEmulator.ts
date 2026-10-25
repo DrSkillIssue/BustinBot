@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { FIRESTORE_SETTINGS } from "../src/core/database/firestore.js";
 
 const APP_NAME = "firestore-emulator-tests";
 
@@ -26,5 +27,6 @@ export function newEmulatorDatabase(): Firestore {
     const { projectId } = emulatorTarget();
     const app = getApps().find((existing) => existing.name === APP_NAME) ?? initializeApp({ projectId }, APP_NAME);
     const db = getFirestore(app, `test-${randomUUID()}`);
+    db.settings(FIRESTORE_SETTINGS);
     return db;
 }

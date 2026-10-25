@@ -24,9 +24,11 @@ const suppress: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction || !services) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const guildId = interaction.guildId;
         if (!guildId) {
-            await interaction.reply({ content: "This command can only be used in a server.", flags: 1 << 6 });
+            await interaction.editReply({ content: "This command can only be used in a server." });
             return;
         }
 
@@ -40,9 +42,8 @@ const suppress: Command = {
         });
 
         const untilUnix = Math.floor(untilMs / 1000);
-        await interaction.reply({
+        await interaction.editReply({
             content: `Mention suppression enabled for **${minutes}** minute${minutes === 1 ? "" : "s"}. It will expire <t:${untilUnix}:R> (<t:${untilUnix}:F>).`,
-            flags: 1 << 6,
         });
     },
 };

@@ -1,13 +1,47 @@
 import { InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "../fixtures.js";
 import { handleInteraction } from "../../src/core/events/onInteraction.js";
-import { AS, IDS, NAMES, chatInputInteraction, apiUser } from "../discord/payloads.js";
-import { PRIVATE_DEFERRAL } from "../discord/harness.js";
+import { CommandRole } from "../../src/models/Command.js";
+import { AS, IDS, NAMES, chatInputInteraction, apiUser, messageCreate } from "../discord/payloads.js";
+import { PRIVATE_DEFERRAL, DiscordError } from "../discord/harness.js";
 import { commandFactory } from "../factories.js";
+import { handleMessage } from "../../src/core/events/onMessage.js";
 
+const failing = commandFactory.build({
+    name: "fail",
+    execute: async () => {
+        throw new Error("boom");
+    },
+});
 const { user: _user, permissions: _permissions, ...botAdmin } = AS.botAdmin.member;
 
 describe("slash command routing", () => {
+    test("recognises a role configured by name for a member Discord sends as role ids", async ({
+        discord,
+        services,
+        uncachedGuild,
+    }) => {
+        await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
+        const interaction = await discord.dispatch(
+            chatInputInteraction("probe", [], { ...uncachedGuild, ...AS.botAdmin }),
+        );
+        const ran = commandFactory.build({
+            allowedRoles: [CommandRole.BotAdmin],
+            execute: async ({ interaction: probe }) => {
+                await probe?.reply({ content: "ran" });
+            },
+        });
+
+        await handleInteraction(interaction, new Map([["probe", ran]]), services);
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({ content: "ran" }),
+            },
+        ]);
+    });
+
     test("lets a BustinBot Admin Discord sends as role ids run /setup", async ({
         discord,
         services,
@@ -24,6 +58,30 @@ describe("slash command routing", () => {
         expect(discord.callbacks(interaction)).toEqual([PRIVATE_DEFERRAL]);
     });
 
+    test("refuses /setup to a member without the BustinBot Admin role", async ({
+        discord,
+        services,
+        commands,
+        uncachedGuild,
+    }) => {
+        await services.guilds.update(IDS.uncachedGuild, { roles: { admin: NAMES.roles.admin } });
+        const interaction = await discord.dispatch(
+            chatInputInteraction("setup", [], { ...uncachedGuild, ...AS.taskAdmin }),
+        );
+
+        await handleInteraction(interaction, commands, services);
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content:
+                        "Only members with the **BustinBot Admin** role can run `/setup`. Please have a server admin create and assign this role first.",
+                }),
+            },
+        ]);
+    });
+
     test("replies privately when the command is unknown", async ({ discord, services }) => {
         const interaction = await discord.dispatch(chatInputInteraction("missing"));
 
@@ -35,6 +93,84 @@ describe("slash command routing", () => {
                 data: expect.objectContaining({ content: "Command not found.", flags: MessageFlags.Ephemeral }),
             },
         ]);
+    });
+
+    test("refuses a role-restricted command to members without the role", async ({ discord, services }) => {
+        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+        const execute = vi.fn();
+
+        await handleInteraction(
+            interaction,
+            new Map([["probe", commandFactory.build({ execute, allowedRoles: [CommandRole.TaskAdmin] })]]),
+            services,
+        );
+
+        expect(execute).not.toHaveBeenCalled();
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+
+    test("tells members to run /setup before the bot is configured", async ({ discord, services }) => {
+        const execute = vi.fn();
+        await services.guilds.update(IDS.guild, {
+            setupComplete: { core: false, movie: false, task: false },
+        });
+        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+
+        await handleInteraction(interaction, new Map([["probe", commandFactory.build({ execute })]]), services);
+
+        expect(execute).not.toHaveBeenCalled();
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: expect.stringContaining("run `/setup`"),
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+
+    test("replies with a private error when a command fails before responding", async ({ discord, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        const interaction = await discord.dispatch(chatInputInteraction("probe"));
+
+        await handleInteraction(
+            interaction,
+            new Map([
+                [
+                    "probe",
+                    commandFactory.build({
+                        execute: async () => {
+                            throw new Error("boom");
+                        },
+                    }),
+                ],
+            ]),
+            services,
+        );
+
+        expect(discord.callbacks(interaction)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "There was an error executing that command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+        expect(error).toHaveBeenCalledWith(
+            "[Slash Command Error]: probe",
+            expect.objectContaining({ message: "boom" }),
+        );
     });
 
     test("turns the deferred reply into the error when a command fails after deferring", async ({
@@ -106,5 +242,31 @@ describe("prefix commands", () => {
         expect(discord.messagesSentTo(IDS.channel)).toEqual([
             expect.objectContaining({ content: expect.stringContaining("replaced with a slash command") }),
         ]);
+    });
+
+    test("tells the member when a command fails", async ({ discord, services }) => {
+        discord.acceptMessages(IDS.channel);
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        const message = await discord.sendMessage(messageCreate("!fail"));
+
+        await handleMessage(message, new Map([["fail", failing]]), services);
+
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({ content: "There was an error executing that command." }),
+        ]);
+        expect(error).toHaveBeenCalledWith("[Command Error]: fail", expect.objectContaining({ message: "boom" }));
+    });
+
+    test("survives Discord rejecting the error reply", async ({ discord, services }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
+        const message = await discord.sendMessage(messageCreate("!fail"));
+
+        await expect(handleMessage(message, new Map([["fail", failing]]), services)).resolves.toBeUndefined();
+        expect(error).toHaveBeenCalledWith("[Command Error]: fail", expect.any(Error));
+        expect(error).toHaveBeenCalledWith(
+            "[Command Error]: fail: could not send the error reply",
+            expect.objectContaining({ status: 403 }),
+        );
     });
 });

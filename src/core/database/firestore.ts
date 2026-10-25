@@ -1,8 +1,10 @@
 import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getFirestore, type Firestore, type Settings } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
-import { getDirname } from '../../utils/PathUtils.js';
+
+// Optional model fields are often undefined (e.g. TMDb metadata), which Firestore otherwise rejects on write
+export const FIRESTORE_SETTINGS: Settings = { ignoreUndefinedProperties: true };
 
 function loadServiceAccount(): ServiceAccount | undefined {
     const raw = process.env.FIREBASE_SERVICE_KEY;
@@ -31,8 +33,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
     }
 
     // Fallback to bundled config for local scripts.
-    const dirname = getDirname(import.meta.url);
-    const defaultPath = path.resolve(dirname, '../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json');
+    const defaultPath = path.resolve(import.meta.dirname, '../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json');
     if (fs.existsSync(defaultPath)) {
         const fileContents = fs.readFileSync(defaultPath, 'utf8');
         try {
@@ -53,9 +54,13 @@ export function createFirestore(): Firestore {
             throw new Error('FIREBASE_SERVICE_KEY is not configured and default service account file is missing.');
         }
 
-        initializeApp({
+        const app = initializeApp({
             credential: cert(serviceAccount),
         });
+        // settings() may only be called once, before the instance is first used
+        const db = getFirestore(app);
+        db.settings(FIRESTORE_SETTINGS);
+        return db;
     }
 
     return getFirestore();

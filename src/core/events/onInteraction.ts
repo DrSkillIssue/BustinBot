@@ -1,57 +1,24 @@
 import { GuildMember } from 'discord.js';
-import type { APIInteractionGuildMember, Interaction } from 'discord.js';
+import type { APIInteractionGuildMember, ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandModule, CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
-import { setupService } from '../services/SetupService.js';
+import type { GuildSetupComplete } from '../../models/Guild.js';
 import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
 
-const EPHEMERAL_FLAGS = 1 << 6;
-const slashAckPatched = Symbol('slashAckPatched');
-
-function stripReplyOnlyOptions(options: unknown) {
-    if (!options || typeof options !== 'object' || Array.isArray(options)) return options;
-    const { flags, ephemeral, ...rest } = options as Record<string, unknown>;
-    return rest;
-}
-
-async function respondToInteraction(interaction: any, options: any) {
-    if (interaction.deferred && !interaction.replied) {
-        return interaction.editReply(stripReplyOnlyOptions(options));
+async function resolveMemberRoles(
+    interaction: ChatInputCommandInteraction,
+    member: GuildMember | APIInteractionGuildMember
+): Promise<{ ids: string[]; names: string[] }> {
+    if (member instanceof GuildMember) {
+        return { ids: [...member.roles.cache.keys()], names: member.roles.cache.map((role) => role.name) };
     }
 
-    if (interaction.deferred || interaction.replied) {
-        return interaction.followUp(options);
-    }
-
-    return interaction.reply(options);
-}
-
-function patchSlashCommandAcknowledgement(interaction: any) {
-    if (interaction[slashAckPatched]) return;
-
-    const originalDeferReply = interaction.deferReply.bind(interaction);
-    const originalReply = interaction.reply.bind(interaction);
-    const originalEditReply = interaction.editReply.bind(interaction);
-
-    interaction.deferReply = async (options?: unknown) => {
-        if (interaction.deferred || interaction.replied) return undefined;
-        return originalDeferReply(options);
+    const guild = interaction.guildId ? await interaction.client.guilds.fetch(interaction.guildId) : null;
+    return {
+        ids: member.roles,
+        names: member.roles.flatMap((roleId) => guild?.roles.cache.get(roleId)?.name ?? []),
     };
-
-    interaction.reply = async (options: unknown) => {
-        if (interaction.deferred && !interaction.replied) {
-            return originalEditReply(stripReplyOnlyOptions(options));
-        }
-
-        if (interaction.deferred || interaction.replied) {
-            return interaction.followUp(options);
-        }
-
-        return originalReply(options);
-    };
-
-    interaction[slashAckPatched] = true;
 }
 
 export async function handleInteraction(
@@ -62,49 +29,32 @@ export async function handleInteraction(
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command) {
-            await interaction.reply({ content: 'Command not found.', flags: EPHEMERAL_FLAGS });
+            await interaction.reply({ content: 'Command not found.', flags: 1 << 6 });
             return;
         }
-
-        patchSlashCommandAcknowledgement(interaction);
-        await interaction.deferReply({ flags: EPHEMERAL_FLAGS });
 
         const isSetupCommand = command.name === 'setup';
         const rawMember = interaction.member;
 
         if (!rawMember) {
-            await respondToInteraction(interaction, {
+            await interaction.reply({
                 content: 'Unable to determine your server membership. Please try again from within the guild.',
-                flags: EPHEMERAL_FLAGS,
+                flags: 1 << 6,
             });
             return;
         }
 
-        const guildMember = rawMember instanceof GuildMember ? rawMember : null;
-        const apiMember = rawMember as APIInteractionGuildMember;
-
-        const userRoleIds = guildMember
-            ? guildMember.roles.cache.map((role) => role.id)
-            : Array.isArray(apiMember.roles)
-            ? apiMember.roles
-            : [];
-
-        const userRoleNames = guildMember
-            ? guildMember.roles.cache.map((role) => role.name)
-            : [];
+        const { ids: userRoleIds, names: userRoleNames } = await resolveMemberRoles(interaction, rawMember);
 
         if (isSetupCommand) {
             const adminRoleName = "BustinBot Admin";
 
-            const hasAdminRole =
-                guildMember?.roles.cache.some(
-                    (role) => role.name === adminRoleName || role.id === adminRoleName,
-                ) ?? false;
+            const hasAdminRole = userRoleNames.includes(adminRoleName);
 
             if (!hasAdminRole) {
-                await respondToInteraction(interaction, {
+                await interaction.reply({
                     content: `Only members with the **${adminRoleName}** role can run \`/setup\`. Please have a server admin create and assign this role first.`,
-                    flags: EPHEMERAL_FLAGS,
+                    flags: 1 << 6,
                 });
                 return;
             }
@@ -147,7 +97,7 @@ export async function handleInteraction(
             });
 
             if (!roleMatch) {
-                await respondToInteraction(interaction, { content: "You don't have permission to use this command.", flags: EPHEMERAL_FLAGS });
+                await interaction.reply({ content: "You don't have permission to use this command.", flags: 1 << 6 });
                 return;
             }
         }
@@ -155,13 +105,13 @@ export async function handleInteraction(
         // Module setup validation
         const guildId = interaction.guildId!;
         const guildConfig = await services.guilds.get(guildId);
-        const setupMap = guildConfig?.setupComplete ?? {} as any;
+        const setupMap: GuildSetupComplete = guildConfig?.setupComplete ?? {};
 
         const requiredModule = command.module;
         const moduleReady = setupMap[requiredModule];
 
         if (!setupMap.core && !isSetupCommand) {
-            await respondToInteraction(interaction, { content: 'The bot has not been set up yet. Please run `/setup` first to configure the core channels.', flags: EPHEMERAL_FLAGS });
+            await interaction.reply({ content: 'The bot has not been set up yet. Please run `/setup` first to configure the core channels.', flags: 1 << 6 });
             return;
         }
 
@@ -177,21 +127,27 @@ export async function handleInteraction(
                     break;
             }
 
-            await respondToInteraction(interaction, { content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`, flags: EPHEMERAL_FLAGS });
+            await interaction.reply({ content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`, flags: 1 << 6 });
             return;
         }
 
         try {
-            const userRepo = services.repos.userRepo;
-            try {
-                await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
-            } catch (err) {
-                console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
-            }
+            await services.repos.userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
+        } catch (err) {
+            console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
+        }
+
+        try {
             await command.execute({ interaction, services });
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
-            await respondToInteraction(interaction, { content: 'There was an error executing that command.', flags: EPHEMERAL_FLAGS });
+            if (interaction.deferred && !interaction.replied) {
+                await interaction.editReply({ content: 'There was an error executing that command.' });
+            } else if (interaction.replied) {
+                await interaction.followUp({ content: 'There was an error executing that command.', flags: 1 << 6 });
+            } else {
+                await interaction.reply({ content: 'There was an error executing that command.', flags: 1 << 6 });
+            }
         }
         return;
     }
@@ -201,22 +157,22 @@ export async function handleInteraction(
         const userId = interaction.user.id;
 
         if (customId === 'setup_confirm') {
-            const selections = setupService.getSelections('core', userId);
-            const missing = setupService.getMissingFields('core', selections);
+            const selections = services.setup.getSelections('core', userId);
+            const missing = services.setup.getMissingFields('core', selections);
             if (missing.length) {
                 await interaction.reply({ content: `Please select: ${missing.join(', ')}`, flags: 1 << 6 });
                 return;
             }
 
-            await setupService.persist('core', services.guilds, interaction.guildId!, selections!);
-            setupService.clearSelections('core', userId);
+            await services.setup.persist('core', services.guilds, interaction.guildId!, selections!);
+            services.setup.clearSelections('core', userId);
 
             await interaction.update({ content: 'Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.', components: [] });
             return;
         }
 
         if (customId === 'setup_cancel') {
-            setupService.clearSelections('core', userId);
+            services.setup.clearSelections('core', userId);
             await interaction.update({ content: 'Setup cancelled. No changes were made.', components: [] });
             return;
         }
@@ -238,13 +194,13 @@ export async function handleInteraction(
 
         switch (interaction.customId) {
             case 'setup_announce':
-                setupService.setSelection('core', userId, 'announcements', channelId);
+                services.setup.setSelection('core', userId, 'announcements', channelId);
                 break;
             case 'setup_log':
-                setupService.setSelection('core', userId, 'botLog', channelId);
+                services.setup.setSelection('core', userId, 'botLog', channelId);
                 break;
             case 'setup_archive':
-                setupService.setSelection('core', userId, 'botArchive', channelId);
+                services.setup.setSelection('core', userId, 'botArchive', channelId);
                 break;
             default:
                 return;

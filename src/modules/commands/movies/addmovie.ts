@@ -37,8 +37,11 @@ const addmovie: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guildConfig = await services.guilds.requireConfig(interaction);
-        if (!guildConfig) return;
+        const guildConfig = await services.guilds.get(interaction.guildId!);
+        if (!guildConfig) {
+            await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
+            return;
+        }
 
         const movieRepo = services.repos.movieRepo;
 

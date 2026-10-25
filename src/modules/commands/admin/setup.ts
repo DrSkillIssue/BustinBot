@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ActionRowBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
+import { channelLabel } from "../../../core/services/SetupService.js";
 
 const setup: Command = {
     name: 'setup',
@@ -15,27 +16,17 @@ const setup: Command = {
     async execute({ interaction, services }) {
         if (!interaction || !services) return;
 
+        await interaction.deferReply({ flags: 1 << 6 });
+
         const guild = interaction.guild!;
         const guildId = interaction.guildId!;
         const guildConfig = await services.guilds.ensureExists(guildId, interaction.user.id);
         const current = guildConfig?.channels ?? {};
 
-        const announceChannelName = current.announcements
-            ? guild.channels.cache.get(current.announcements)?.name ?? `#${current.announcements}`
-            : 'None';
-
-        const logChannelName = current.botLog
-            ? guild.channels.cache.get(current.botLog)?.name ?? `#${current.botLog}`
-            : 'None';
-
-        const archiveChannelName = current.botArchive
-            ? guild.channels.cache.get(current.botArchive)?.name ?? `#${current.botArchive}`
-            : 'None';
-
         const announceSelect = new ChannelSelectMenuBuilder()
             .setCustomId('setup_announce')
             .setPlaceholder(
-                `Channel for bot announcements (Current: #${announceChannelName})`)
+                `Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
@@ -43,7 +34,7 @@ const setup: Command = {
         const logSelect = new ChannelSelectMenuBuilder()
             .setCustomId('setup_log')
             .setPlaceholder(
-                `Channel for errors and logs (Current: #${logChannelName})`
+                `Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`
             )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
@@ -52,7 +43,7 @@ const setup: Command = {
         const archiveSelect = new ChannelSelectMenuBuilder()
             .setCustomId('setup_archive')
             .setPlaceholder(
-                `Channel for archived posts (Current: #${archiveChannelName})`
+                `Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`
             )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
@@ -73,7 +64,7 @@ const setup: Command = {
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger);
 
-        await interaction.reply({
+        await interaction.editReply({
             content: 'Select a channel for each category below, then click **Confirm** to save.',
             components: [
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(announceSelect),
@@ -81,7 +72,6 @@ const setup: Command = {
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(archiveSelect),
                 new ActionRowBuilder<ButtonBuilder>().addComponents(timezoneButton, confirmButton, cancelButton),
             ],
-            flags: 1 << 6
         });
     }
 };
