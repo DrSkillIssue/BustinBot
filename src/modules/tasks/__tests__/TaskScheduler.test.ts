@@ -1,8 +1,5 @@
-const cronMockModule = vi.hoisted(() => import("../../../tests/mocks/cronMock.js"));
-
-vi.mock("node-cron", async () => ({
-    ...(await cronMockModule),
-}));
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock("node-cron", () => import("../../../tests/mocks/cronMock.js"));
 
 vi.mock("../HandlePrizeDraw.js", () => ({
     generatePrizeDrawSnapshot: vi.fn().mockResolvedValue({ id: 'snapshot-1' }),

@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 import type { Movie } from '../../models/Movie.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';

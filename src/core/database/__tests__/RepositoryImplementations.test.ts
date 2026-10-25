@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 const firebaseHoist = vi.hoisted(() => {
     const incrementMock = vi.fn((amount: number) => ({ __type: 'increment', amount }));
@@ -41,19 +41,19 @@ import { KeywordRepository } from '../KeywordRepo.js';
 import { UserRepository } from '../UserRepo.js';
 
 type FirestoreDoc<T = any> = {
-    get: ReturnType<typeof vi.fn>;
-    set: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
+    get: Mock<(...args: any[]) => any>;
+    set: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
+    delete: Mock<(...args: any[]) => any>;
     id?: string;
 };
 
 type FirestoreCollection = {
-    doc: ReturnType<typeof vi.fn>;
-    get: ReturnType<typeof vi.fn>;
-    where?: ReturnType<typeof vi.fn>;
-    orderBy?: ReturnType<typeof vi.fn>;
-    limit?: ReturnType<typeof vi.fn>;
+    doc: Mock<(...args: any[]) => any>;
+    get: Mock<(...args: any[]) => any>;
+    where?: Mock<(...args: any[]) => any>;
+    orderBy?: Mock<(...args: any[]) => any>;
+    limit?: Mock<(...args: any[]) => any>;
 };
 
 const mockDb = vi.mocked(db);

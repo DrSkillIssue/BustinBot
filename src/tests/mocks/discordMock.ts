@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 export const mockEmbedInstance = {
     setTitle: vi.fn().mockReturnThis(),
     setDescription: vi.fn().mockReturnThis(),
@@ -9,4 +10,4 @@ export const mockEmbedInstance = {
     setTimestamp: vi.fn().mockReturnThis(),
 };
 
-export const EmbedBuilder = vi.fn().mockImplementation(() => mockEmbedInstance);
+export const EmbedBuilder = vi.fn().mockImplementation(function () { return mockEmbedInstance; });

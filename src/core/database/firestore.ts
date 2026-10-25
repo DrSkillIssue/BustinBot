@@ -1,4 +1,4 @@
-import admin from 'firebase-admin';
+import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { config as loadEnv } from 'dotenv';
 import fs from 'fs';
@@ -7,7 +7,7 @@ import { getDirname } from '../../utils/PathUtils.js';
 
 loadEnv();
 
-function loadServiceAccount(): admin.ServiceAccount | undefined {
+function loadServiceAccount(): ServiceAccount | undefined {
     const raw = process.env.FIREBASE_SERVICE_KEY;
 
     if (raw) {
@@ -15,7 +15,7 @@ function loadServiceAccount(): admin.ServiceAccount | undefined {
         const trimmed = raw.trim();
         if (trimmed.startsWith('{')) {
             try {
-                return JSON.parse(trimmed) as admin.ServiceAccount;
+                return JSON.parse(trimmed) as ServiceAccount;
             } catch (err) {
                 throw new Error(`Failed to parse FIREBASE_SERVICE_KEY JSON: ${(err as Error).message}`);
             }
@@ -27,7 +27,7 @@ function loadServiceAccount(): admin.ServiceAccount | undefined {
         }
         const fileContents = fs.readFileSync(resolvedPath, 'utf8');
         try {
-            return JSON.parse(fileContents) as admin.ServiceAccount;
+            return JSON.parse(fileContents) as ServiceAccount;
         } catch (err) {
             throw new Error(`Failed to parse service account JSON at ${resolvedPath}: ${(err as Error).message}`);
         }
@@ -39,7 +39,7 @@ function loadServiceAccount(): admin.ServiceAccount | undefined {
     if (fs.existsSync(defaultPath)) {
         const fileContents = fs.readFileSync(defaultPath, 'utf8');
         try {
-            return JSON.parse(fileContents) as admin.ServiceAccount;
+            return JSON.parse(fileContents) as ServiceAccount;
         } catch (err) {
             throw new Error(`Failed to parse default service account JSON: ${(err as Error).message}`);
         }
@@ -54,9 +54,9 @@ if (!serviceAccount) {
     throw new Error('FIREBASE_SERVICE_KEY is not configured and default service account file is missing.');
 }
 
-if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+if (!getApps().length) {
+    initializeApp({
+        credential: cert(serviceAccount),
     });
 }
 

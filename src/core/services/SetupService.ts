@@ -1,4 +1,3 @@
-import { servicesVersion } from "typescript";
 import type { GuildService } from "./GuildService.js";
 
 type SetupType = "core" | "movie" | "task";

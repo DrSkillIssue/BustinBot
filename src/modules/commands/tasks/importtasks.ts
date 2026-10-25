@@ -4,7 +4,6 @@ import type { Command } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import fs from 'fs';
 import path from 'path';
-import fetch from 'node-fetch';
 import { importTasksFromCsv } from "../../../scripts/importTasksFromCSV.js";
 
 const importtasks: Command = {

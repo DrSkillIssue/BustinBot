@@ -13,10 +13,9 @@
       "vitest/globals",
       "node"
     ],
-    "baseUrl": "./src",
     "paths": {
       "@tests/*": [
-        "tests/*"
+        "./src/tests/*"
       ]
     },
     // For nodejs:
@@ -25,8 +24,6 @@
     // and npm install -D @types/node
     // Other Outputs
     "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

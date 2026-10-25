@@ -10,6 +10,7 @@ import {
 } from "../TaskLeaderboards.js";
 import type { TaskLeaderboard } from "../../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
+import { TaskCategory } from "../../../models/Task.js";
 
 function createLeaderboardRepo(initial?: TaskLeaderboard) {
     let leaderboard = initial;
@@ -21,19 +22,7 @@ function createLeaderboardRepo(initial?: TaskLeaderboard) {
         }),
         updateLeaderboard: vi.fn(async (_id: string, data: Partial<TaskLeaderboard>) => {
             if (!leaderboard) return;
-            leaderboard = {
-                ...leaderboard,
-                ...structuredClone(data),
-                period: data.period ? structuredClone(data.period) : leaderboard.period,
-                completedPeriod: data.completedPeriod
-                    ? structuredClone(data.completedPeriod)
-                    : leaderboard.completedPeriod,
-                pendingPeriod: data.pendingPeriod !== undefined
-                    ? structuredClone(data.pendingPeriod)
-                    : leaderboard.pendingPeriod,
-                points: data.points ? structuredClone(data.points) : leaderboard.points,
-                tierCounts: data.tierCounts ? structuredClone(data.tierCounts) : leaderboard.tierCounts,
-            };
+            leaderboard = { ...leaderboard, ...structuredClone(data) };
         }),
         incrementPoints: vi.fn(async (_id: string, userId: string, amount: number) => {
             if (!leaderboard) return;
@@ -62,9 +51,12 @@ function createEvent(id: string, start: string, end: string): TaskEvent {
         task: { name: id } as any,
         startTime: new Date(start),
         endTime: new Date(end),
+        category: TaskCategory.PvM,
+        amounts: { bronze: 0, silver: 0, gold: 0 },
         keyword: id,
         completedUserIds: [],
-    } as TaskEvent;
+        createdAt: new Date(start),
+    };
 }
 
 function createServices(taskLeaderboardRepo: ReturnType<typeof createLeaderboardRepo>, events: TaskEvent[]) {

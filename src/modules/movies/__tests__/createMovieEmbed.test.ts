@@ -1,8 +1,5 @@
-const discordMock = vi.hoisted(() => import("../../../tests/mocks/discordMock.js"));
-
-vi.mock("discord.js", async () => ({
-    ...(await discordMock),
-}));
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock("discord.js", () => import("../../../tests/mocks/discordMock.js"));
 
 import { createMovieEmbed } from "../MovieEmbeds.js";
 import { mockEmbedInstance } from "../../../tests/mocks/discordMock.js";

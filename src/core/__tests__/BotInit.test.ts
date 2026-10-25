@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
 import type { BotStatsService } from '../services/BotStatsService.js';
 import type { Command } from '../../models/Command.js';
@@ -34,8 +35,8 @@ describe('Bot startup smoke test', () => {
                 setToken: vi.fn(() => restInstance),
             };
             return {
-                Client: vi.fn(() => mockClient),
-                REST: vi.fn(() => restInstance),
+                Client: vi.fn(function () { return mockClient; }),
+                REST: vi.fn(function () { return restInstance; }),
                 Routes: { applicationGuildCommands: vi.fn() },
                 GatewayIntentBits: { Guilds: 1, GuildMessages: 2, MessageContent: 4, DirectMessages: 8 },
                 Partials: { Channel: 1 },
@@ -89,5 +90,8 @@ describe('Bot startup smoke test', () => {
 
         // ---- Run main index (startup) ----
         await expect(import('../../index.js')).resolves.not.toThrow();
+
+        // Startup continues asynchronously after import; wait for its final step before teardown
+        await vi.waitFor(() => expect(mockClient.login).toHaveBeenCalledWith('token'));
     }, 10000);
 });

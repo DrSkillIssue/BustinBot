@@ -15,14 +15,6 @@ vi.mock('../services/CommandService', () => ({
   }),
 }));
 
-vi.mock('node-fetch', () => ({
-  __esModule: true,
-  default: vi.fn(async () => ({
-    ok: true,
-    json: async () => ({}),
-  })),
-}));
-
 describe('Slash command registration', () => {
   it('invokes application.commands.create for every slash command builder', async () => {
     const commandsDir = path.join(__dirname, '../../modules/commands');
