@@ -12,7 +12,7 @@ import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { TaskFeedback } from "../../models/TaskFeedback.js";
 import type { TaskLeaderboard } from "../../models/TaskLeaderboard.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
-import type { TaskSubmission } from "../../models/TaskSubmission.js";
+import type { TaskSubmission, TaskSubmissionDraft } from "../../models/TaskSubmission.js";
 import type { UserStats } from "../../models/UserStats.js";
 
 function storedDocument(snapshot: QueryDocumentSnapshot): DocumentData {
@@ -33,6 +33,7 @@ export const taskConverter = converter<Task>();
 export const taskPollConverter = converter<TaskPoll>();
 export const taskEventConverter = converter<TaskEvent>();
 export const taskSubmissionConverter = converter<TaskSubmission>();
+export const taskSubmissionDraftConverter = converter<TaskSubmissionDraft>();
 export const taskFeedbackConverter = converter<TaskFeedback>();
 export const taskLeaderboardConverter = converter<TaskLeaderboard>();
 export const prizeDrawConverter = converter<PrizeDraw>();

@@ -4,7 +4,6 @@ import { handleTaskFeedback } from "./HandleTaskFeedback.js";
 import {
     handleSubmitButton,
     handleAdminButton,
-    handleTaskSelect,
     handleRejectionModal,
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
@@ -104,11 +103,6 @@ export async function handleTaskInteraction(
     }
 
     if (interaction.isStringSelectMenu()) {
-        if (interaction.customId.startsWith("select-task-")) {
-            await handleTaskSelect(interaction, services);
-            return;
-        }
-
         if (interaction.customId === "tasksetup_period_events") {
             const userId = interaction.user.id;
             const selection = interaction.values[0];

@@ -4,7 +4,7 @@ import { DateTime } from "luxon";
 import { TaskCategory, TaskType, type Task } from "../src/models/Task.js";
 import type { TaskEvent } from "../src/models/TaskEvent.js";
 import { newUserStats, type UserStats } from "../src/models/UserStats.js";
-import { SubmissionStatus, type TaskSubmission } from "../src/models/TaskSubmission.js";
+import { SubmissionStatus, type TaskSubmission, type TaskSubmissionDraft } from "../src/models/TaskSubmission.js";
 import type { TaskPoll } from "../src/models/TaskPoll.js";
 import type { Guild, TaskMilestoneRole } from "../src/models/Guild.js";
 import type { Movie } from "../src/models/Movie.js";
@@ -68,6 +68,12 @@ export const taskSubmissionFactory = Factory.define<TaskSubmission>(() => ({
     taskName: "Kill 10 Zulrah",
     screenshotUrls: ["https://cdn.discordapp.com/attachments/1/2/proof.png"],
     status: SubmissionStatus.Pending,
+    createdAt: new Date("2026-01-06T00:00:00.000Z"),
+}));
+
+export const submissionDraftFactory = Factory.define<TaskSubmissionDraft>(() => ({
+    userId: IDS.user,
+    taskEventId: "PVM001-20260105",
     createdAt: new Date("2026-01-06T00:00:00.000Z"),
 }));
 

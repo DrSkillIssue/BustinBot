@@ -1,4 +1,4 @@
-import type { TaskLeaderboard, TaskLeaderboardId } from "../../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardId, TaskTierChange } from "../../../models/TaskLeaderboard.js";
 
 export interface ITaskLeaderboardRepository {
     getLeaderboard(id: TaskLeaderboardId): Promise<TaskLeaderboard | null>;
@@ -9,10 +9,5 @@ export interface ITaskLeaderboardRepository {
         change: (current: TaskLeaderboard | null) => { update: Partial<TaskLeaderboard>; result: T } | null
     ): Promise<T | null>;
     incrementPoints(id: TaskLeaderboardId, userId: string, amount: number): Promise<void>;
-    incrementTierCount(
-        id: TaskLeaderboardId,
-        userId: string,
-        tier: "bronze" | "silver" | "gold",
-        amount: number
-    ): Promise<void>;
+    recordTierChange(id: TaskLeaderboardId, change: TaskTierChange, within?: "pendingPeriod"): Promise<void>;
 }

@@ -1,13 +1,21 @@
 import assert from "node:assert";
 import path from "node:path";
 import cron from "node-cron";
+import { DateTime } from "luxon";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, test, vi } from "../fixtures.js";
 import { startBot } from "../../src/bot.js";
 import { DiscordError, DiscordHarness } from "../discord/harness.js";
-import { IDS, apiTextChannel, chatInputInteraction, apiOtherGuild } from "../discord/payloads.js";
-import { taskFactory, userStatsFactory } from "../factories.js";
+import {
+    IDS,
+    apiAttachment,
+    apiTextChannel,
+    chatInputInteraction,
+    directMessage,
+    apiOtherGuild,
+} from "../discord/payloads.js";
+import { submissionDraftFactory, taskEventFactory, taskFactory, userStatsFactory } from "../factories.js";
 import { getNextPollDate } from "../../src/modules/tasks/TaskScheduler.js";
 import { createServiceContainer } from "../../src/core/services/ServiceFactory.js";
 import { BotStatsService } from "../../src/core/services/BotStatsService.js";
@@ -140,6 +148,47 @@ describe("startBot", () => {
             expect.objectContaining({ content: "Bustin makes me feel good!" }),
         ]);
         expect(await services.repos.userRepo.getUserById(interaction.user.id)).toMatchObject({ commandsRun: 1 });
+    });
+
+    test("takes screenshots DMed after a restart for the guild where the member last clicked Submit", async ({
+        db,
+        http,
+        services,
+        otherGuild,
+        factories,
+    }) => {
+        const otherTasks = otherGuild.repos.taskRepo;
+        const event = taskEventFactory.build({ endTime: DateTime.now().plus({ days: 1 }).toJSDate() });
+        await otherTasks.createTaskEvent(event);
+        await factories.submissionDraft.create({
+            taskEventId: "older",
+            createdAt: DateTime.now().minus({ minutes: 1 }).toJSDate(),
+        });
+        await otherTasks.saveSubmissionDraft(
+            submissionDraftFactory.build({ taskEventId: event.id, createdAt: new Date() }),
+        );
+        const discord = DiscordHarness.create(http);
+        const screenshot = apiAttachment();
+        discord.serveAttachment(screenshot);
+        discord.acceptMessages(IDS.otherGuildChannel);
+        discord.acceptMessages(IDS.dm);
+
+        const shutdown = await startBot(discord.client, { db, commandsDir, fallbackGuildId: null, commandSync: null });
+        await discord.connect();
+        await discord.addGuild(apiOtherGuild());
+        await discord.sendMessage(directMessage("", { attachments: [screenshot] }));
+        await shutdown();
+
+        expect(discord.messagesSentTo(IDS.dm)).toEqual([
+            expect.objectContaining({
+                content: expect.stringContaining("received with 1 screenshot and sent for review!"),
+            }),
+        ]);
+        expect(await otherTasks.getSubmissionsByUser(IDS.user)).toEqual([
+            expect.objectContaining({ taskEventId: event.id }),
+        ]);
+        expect(discord.messagesSentTo(IDS.otherGuildChannel)).toHaveLength(2);
+        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: "older" });
     });
 
     test("refuses to start when no guild is configured and no fallback is given", async ({

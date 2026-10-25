@@ -66,19 +66,20 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         toField: keyof UserStats
     ): Promise<void> {
         const docRef = this.collection.doc(userId);
-        const doc = await docRef.get();
 
-        if (!doc.exists) {
-            const newStats = newUserStats(userId, new Date());
-            (newStats as any)[toField] = 1;
-            await docRef.set(newStats);
-            return;
-        }
+        await this.db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(docRef);
 
-        await docRef.update({
-            [fromField]: FieldValue.increment(-1),
-            [toField]: FieldValue.increment(1),
-            lastActiveAt: new Date(),
+            if (!doc.exists) {
+                transaction.set(docRef, { ...newUserStats(userId, new Date()), [toField]: 1 });
+                return;
+            }
+
+            transaction.update(docRef, {
+                [fromField]: FieldValue.increment(-1),
+                [toField]: FieldValue.increment(1),
+                lastActiveAt: new Date(),
+            });
         });
     }
 

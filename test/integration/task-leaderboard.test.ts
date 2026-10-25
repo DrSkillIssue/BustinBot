@@ -24,6 +24,8 @@ import {
 } from "../../src/modules/tasks/HandleLeaderboardUpdate.js";
 import {
     ensureTaskLeaderboardsInitialized,
+    finalizePeriodicLeaderboard,
+    recordPeriodicTierChange,
     registerPeriodicTaskEvent,
 } from "../../src/modules/tasks/TaskLeaderboards.js";
 import { periodicLeaderboardFactory } from "../factories.js";
@@ -68,6 +70,8 @@ async function setUpChampions(discord: DiscordHarness, services: ServiceContaine
     };
     return { roles, dms };
 }
+
+const [oldPeriodMember, overlapMember] = [SnowflakeUtil.generate().toString(), SnowflakeUtil.generate().toString()];
 
 describe("the weekly leaderboard update", () => {
     test("posts the current standings with the week of the period", async ({ discord, services, factories }) => {
@@ -311,6 +315,50 @@ describe("TaskLeaderboards periodic submissions", () => {
         expect(stored?.period?.eventIds).toEqual(eventIds.slice(0, 12));
         expect(stored?.pendingPeriod?.period.eventIds).toEqual(["week-5-pvm"]);
     });
+
+    test("carries approved submissions from the overlap into the following period", async ({ services, factories }) => {
+        const weeks = await storeWeeks(factories, DateTime.fromISO("2026-01-05T00:00:00Z"), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+            "week-5",
+        ]);
+
+        await ensureTaskLeaderboardsInitialized(services);
+        for (const id of weeks.slice(0, 4)) {
+            await registerPeriodicTaskEvent(services, id);
+        }
+        await recordPeriodicTierChange(services, "week-4", {
+            userId: oldPeriodMember,
+            points: 6,
+            from: null,
+            to: SubmissionStatus.Gold,
+        });
+        await registerPeriodicTaskEvent(services, "week-5");
+        await recordPeriodicTierChange(services, "week-5", {
+            userId: overlapMember,
+            points: 3,
+            from: null,
+            to: SubmissionStatus.Silver,
+        });
+
+        const finalising = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(finalising?.points).toEqual({ [oldPeriodMember]: 6 });
+        const firstPeriod = 1;
+        expect(finalising?.period?.index).toBe(firstPeriod);
+
+        const finalised = await finalizePeriodicLeaderboard(services, firstPeriod);
+
+        expect(finalised?.placements.first).toEqual([{ userId: oldPeriodMember, points: 6 }]);
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(stored?.completedPeriod?.topThree).toEqual([{ userId: oldPeriodMember, points: 6 }]);
+        expect(stored?.completedPeriod?.topTen).toEqual([{ userId: oldPeriodMember, points: 6 }]);
+        expect(stored?.period?.eventIds).toEqual(["week-5"]);
+        expect(stored?.points).toEqual({ [overlapMember]: 3 });
+        expect(stored?.tierCounts).toEqual({ [overlapMember]: { silver: 1 } });
+        expect(await finalizePeriodicLeaderboard(services, firstPeriod)).toBeNull();
+    });
 });
 
 describe("/leaderboard", () => {
@@ -440,5 +488,17 @@ describe("TaskLeaderboardRepository", () => {
         const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
         expect(stored?.points).toEqual({ [IDS.user]: 3 });
         expect(stored?.pendingPeriod).toBeNull();
+    });
+
+    test("keeps a leaderboard that already exists when asked to create it", async ({ services }) => {
+        await services.repos.taskLeaderboardRepo.createLeaderboard(
+            periodicLeaderboardFactory.build({ points: { [IDS.user]: 3 } }),
+        );
+
+        await services.repos.taskLeaderboardRepo.createLeaderboard(periodicLeaderboardFactory.build());
+
+        expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
+            points: { [IDS.user]: 3 },
+        });
     });
 });

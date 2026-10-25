@@ -1,10 +1,9 @@
 import type { ModalSubmitInteraction } from "discord.js";
-import { buildTaskEventEmbed } from "./TaskEmbeds.js";
-import { isTextChannel } from "../../utils/ChannelUtils.js";
 import { TaskCategory, TaskType, type Task } from "../../models/Task.js";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
+import { refreshTaskEventMessage } from "./HandleTaskStart.js";
 
 function parseAmount(input: string): number | null {
     const digits = input.replace(/[,\s_]/g, '');
@@ -69,8 +68,6 @@ async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRep
         .filter(event => event.task.id === task.id && event.startTime <= now);
 
     for (const activeEvent of activeEvents) {
-        if (!activeEvent.messageId || !activeEvent.channelId) continue;
-
         activeEvent.task = task;
         activeEvent.amounts = {
             bronze: task.amtBronze,
@@ -79,18 +76,10 @@ async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRep
         }
         await repo.updateTaskEventTask(activeEvent.id, activeEvent.task, activeEvent.amounts);
 
-        const { embeds, components, files } = buildTaskEventEmbed(activeEvent);
-        const channel = await interaction.client.channels.fetch(activeEvent.channelId).catch(() => null);
-
-        if (!channel || !isTextChannel(channel)) {
-            console.warn(`[HandleUpdateTaskModal] Could not resolve text channel ${activeEvent.channelId} for live embed update.`);
-        } else {
-            try {
-                const message = await channel.messages.fetch(activeEvent.messageId);
-                if (message) await message.edit({ embeds, components, files });
-            } catch (err) {
-                console.error('[HandleUpdateTaskModal] Failed to update active task event embed:', err);
-            }
+        try {
+            await refreshTaskEventMessage(interaction.client, activeEvent);
+        } catch (err) {
+            console.error('[HandleUpdateTaskModal] Failed to update active task event embed:', err);
         }
     }
 

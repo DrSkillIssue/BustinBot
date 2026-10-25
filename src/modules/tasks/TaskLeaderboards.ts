@@ -1,7 +1,7 @@
 import type { Client, Guild } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardCompletedPeriod, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPendingPeriod, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardCompletedPeriod, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPeriod, TaskTierChange } from "../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
@@ -12,10 +12,6 @@ const TIER_POINTS = {
     gold: 6,
 };
 
-export function getTierPoints(tier: keyof typeof TIER_POINTS): number {
-    return TIER_POINTS[tier];
-}
-
 const STATUS_POINTS: Partial<Record<SubmissionStatus, number>> = {
     [SubmissionStatus.Bronze]: TIER_POINTS.bronze,
     [SubmissionStatus.Silver]: TIER_POINTS.silver,
@@ -25,48 +21,6 @@ const STATUS_POINTS: Partial<Record<SubmissionStatus, number>> = {
 export function getStatusPoints(status?: SubmissionStatus): number {
     if (!status) return 0;
     return STATUS_POINTS[status] ?? 0;
-}
-
-type LeaderboardTier = keyof typeof TIER_POINTS;
-
-function inferPreviousTierFromDelta(tier: LeaderboardTier, amount: number): LeaderboardTier | null {
-    const previousPoints = TIER_POINTS[tier] - amount;
-    const previous = Object.entries(TIER_POINTS).find(([, points]) => points === previousPoints);
-    return (previous?.[0] as LeaderboardTier | undefined) ?? null;
-}
-
-function applyTierCountDelta(
-    tierCounts: Record<string, TaskTierCounts> | undefined,
-    userId: string,
-    tier: LeaderboardTier,
-    amount: number
-): Record<string, TaskTierCounts> {
-    const updated = structuredClone(tierCounts ?? {});
-    updated[userId] ??= { bronze: 0, silver: 0, gold: 0 };
-
-    const previousTier = inferPreviousTierFromDelta(tier, amount);
-    if (previousTier) {
-        updated[userId][previousTier] = Math.max(0, updated[userId][previousTier] - 1);
-    }
-    updated[userId][tier] += 1;
-
-    return updated;
-}
-
-function incrementPendingPeriodPoints(
-    pendingPeriod: TaskLeaderboardPendingPeriod,
-    userId: string,
-    amount: number,
-    tier: LeaderboardTier
-): TaskLeaderboardPendingPeriod {
-    return {
-        ...pendingPeriod,
-        points: {
-            ...pendingPeriod.points,
-            [userId]: (pendingPeriod.points[userId] ?? 0) + amount,
-        },
-        tierCounts: applyTierCountDelta(pendingPeriod.tierCounts, userId, tier, amount),
-    };
 }
 
 const DEFAULT_PERIOD_EVENTS = 4;
@@ -276,16 +230,6 @@ export async function incrementLifetimePoints(
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
 
-    const leaderboard = await repo.getLeaderboard("lifetime");
-    if (!leaderboard) {
-        try {
-            await ensureTaskLeaderboardsInitialized(services);
-        } catch (err) {
-            console.warn("[TaskLeaderboards] Leaderboard initialisation failed:", err);
-            return;
-        }
-    }
-
     try {
         await repo.incrementPoints("lifetime", userId, amount);
     } catch (err) {
@@ -293,58 +237,25 @@ export async function incrementLifetimePoints(
     }
 }
 
-export async function incrementPeriodicPoints(
+export async function recordPeriodicTierChange(
     services: ServiceContainer,
-    userId: string,
-    amount: number,
     taskEventId: string,
-    tier: "bronze" | "silver" | "gold"
+    change: TaskTierChange
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
 
-    let leaderboard = await repo.getLeaderboard("periodic");
-    if (!leaderboard) {
-        try {
-            await ensureTaskLeaderboardsInitialized(services);
-            leaderboard = await repo.getLeaderboard("periodic");
-        } catch (err) {
-            console.warn("[TaskLeaderboards] Leaderboard initialisation failed:", err);
-            return;
-        }
-    }
-
-    const period = leaderboard?.period;
-    if (!period) return;
-
-    if (!period.eventIds.includes(taskEventId)) {
-        if (leaderboard?.pendingPeriod?.period.eventIds.includes(taskEventId)) {
-            const pendingPeriod = incrementPendingPeriodPoints(
-                leaderboard.pendingPeriod,
-                userId,
-                amount,
-                tier
-            );
-            try {
-                await repo.updateLeaderboard("periodic", {
-                    pendingPeriod,
-                    updatedAt: new Date().toISOString(),
-                });
-            } catch (err) {
-                console.warn(`[TaskLeaderboards] Failed to increment pending periodic points for ${userId}:`, err);
-            }
-        }
-        return;
-    }
+    const leaderboard = await repo.getLeaderboard("periodic");
+    const within = leaderboard?.period?.eventIds.includes(taskEventId)
+        ? undefined
+        : leaderboard?.pendingPeriod?.period.eventIds.includes(taskEventId)
+            ? "pendingPeriod"
+            : null;
+    if (within === null) return;
 
     try {
-        await repo.incrementPoints("periodic", userId, amount);
-        const previousTier = inferPreviousTierFromDelta(tier, amount);
-        if (previousTier) {
-            await repo.incrementTierCount("periodic", userId, previousTier, -1);
-        }
-        await repo.incrementTierCount("periodic", userId, tier, 1);
+        await repo.recordTierChange("periodic", change, within);
     } catch (err) {
-        console.warn(`[TaskLeaderboards] Failed to increment periodic points for ${userId}:`, err);
+        console.warn(`[TaskLeaderboards] Failed to record periodic points for ${change.userId}:`, err);
     }
 }
 

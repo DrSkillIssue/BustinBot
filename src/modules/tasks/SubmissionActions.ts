@@ -1,11 +1,13 @@
-import { TextChannel, ButtonBuilder, ButtonStyle, ActionRowBuilder, Client } from 'discord.js';
-import type { TaskSubmission } from '../../models/TaskSubmission.js';
-import { SubmissionStatus } from '../../models/TaskSubmission.js';
-import { buildSubmissionEmbed, buildArchiveEmbed, buildTaskEventEmbed } from './TaskEmbeds.js';
+import { TextChannel, ButtonBuilder, ButtonStyle, ActionRowBuilder, Client, type Message } from 'discord.js';
+import type { SubmissionTier, TaskSubmission } from '../../models/TaskSubmission.js';
+import { isTier, tierRank } from '../../models/TaskSubmission.js';
+import type { TaskEvent } from '../../models/TaskEvent.js';
+import { buildSubmissionEmbed, buildArchiveEmbed, getTierLabel } from './TaskEmbeds.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
-import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
+
+export const MAX_SCREENSHOTS = 10;
 
 async function resolveTextChannel(client: Client, channelId?: string | null): Promise<TextChannel | null> {
     if (!channelId) return null;
@@ -18,25 +20,27 @@ async function resolveTextChannel(client: Client, channelId?: string | null): Pr
     }
 }
 
-export async function postToAdminChannel(client: Client, submission: TaskSubmission, services: ServiceContainer) {
+async function resolveVerificationChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
     const guildConfig = await services.guilds.get(services.guildId);
-    const verificationChannelId = guildConfig?.channels?.taskVerification;
-    if (!verificationChannelId) {
-        console.warn(`[SubmissionActions] Task verification channel not configured for guild ${services.guildId}.`);
-        return;
-    }
+    return resolveTextChannel(client, guildConfig?.channels?.taskVerification);
+}
 
-    const channel = await resolveTextChannel(client, verificationChannelId);
+export interface ReviewPost {
+    message: string;
+    screenshotMessage?: string;
+}
+
+export async function postToAdminChannel(
+    client: Client,
+    submission: TaskSubmission,
+    event: TaskEvent,
+    heldTier: SubmissionTier | null,
+    services: ServiceContainer
+): Promise<ReviewPost> {
+    const channel = await resolveVerificationChannel(client, services);
     if (!channel) {
-        console.warn(`[SubmissionActions] Unable to resolve task verification channel ${verificationChannelId}.`);
-        return;
+        throw new Error(`The task verification channel for guild ${services.guildId} is not configured or can't be reached.`);
     }
-
-    const taskEvent = await services.repos.taskRepo?.getTaskEventById(submission.taskEventId);
-    if (!taskEvent) return;
-
-    const taskLabel = submission.taskName ?? `Task ${submission.taskEventId}`;
-    const embed = buildSubmissionEmbed(submission, taskLabel, taskEvent);
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
@@ -57,143 +61,83 @@ export async function postToAdminChannel(client: Client, submission: TaskSubmiss
             .setStyle(ButtonStyle.Danger)
     );
 
-    // First message: embed with info and buttons
-    const sentMessage = await channel.send({ embeds: [embed], components: [buttons] });
-    submission.message = sentMessage.id;
+    const details = await channel.send({ embeds: [buildSubmissionEmbed(submission, event, heldTier)], components: [buttons] });
+    if (submission.screenshotUrls.length === 0) return { message: details.id };
 
-    // Second message: screenshots as file uploads
-    if (submission.screenshotUrls?.length > 0) {
-        const filesToSend = submission.screenshotUrls.slice(0, 10);
+    try {
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-        const sentScreens = await channel.send({
-            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
-            files: filesToSend
+        const screenshots = await channel.send({
+            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${submission.taskName ?? `Task ${submission.taskEventId}`}:` }, suppressMentions),
+            files: submission.screenshotUrls.slice(0, MAX_SCREENSHOTS),
         });
-        submission.screenshotMessage = sentScreens.id;
+        return { message: details.id, screenshotMessage: screenshots.id };
+    } catch (err) {
+        await details.delete().catch((deleteErr: unknown) => console.warn(`[SubmissionActions] Failed to remove the partly posted submission ${submission.id}:`, deleteErr));
+        throw err;
     }
 }
 
-export async function notifyUser(client: Client, submission: TaskSubmission, streakLine?: string) {
+export async function removeReviewPost(client: Client, submission: Pick<TaskSubmission, 'id' | 'message' | 'screenshotMessage'>, services: ServiceContainer): Promise<void> {
+    const channel = await resolveVerificationChannel(client, services);
+    if (!channel) return;
+
+    for (const messageId of [submission.message, submission.screenshotMessage]) {
+        if (!messageId) continue;
+        try {
+            await channel.messages.delete(messageId);
+        } catch (err) {
+            console.warn(`[SubmissionActions] Failed to remove review message ${messageId} of submission ${submission.id}:`, err);
+        }
+    }
+}
+
+export async function notifyUser(client: Client, submission: TaskSubmission, heldTier: SubmissionTier | null, streakLine?: string): Promise<Message> {
     const user = await client.users.fetch(submission.userId);
-    if (!user) return;
+    const taskLabel = submission.taskName ?? `Task ${submission.taskEventId}`;
 
-    if (
-        submission.status === SubmissionStatus.Bronze ||
-        submission.status === SubmissionStatus.Silver ||
-        submission.status === SubmissionStatus.Gold
-    ) {
-        const tierMap = {
-            [SubmissionStatus.Bronze]: { emoji: '🥉', name: 'Bronze' },
-            [SubmissionStatus.Silver]: { emoji: '🥈', name: 'Silver' },
-            [SubmissionStatus.Gold]: { emoji: '🥇', name: 'Gold' },
-        } as const;
-
-        const tierInfo = tierMap[submission.status];
-
-        await user.send(
-            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`
-        );
-    } else if (submission.status === SubmissionStatus.Rejected) {
-        const reason = submission.rejectionReason ?? 'No reason provided.';
-        await user.send(
-            `❌ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** was rejected.\n**Reason:** ${reason}`
-        );
+    if (isTier(submission.status)) {
+        const tierLabel = getTierLabel(submission.status);
+        if (heldTier && tierRank(submission.status) <= tierRank(heldTier)) {
+            return user.send(
+                `✅ Your submission for **${taskLabel}** has been approved for ${tierLabel} tier. You already hold ${getTierLabel(heldTier)} for this task, so your tier is unchanged.`
+            );
+        }
+        return user.send(`✅ Your submission for **${taskLabel}** has been approved for ${tierLabel} tier!${streakLine ?? ""}`);
     }
+
+    const reason = submission.rejectionReason || 'No reason provided.';
+    return user.send(`❌ Your submission for **${taskLabel}** was rejected.\n**Reason:** ${reason}`);
 }
 
-export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer) {
+export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<boolean> {
     const guildConfig = await services.guilds.get(services.guildId);
     const archiveChannelId = guildConfig?.channels?.botArchive;
     if (!archiveChannelId) {
         console.warn(`[SubmissionActions] Bot archive channel not configured for guild ${services.guildId}.`);
-        return;
+        return false;
     }
 
     const archive = await resolveTextChannel(client, archiveChannelId);
     if (!archive) {
         console.warn(`[SubmissionActions] Unable to resolve archive channel ${archiveChannelId}.`);
-        return;
+        return false;
     }
 
-    const embed = buildArchiveEmbed(
-        submission,
-        submission.status,
-        submission.taskName ?? `Task ${submission.taskEventId}`,
-        submission.reviewedBy ?? "Unknown"
-    );
+    await archive.send({ embeds: [buildArchiveEmbed(submission)] });
 
-    await archive.send({ embeds: [embed] });
-
-    if (submission.screenshotUrls?.length > 0) {
-        const filesToArchive = submission.screenshotUrls.slice(0, 10);
-        const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-        await archive.send(withSuppressedMentions({
-            content: `Archived screenshots for <@${submission.userId}>:`,
-            files: filesToArchive
-        }, suppressMentions));
-    }
-}
-
-export async function updateTaskCounter(client: Client, taskEventId: string, userId?: string, repo?: ITaskRepository, newTier?: SubmissionStatus) {
-    if (!repo) {
-        console.warn(`[UpdateTaskCounter] Missing repository reference.`);
-        return;
+    const verification = await resolveVerificationChannel(client, services);
+    const screenshots = submission.screenshotMessage
+        ? await verification?.messages.fetch(submission.screenshotMessage).catch(() => null)
+        : null;
+    if (!screenshots?.attachments.size) {
+        console.warn(`[SubmissionActions] Screenshots of submission ${submission.id} are no longer posted; archived without them.`);
+        return true;
     }
 
-    const event = await repo.getTaskEventById(taskEventId);
-    if (!event) return;
-
-    event.completionCounts = event.completionCounts ?? { bronze: 0, silver: 0, gold: 0 };
-
-    if (!userId || !newTier) {
-        console.warn(`[UpdateTaskCounter] Missing userId or newTier for event ${event.id}`);
-        return;
-    }
-
-    const submissions = await repo.getSubmissionsForTask(event.id);
-    const userSubs = submissions.filter(s => s.userId === userId);
-
-    const tierOrder = [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold];
-    const highestTier = userSubs.reduce<SubmissionStatus | null>((acc, s) => {
-        if (!tierOrder.includes(s.status)) return acc;
-        if (!acc) return s.status;
-        return tierOrder.indexOf(s.status) > tierOrder.indexOf(acc) ? s.status : acc;
-    }, null);
-
-    const prevTier = highestTier && tierOrder.indexOf(highestTier) < tierOrder.indexOf(newTier) ? highestTier : null;
-    if (prevTier) {
-        event.completionCounts[prevTier.toLowerCase() as "bronze" | "silver" | "gold"]--;
-    }
-
-    event.completionCounts[newTier.toLowerCase() as "bronze" | "silver" | "gold"]++;
-
-    await repo.createTaskEvent(event);
-
-    if (!event.channelId || !event.messageId) {
-        console.warn(`[UpdateTaskCounter] No channel/message ID stored for task event ${event.id}`);
-        return;
-    }
-
-    const channel = client.channels.cache.get(event.channelId) as TextChannel;
-    if (!channel || !isTextChannel(channel)) return;
-
-    try {
-        const message = await channel.messages.fetch(event.messageId);
-        if (!message) {
-            console.warn(`[UpdateTaskCounter] Could not fetch message ${event.messageId} for event ${event.id}`);
-            return;
-        }
-
-        const updatedEmbed = buildTaskEventEmbed(event);
-
-        await message.edit({
-            embeds: updatedEmbed.embeds,
-            components: updatedEmbed.components,
-            files: updatedEmbed.files,
-        });
-
-        console.log(`[UpdateTaskCounter] Updated completions for ${event.task.taskName}: 🥉${event.completionCounts.bronze} 🥈${event.completionCounts.silver} 🥇${event.completionCounts.gold}`);
-    } catch (err) {
-        console.error(`[UpdateTaskCounter] Failed to update task embed for event ${event.id}:`, err);
-    }
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+    await archive.send(withSuppressedMentions({
+        content: `Archived screenshots for <@${submission.userId}>:`,
+        files: screenshots.attachments.map((attachment) => attachment.url),
+    }, suppressMentions));
+    return true;
 }

@@ -67,9 +67,13 @@ const testtaskapproval: Command = {
 
         const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
-        // Use the real submission flow: create → complete
-        const submission = await services.tasks.createSubmission(userId, taskEvent.id);
-        await services.tasks.completeSubmission(interaction.client, submission.id, [], services, `[Test] Tier hint: ${tier}`);
+        const draft = await services.tasks.startSubmission(userId, taskEvent.id);
+        const outcome = await services.tasks.submit(interaction.client, draft, [], `[Test] Tier hint: ${tier}`, services);
+        if (outcome.result !== 'submitted') {
+            await interaction.editReply({ content: `❌ The test submission couldn't be posted (${outcome.result}).` });
+            return;
+        }
+        const { submission } = outcome;
 
         const guildConfig = await services.guilds.get(services.guildId);
         const verificationChannelId = guildConfig?.channels?.taskVerification;

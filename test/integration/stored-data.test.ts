@@ -1,5 +1,14 @@
 import { test, describe, expect } from "../fixtures.js";
-import { movieFactory, movieEventFactory, moviePollFactory } from "../factories.js";
+import {
+    movieFactory,
+    movieEventFactory,
+    moviePollFactory,
+    taskEventFactory,
+    taskPollFactory,
+    taskSubmissionFactory,
+    submissionDraftFactory,
+} from "../factories.js";
+import { IDS } from "../discord/payloads.js";
 
 describe("MovieRepository dates", () => {
     const watched = movieFactory.build({
@@ -24,5 +33,29 @@ describe("MovieRepository dates", () => {
         expect(await services.repos.movieRepo.getActivePoll()).toEqual(poll);
         expect(await services.repos.movieRepo.getLatestEvent()).toEqual(event);
         expect((await services.repos.movieRepo.getLatestEvent())?.movie.watchedAt).toBeInstanceOf(Date);
+    });
+});
+
+describe("TaskRepository dates", () => {
+    test("reads task events, polls, submissions and drafts back exactly as stored", async ({ services }) => {
+        const event = taskEventFactory.build();
+        const poll = taskPollFactory.build();
+        const submission = taskSubmissionFactory.build({
+            submittedAt: new Date("2026-01-06T01:00:00.000Z"),
+            reviewedAt: new Date("2026-01-06T02:00:00.000Z"),
+        });
+        await services.repos.taskRepo.createTaskEvent(event);
+        await services.repos.taskRepo.createTaskPoll(poll);
+        await services.repos.taskRepo.createSubmission(submission);
+        const draft = submissionDraftFactory.build({
+            taskEventId: event.id,
+            createdAt: new Date("2026-01-06T00:30:00.000Z"),
+        });
+        await services.repos.taskRepo.saveSubmissionDraft(draft);
+
+        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).toEqual(draft);
+        expect(await services.repos.taskRepo.getTaskEventById(event.id)).toEqual(event);
+        expect(await services.repos.taskRepo.getTaskPollById(poll.id)).toEqual(poll);
+        expect(await services.repos.taskRepo.getSubmissionById(submission.id)).toEqual(submission);
     });
 });

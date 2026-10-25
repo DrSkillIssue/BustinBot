@@ -1,320 +1,182 @@
 import type { Client } from 'discord.js';
-import { TextChannel } from 'discord.js';
-import type { TaskSubmission } from '../../models/TaskSubmission.js';
-import { SubmissionStatus } from '../../models/TaskSubmission.js';
-import { postToAdminChannel, notifyUser, archiveSubmission, updateTaskCounter } from './SubmissionActions.js';
+import {
+    SubmissionStatus,
+    isTier,
+    tierRank,
+    type SubmissionReview,
+    type SubmissionReviewOutcome,
+    type SubmissionTier,
+    type TaskSubmission,
+    type TaskSubmissionDraft,
+} from '../../models/TaskSubmission.js';
+import type { UserStats } from '../../models/UserStats.js';
+import { MAX_SCREENSHOTS, archiveSubmission, notifyUser, postToAdminChannel, removeReviewPost, type ReviewPost } from './SubmissionActions.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { calculateTaskStreakSummary } from './TaskStreaks.js';
-import { getStatusPoints } from './TaskLeaderboards.js';
+import { ensureTaskLeaderboardsInitialized, getStatusPoints, incrementLifetimePoints, recordPeriodicTierChange } from './TaskLeaderboards.js';
+import { applyTaskMilestoneRoles } from './TaskMilestones.js';
+import { refreshTaskEventMessage } from './HandleTaskStart.js';
 
-const MAX_SCREENSHOTS = 10;
+const TIER_STATS: Record<SubmissionTier, keyof UserStats> = {
+    [SubmissionStatus.Bronze]: 'tasksCompletedBronze',
+    [SubmissionStatus.Silver]: 'tasksCompletedSilver',
+    [SubmissionStatus.Gold]: 'tasksCompletedGold',
+};
 
-async function resolveTextChannel(client: Client, channelId?: string | null): Promise<TextChannel | null> {
-    if (!channelId) return null;
-    try {
-        const channel = await client.channels.fetch(channelId);
-        return channel && channel.isTextBased() ? (channel as TextChannel) : null;
-    } catch (err) {
-        console.warn(`[TaskService] Failed to resolve channel ${channelId}:`, err);
-        return null;
-    }
+export type SubmitOutcome =
+    | { result: 'submitted'; submission: TaskSubmission }
+    | { result: 'taskNotFound' }
+    | { result: 'adminsUnreachable' }
+    | { result: 'alreadySubmitted' };
+
+export type ReviewResult =
+    | Exclude<SubmissionReviewOutcome, { result: 'reviewed' }>
+    | (Extract<SubmissionReviewOutcome, { result: 'reviewed' }> & { archived: boolean });
+
+export function raisedTier(outcome: SubmissionReviewOutcome): SubmissionTier | null {
+    if (outcome.result !== 'reviewed') return null;
+    const { submission, heldTier } = outcome;
+    return isTier(submission.status) && tierRank(submission.status) > tierRank(heldTier) ? submission.status : null;
 }
 
 export class TaskService {
-    private pendingTaskMap = new Map<string, string>();
     constructor(private repo: ITaskRepository) { }
 
     get repository() {
         return this.repo;
     }
 
-    async createSubmission(userId: string, taskEventId: string): Promise<TaskSubmission> {
-        // Check if this user already has an approved submission for this task
-        const existing = await this.repo.getSubmissionsByUser(userId);
-        const hasApproved = existing.some(
-            s => s.userId === userId && s.taskEventId === taskEventId && s.status === SubmissionStatus.Approved
-        );
+    async startSubmission(userId: string, taskEventId: string): Promise<TaskSubmissionDraft> {
+        const draft: TaskSubmissionDraft = { userId, taskEventId, createdAt: new Date() };
+        await this.repo.saveSubmissionDraft(draft);
+        return draft;
+    }
 
-        const taskEvent = await this.repo.getTaskEventById(taskEventId);
-        if (!taskEvent) {
-            throw new Error(`Task event ${taskEventId} not found`);
+    async getSubmissionDraft(userId: string): Promise<TaskSubmissionDraft | null> {
+        return this.repo.getSubmissionDraft(userId);
+    }
+
+    async submit(client: Client, draft: TaskSubmissionDraft, screenshotUrls: string[], notes: string | undefined, services: ServiceContainer): Promise<SubmitOutcome> {
+        const event = await this.repo.getTaskEventById(draft.taskEventId);
+        if (!event) {
+            await this.repo.deleteSubmissionDraft(draft.userId);
+            return { result: 'taskNotFound' };
         }
-        const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
+        const now = new Date();
         const submission: TaskSubmission = {
-            id: Date.now().toString(),
-            userId,
-            taskEventId,
-            screenshotUrls: [],
+            id: this.repo.newSubmissionId(),
+            userId: draft.userId,
+            taskEventId: draft.taskEventId,
+            taskName: getTaskDisplayName(event.task, event.selectedAmount),
+            screenshotUrls: screenshotUrls.slice(0, MAX_SCREENSHOTS),
+            ...(notes ? { notes } : {}),
             status: SubmissionStatus.Pending,
-            createdAt: new Date(),
-            alreadyApproved: hasApproved,
-            taskName,
+            createdAt: now,
+            submittedAt: now,
         };
+        const heldTier = await this.repo.getHeldTier(draft.userId, draft.taskEventId);
 
-        await this.repo.createSubmission(submission);
-        return submission;
+        let posted: ReviewPost;
+        try {
+            posted = await postToAdminChannel(client, submission, event, heldTier, services);
+        } catch (err) {
+            console.warn(`[TaskService] Couldn't post submission ${submission.id} for review:`, err);
+            return { result: 'adminsUnreachable' };
+        }
+
+        const stored: TaskSubmission = { ...submission, ...posted };
+        let submitted: boolean;
+        try {
+            submitted = await this.repo.submitDraft(stored);
+        } catch (err) {
+            await removeReviewPost(client, stored, services);
+            throw err;
+        }
+        if (!submitted) {
+            await removeReviewPost(client, stored, services);
+            return { result: 'alreadySubmitted' };
+        }
+        return { result: 'submitted', submission: stored };
     }
 
-    async completeSubmission(client: Client, submissionId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<TaskSubmission | null> {
-        const submission = await this.repo.getSubmissionById(submissionId);
-        if (!submission) return null;
-
-        submission.screenshotUrls = screenshotUrls.slice(0, MAX_SCREENSHOTS);
-        submission.submittedAt = new Date();
-
-        if (notes !== undefined) {
-            submission.notes = notes;
-        } else {
-            delete submission.notes;
+    async review(client: Client, review: SubmissionReview, services: ServiceContainer): Promise<ReviewResult> {
+        if (review.decision !== SubmissionStatus.Rejected) {
+            await ensureTaskLeaderboardsInitialized(services);
         }
 
-        if (!submission.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(submission.taskEventId);
-            if (taskEvent) {
-                submission.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-            }
-        }
+        const outcome = await this.repo.reviewSubmission(review);
+        if (outcome.result !== 'reviewed') return outcome;
 
-        await postToAdminChannel(client, submission, services);
-        await this.repo.createSubmission(submission);
-        return submission;
-    }
-
-    async updateSubmissionStatus(
-        client: Client,
-        submissionId: string,
-        newStatus: SubmissionStatus.Approved | SubmissionStatus.Rejected,
-        reviewedBy: string,
-        services: ServiceContainer,
-        rejectionReason?: string
-    ): Promise<TaskSubmission | null> {
-        const submission = await this.repo.getSubmissionById(submissionId);
-        if (!submission) return null;
-
-        submission.status = newStatus;
-        submission.reviewedBy = reviewedBy;
-        submission.reviewedAt = new Date();
-        if (newStatus === SubmissionStatus.Rejected && rejectionReason !== undefined) {
-            submission.rejectionReason = rejectionReason;
-        }
-
-        if (!submission.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(submission.taskEventId);
-            if (taskEvent) {
-                submission.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-            }
-        }
-
-        await this.repo.updateSubmissionStatus(submissionId, newStatus, reviewedBy);
-        await this.repo.createSubmission(submission);
-
-        await this.syncCompletedUsers(submission.taskEventId, submission.userId, newStatus !== SubmissionStatus.Rejected);
+        const { submission, heldTier } = outcome;
+        const tier = raisedTier(outcome);
+        const streakLine = tier ? await this.recordTierRaise(client, submission, tier, heldTier, services) : undefined;
 
         try {
-            await notifyUser(client, submission);
+            await notifyUser(client, submission, heldTier, streakLine);
         } catch (err) {
             console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
         }
 
+        let archived = false;
         try {
-            await archiveSubmission(client, submission, services);
+            archived = await archiveSubmission(client, submission, services);
         } catch (err) {
             console.warn(`[TaskService] Failed to archive submission ${submission.id}:`, err);
         }
 
+        await removeReviewPost(client, submission, services);
 
-        // Delete original messages from admin channel
-        const guildConfig = await services.guilds.get(services.guildId);
-        const verificationChannelId = guildConfig?.channels?.taskVerification;
-        const adminChannel = await resolveTextChannel(client, verificationChannelId);
-        if (adminChannel) {
-            if (submission.message) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.message);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Admin Embed Cleanup Error]:`, err);
-                }
-            }
-            if (submission.screenshotMessage) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.screenshotMessage);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Screenshot Message Cleanup Error]:`, err);
-                }
-            }
-        }
-
-        return submission;
+        return { ...outcome, archived };
     }
 
-    async updateSubmissionTier(
+    private async recordTierRaise(
         client: Client,
-        submissionId: string,
-        tier: 'bronze' | 'silver' | 'gold',
-        reviewedBy: string,
+        submission: TaskSubmission,
+        tier: SubmissionTier,
+        heldTier: SubmissionTier | null,
         services: ServiceContainer
-    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints: number; previousStatus?: SubmissionStatus }) | null> {
-        const TIER_MAP = {
-            bronze: { status: SubmissionStatus.Bronze },
-            silver: { status: SubmissionStatus.Silver },
-            gold: { status: SubmissionStatus.Gold },
-        } as const;
-
-        const tierInfo = TIER_MAP[tier];
-        if (!tierInfo) return null;
-
-        const submission = await this.repo.getSubmissionById(submissionId);
-        if (!submission) return null;
-
-        // Retrieve any previous submission by the same user for this task
-        const existing = await this.repo.getSubmissionByUserAndTask(submission.userId, submission.taskEventId);
-
-        const previousStatus = existing?.status;
-        const previousTierPoints = getStatusPoints(previousStatus);
-        const nextTierPoints = getStatusPoints(tierInfo.status);
-        if (previousTierPoints >= nextTierPoints) {
-            // Already equal or higher tier
-            return null;
-        }
-
-        // Update submission details
-        submission.status = tierInfo.status;
-        submission.prizeRolls = 1;
-        submission.reviewedBy = reviewedBy;
-        submission.reviewedAt = new Date();
-
-        if (!submission.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(submission.taskEventId);
-            if (taskEvent) {
-                submission.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-            }
-        }
-
-        // Persist updates
-        await this.repo.updateSubmissionStatus(submissionId, submission.status, reviewedBy);
-        await this.repo.createSubmission(submission);
-
-        await this.syncCompletedUsers(submission.taskEventId, submission.userId, true);
-
-        let streakLine: string | undefined;
-        try {
-            const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
-            streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
-
-            await services.repos.userRepo.updateUser(submission.userId, {
-                taskStreak: streakSummary.currentStreak,
-                longestTaskStreak: streakSummary.longestStreak,
-            });
-        } catch (err) {
-            console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
-        }
-
-        // Notify, archive, and update counters
-        try {
-            await notifyUser(client, submission, streakLine);
-        } catch (err) {
-            console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
-        }
+    ): Promise<string | undefined> {
+        const { userId, taskEventId } = submission;
+        const userRepo = services.repos.userRepo;
 
         try {
-            await archiveSubmission(client, submission, services);
-        } catch (err) {
-            console.warn(`[TaskService] Failed to archive submission ${submission.id}:`, err);
-        }
-
-        try {
-            await updateTaskCounter(client, submission.taskEventId, submission.userId, this.repo, submission.status);
-        } catch (err) {
-            console.warn(`[TaskService] Failed to update counter for event ${submission.taskEventId}:`, err);
-        }
-
-        // --- Cleanup original admin messages ---
-        const guildConfig = await services.guilds.get(services.guildId);
-        const verificationChannelId = guildConfig?.channels?.taskVerification;
-        const adminChannel = await resolveTextChannel(client, verificationChannelId);
-        if (adminChannel) {
-            if (submission.message) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.message);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Admin Embed Cleanup Error]:`, err);
-                }
-            }
-            if (submission.screenshotMessage) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.screenshotMessage);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Screenshot Message Cleanup Error]:`, err);
-                }
-            }
-        }
-
-        const result = {
-            ...submission,
-            previousTierPoints,
-            ...(streakLine && { streakLine }),
-            ...(previousStatus && { previousStatus }),
-        };
-        return result;
-    }
-
-    async getPendingSubmission(
-        userId: string,
-        taskEventId?: string
-    ): Promise<TaskSubmission | undefined> {
-        const submissions = await this.repo.getSubmissionsByUser(userId);
-        const pending = submissions.find(
-            (s) =>
-                s.userId === userId &&
-                s.status === SubmissionStatus.Pending &&
-                (!s.screenshotUrls || s.screenshotUrls.length === 0) &&
-                (taskEventId ? s.taskEventId === taskEventId : true)
-        );
-        if (pending && !pending.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(pending.taskEventId);
-            if (taskEvent) {
-                pending.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-                await this.repo.createSubmission(pending);
-            }
-        }
-        return pending;
-    }
-
-
-    setPendingTask(userId: string, taskEventId: string) {
-        this.pendingTaskMap.set(userId, taskEventId);
-    }
-
-    hasPendingTask(userId: string): boolean {
-        return this.pendingTaskMap.has(userId);
-    }
-
-    peekPendingTask(userId: string): string | undefined {
-        return this.pendingTaskMap.get(userId);
-    }
-
-    consumePendingTask(userId: string): string | undefined {
-        const taskId = this.pendingTaskMap.get(userId);
-        this.pendingTaskMap.delete(userId);
-        return taskId;
-    }
-
-    private async syncCompletedUsers(taskEventId: string, userId: string, include: boolean): Promise<void> {
-        try {
-            if (include) {
-                await this.repo.addCompletedUser(taskEventId, userId);
+            if (heldTier) {
+                await userRepo.updateTierStat(userId, TIER_STATS[heldTier], TIER_STATS[tier]);
             } else {
-                await this.repo.removeCompletedUser(taskEventId, userId);
+                await userRepo.incrementStat(userId, TIER_STATS[tier], 1);
             }
         } catch (err) {
-            console.warn(`[TaskService] Failed to update completedUserIds for ${taskEventId}:`, err);
+            console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
+        }
+
+        const points = getStatusPoints(tier) - (heldTier ? getStatusPoints(heldTier) : 0);
+        await incrementLifetimePoints(services, userId, points);
+        await recordPeriodicTierChange(services, taskEventId, { userId, points, from: heldTier, to: tier });
+        try {
+            await applyTaskMilestoneRoles(client, services, userId);
+        } catch (err) {
+            console.warn(`[TaskService] Failed to update milestone roles for ${userId}:`, err);
+        }
+
+        const event = await this.repo.getTaskEventById(taskEventId);
+        if (event) {
+            try {
+                await refreshTaskEventMessage(client, event);
+            } catch (err) {
+                console.warn(`[TaskService] Failed to redraw task event ${taskEventId}:`, err);
+            }
+        }
+
+        try {
+            const streak = await calculateTaskStreakSummary(userId, this.repo);
+            await userRepo?.updateUser(userId, { taskStreak: streak.currentStreak, longestTaskStreak: streak.longestStreak });
+            return `\n🔥 Task streak: **${streak.currentStreak}** (Longest: **${streak.longestStreak}**).`;
+        } catch (err) {
+            console.warn(`[TaskService] Failed to compute streak summary for ${userId}:`, err);
+            return undefined;
         }
     }
 }

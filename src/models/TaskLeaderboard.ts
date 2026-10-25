@@ -1,3 +1,5 @@
+import type { SubmissionTier } from "./TaskSubmission.js";
+
 export type TaskLeaderboardId = "lifetime" | "periodic";
 
 export interface TaskLeaderboardEntry {
@@ -9,6 +11,13 @@ export interface TaskTierCounts {
     bronze: number;
     silver: number;
     gold: number;
+}
+
+export interface TaskTierChange {
+    userId: string;
+    points: number;
+    from: SubmissionTier | null;
+    to: SubmissionTier;
 }
 
 export interface TaskLeaderboardPeriod {

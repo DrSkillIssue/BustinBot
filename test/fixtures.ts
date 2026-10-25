@@ -26,6 +26,7 @@ import {
     moviePollFactory,
     periodicLeaderboardFactory,
     prizeDrawFactory,
+    submissionDraftFactory,
     taskEventFactory,
     taskFactory,
     taskPollFactory,
@@ -51,6 +52,10 @@ function storingFactories(db: Firestore, services: ServiceContainer) {
         taskSubmission: taskSubmissionFactory.onCreate(async (submission) => {
             await repos.taskRepo.createSubmission(submission);
             return submission;
+        }),
+        submissionDraft: submissionDraftFactory.onCreate(async (draft) => {
+            await repos.taskRepo.saveSubmissionDraft(draft);
+            return draft;
         }),
         userStats: userStatsFactory.onCreate(async (stats) => {
             await repos.userRepo.createUser(stats);
