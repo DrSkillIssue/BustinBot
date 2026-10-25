@@ -13,7 +13,7 @@ function tmdbApiKey(): string {
 }
 
 // TMDb Response Types
-interface TMDbSearchResult {
+export interface TMDbSearchResult {
     id: number;
     title: string;
     release_date?: string;
@@ -21,7 +21,7 @@ interface TMDbSearchResult {
     poster_path?: string;
 }
 
-interface TMDbSearchResponse {
+export interface TMDbSearchResponse {
     results: TMDbSearchResult[];
 }
 

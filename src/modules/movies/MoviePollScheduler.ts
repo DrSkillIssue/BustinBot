@@ -12,27 +12,11 @@ export async function scheduleActivePollClosure(services: ServiceContainer, clie
     const movieRepo = services.repos.movieRepo;
 
     const activePoll = await movieRepo.getActivePoll();
-    if (!activePoll || !activePoll.isActive || !activePoll.endsAt) {
+    if (!activePoll || !activePoll.isActive) {
         return;
     }
 
-    const endsAtDate =
-        activePoll.endsAt instanceof Date
-            ? activePoll.endsAt
-            : typeof (activePoll.endsAt as { toDate?: () => Date })?.toDate === "function"
-                ? (activePoll.endsAt as { toDate: () => Date }).toDate()
-                : new Date(activePoll.endsAt as unknown as string | number | Date);
-
-    if (Number.isNaN(endsAtDate.getTime())) {
-        console.warn('[MoviePollScheduler] Invalid poll endsAt timestamp, skipping.');
-        return;
-    }
-
-    const endsAt = DateTime.fromJSDate(endsAtDate);
-    if (!endsAt.isValid) {
-        console.warn('[MoviePollScheduler] Invalid poll endsAt timestamp, skipping.');
-        return;
-    }
+    const endsAt = DateTime.fromJSDate(activePoll.endsAt);
 
     const now = DateTime.utc();
     const delayMs = Math.max(endsAt.diff(now, 'milliseconds').milliseconds, 0);
@@ -87,17 +71,11 @@ export async function scheduleActivePollClosure(services: ServiceContainer, clie
             }
 
             const movie = latestEvent.movie;
-            const startTimeISO = latestEvent.startTime instanceof Date
-                ? latestEvent.startTime.toISOString()
-                : typeof latestEvent.startTime === 'string'
-                    ? latestEvent.startTime
-                    : null;
-
-            if (movie?.runtime && startTimeISO) {
+            if (movie.runtime) {
                 console.log('[MoviePollScheduler] Scheduling auto-end post-poll with selected movie.');
-                scheduleMovieAutoEnd(services, startTimeISO, movie.runtime, client);
+                scheduleMovieAutoEnd(services, latestEvent.startTime.toISOString(), movie.runtime, client);
             } else {
-                console.warn('[MoviePollScheduler] Cannot schedule auto-end: missing runtime or start time.');
+                console.warn('[MoviePollScheduler] Cannot schedule auto-end: the movie has no runtime.');
             }
         } catch (error) {
             console.error('[MoviePollScheduler] Failed to auto-close poll:', error);

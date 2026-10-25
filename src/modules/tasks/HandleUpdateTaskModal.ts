@@ -2,7 +2,6 @@ import type { ModalSubmitInteraction, TextChannel } from "discord.js";
 import { buildTaskEventEmbed } from "./TaskEmbeds.js";
 import { isTextChannel } from "../../utils/ChannelUtils.js";
 import { TaskCategory, TaskType } from "../../models/Task.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
 
@@ -32,9 +31,7 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
             silver: task.amtSilver,
             gold: task.amtGold,
         }
-        const event = normaliseFirestoreDates(activeEvent);
-
-        const { embeds, components, files } = buildTaskEventEmbed(event);
+        const { embeds, components, files } = buildTaskEventEmbed(activeEvent);
 
         let channel = interaction.client.channels.cache.get(activeEvent.channelId) as TextChannel | undefined;
         if (!channel) {

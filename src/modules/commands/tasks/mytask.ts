@@ -5,7 +5,6 @@ import { SubmissionStatus } from "../../../models/TaskSubmission.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
 import { TaskCategory } from "../../../models/Task.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
 
 const mytask: Command = {
     name: 'mytask',
@@ -50,11 +49,7 @@ const mytask: Command = {
                 new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
             );
 
-            const currentlyActive = activeEvents
-                .map(event => normaliseFirestoreDates<TaskEvent>(event))
-                .filter((event: TaskEvent) => {
-                    return event.startTime <= now && event.endTime > now;
-                });
+            const currentlyActive = activeEvents.filter((event) => event.startTime <= now && event.endTime > now);
 
             if (currentlyActive.length === 0) {
                 await interaction.editReply({
@@ -115,11 +110,7 @@ const mytask: Command = {
                 }
 
                 // Sort by most recent first
-                submissions.sort((a, b) => {
-                    const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-                    const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
-                    return bTime - aTime;
-                });
+                submissions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
             }
 
             const statusLines = submissions.map(sub => {

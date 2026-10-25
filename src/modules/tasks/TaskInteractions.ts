@@ -2,7 +2,6 @@ import { ButtonInteraction, StringSelectMenuInteraction, Message, Client, ModalS
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName } from './TaskEmbeds.js';
-import { handleUpdateTaskModal } from './HandleUpdateTaskModal.js';
 import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from './TaskLeaderboards.js';
 import { applyTaskMilestoneRoles } from './TaskMilestones.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
@@ -310,8 +309,6 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
         await interaction.reply({ content: "Unknown task action.", flags: 1 << 6 });
         return;
     }
-
-    const reviewerId = interaction.user.id;
 
     if (action === 'reject') {
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(

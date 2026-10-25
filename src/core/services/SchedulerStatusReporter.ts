@@ -24,17 +24,11 @@ export class SchedulerStatusReporter {
             // MOVIE EVENTS
             const activePoll = await movieRepo.getActivePoll();
             const nextEvent = await movieRepo.getActiveEvent();
-            if (activePoll?.endsAt) {
-                const endsAt = activePoll.endsAt instanceof Date
-                    ? activePoll.endsAt
-                    : new Date((activePoll.endsAt as any).toDate?.() ?? activePoll.endsAt);
-                console.log(`Active Movie Poll ends: ${endsAt.toUTCString()}`);
+            if (activePoll) {
+                console.log(`Active Movie Poll ends: ${activePoll.endsAt.toUTCString()}`);
             }
-            if (nextEvent?.startTime) {
-                const start = nextEvent.startTime instanceof Date
-                    ? nextEvent.startTime
-                    : new Date((nextEvent.startTime as any).toDate?.() ?? nextEvent.startTime);
-                console.log(`Next Movie Night: ${start.toUTCString()}`);
+            if (nextEvent) {
+                console.log(`Next Movie Night: ${nextEvent.startTime.toUTCString()}`);
             }
         } catch (err) {
             console.error("[SchedulerStatusReporter] Failed to retrieve schedule info:", err);

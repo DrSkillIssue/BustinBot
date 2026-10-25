@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, Message } from "discord.js";
 import { createMoviePreviewEmbeds } from "./MovieEmbeds.js";
+import type { TMDbSearchResponse } from "./MovieService.js";
 
 type MovieSelection = {
     id: number;
@@ -24,7 +25,7 @@ export async function presentMovieSelection(
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
     const searchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}${year ? `&year=${year}` : ''}`;
     const response = await fetch(searchUrl);
-    const data = await response.json();
+    const data = await response.json() as TMDbSearchResponse;
 
     if (!data?.results?.length) {
         await interaction.editReply(`No results found for "${query}".`);

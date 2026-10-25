@@ -1,7 +1,6 @@
 import { Client, VoiceState } from 'discord.js';
 import type { VoiceBasedChannel } from 'discord.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { DateTime } from 'luxon';
 
 const MIN_ATTENDANCE_MS = 30 * 60 * 1000; // 30 mins
 const PRESENCE_POLL_INTERVAL_MS = 60 * 1000; // Poll every minute as a safety net

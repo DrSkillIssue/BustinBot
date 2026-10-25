@@ -3,7 +3,6 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { UserStats } from "../../../models/UserStats.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
 import { packageVersion } from "../../../utils/version.js";
 
 const stats: Command = {
@@ -31,8 +30,7 @@ const stats: Command = {
 
         let stats: UserStats | null = null;
         try {
-            const raw = await userRepo.getUserById(targetUser.id);
-            if (raw) stats = normaliseFirestoreDates(raw);
+            stats = await userRepo.getUserById(targetUser.id);
         } catch (err) {
             console.error("[Stats Command] Failed to fetch user stats:", err);
             await interaction.editReply("Failed to retrieve your stats. Please try again later.");

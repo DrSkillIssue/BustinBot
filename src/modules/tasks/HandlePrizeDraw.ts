@@ -1,7 +1,6 @@
 import type { IPrizeDrawRepository } from '../../core/database/interfaces/IPrizeDrawRepo.js';
 import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
 import type { PrizeDraw } from '../../models/PrizeDraw.js';
-import type { TaskEvent } from '../../models/TaskEvent.js';
 import { TaskCategory } from '../../models/Task.js';
 import type { TaskSubmission } from '../../models/TaskSubmission.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
@@ -9,7 +8,6 @@ import { buildPrizeDrawEmbed } from './TaskEmbeds.js';
 import { Client, TextChannel } from 'discord.js';
 import { isTextChannel } from '../../utils/ChannelUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { normaliseFirestoreDates } from '../../utils/DateUtils.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 const DEFAULT_PERIOD_DAYS = parseInt(process.env.PRIZE_PERIOD_DAYS ?? '14');
@@ -32,8 +30,8 @@ function isSubmissionApprovedLike(status: SubmissionStatus): boolean {
     );
 }
 
-function parseDateInput(value: unknown): Date | null {
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+// Prize draws store their dates as ISO strings
+function parseDateInput(value: string | null): Date | null {
     if (typeof value === 'string') {
         const parsed = new Date(value);
         return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -79,11 +77,9 @@ async function getCarryOverSubmissions(
 
     return previousEventSubmissions
         .flat()
-        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission))
         .filter((submission) => isSubmissionApprovedLike(submission.status))
         .filter((submission) => {
-            const submittedAt = parseDateInput(submission.submittedAt ?? null);
-            const reviewedAt = parseDateInput(submission.reviewedAt ?? null);
+            const { submittedAt, reviewedAt } = submission;
 
             if (!submittedAt || !reviewedAt) return false;
 
@@ -100,10 +96,8 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
 
     const rawEvents = await taskRepo.getTaskEventsBetween(start, end);
     const qualifyingEvents = rawEvents
-        .map(event => normaliseFirestoreDates<TaskEvent>(event))
         .filter(event => {
             const eventEnd = event.endTime;
-            if (!(eventEnd instanceof Date)) return false;
             const endsAfterStart = eventEnd.getTime() >= start.getTime();
             const endsBeforeOrAtNow = eventEnd.getTime() <= end.getTime();
             return endsAfterStart && endsBeforeOrAtNow;
@@ -117,9 +111,7 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
         qualifyingEvents.map((event) => taskRepo.getSubmissionsForTask(event.id))
     );
 
-    const currentSubmissions = submissionsPerEvent
-        .flat()
-        .map((submission) => normaliseFirestoreDates<TaskSubmission>(submission));
+    const currentSubmissions = submissionsPerEvent.flat();
     const carryOverSubmissions = await getCarryOverSubmissions(prizeRepo, taskRepo, start);
 
     const filtered = [...currentSubmissions, ...carryOverSubmissions].filter((submission) =>

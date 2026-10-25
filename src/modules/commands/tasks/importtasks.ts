@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { Command } from "../../../models/Command.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import fs from 'fs';
 import path from 'path';
 import { importTasksFromCsv } from "../../../scripts/importTasksFromCSV.js";
@@ -19,7 +18,7 @@ const importtasks: Command = {
             option.setName("file").setDescription("CSV file to import").setRequired(true)
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
+    async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 

@@ -2,7 +2,6 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "d
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
 import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
@@ -129,14 +128,9 @@ const cancelmovie: Command = {
             }
 
             // Unpick currently selected movie (if any)
-            const movies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
+            const movies = await movieRepo.getAllMovies();
             const withSelection = movies
-                .filter((m) => !m.watched && m.selectedAt)
-                .map((movie) => {
-                    const selectedAt = movie.selectedAt instanceof Date ? movie.selectedAt : null;
-                    return selectedAt ? { movie, selectedAt } : null;
-                })
-                .filter((entry): entry is { movie: typeof movies[number]; selectedAt: Date } => entry !== null)
+                .flatMap((movie) => (!movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : []))
                 .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
             const currentlySelected = withSelection[0]?.movie;

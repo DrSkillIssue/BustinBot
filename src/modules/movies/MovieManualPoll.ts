@@ -2,7 +2,6 @@ import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle }
 import type { RepliableInteraction } from "discord.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 
 const PAGE_SIZE = 25;
 const sessions = new Map<string, { selected: Set<string>; page: number }>();
@@ -22,13 +21,8 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
     const movieRepo = services.repos.movieRepo;
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies())
-        .map((movie) => normaliseFirestoreDates(movie))
         .filter((movie) => !movie.watched)
-        .sort((a, b) => {
-            const aTime = a.addedAt instanceof Date ? a.addedAt.getTime() : 0;
-            const bTime = b.addedAt instanceof Date ? b.addedAt.getTime() : 0;
-            return aTime - bTime;
-        });
+        .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
     if (!allMovies.length) {
         await interaction.followUp({
             content: "No active movies found.",

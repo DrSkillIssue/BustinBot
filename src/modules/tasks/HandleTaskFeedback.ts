@@ -11,8 +11,6 @@ export async function handleTaskFeedback(interaction: ButtonInteraction, repo: I
         let taskId: string | undefined;
         let eventId: string | undefined;
 
-        let isLegacy = false;
-
         if (customId.includes('|')) {
             // New format: task-feedback|up|taskId|eventId
             const [prefix, parsedDirection, parsedTaskId, parsedEventId] = customId.split('|');
@@ -41,7 +39,6 @@ export async function handleTaskFeedback(interaction: ButtonInteraction, repo: I
             } else {
                 eventId = `${taskId}-${eventSuffix}`;
             }
-            isLegacy = true;
         }
 
         if (!taskId || !eventId) {

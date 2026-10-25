@@ -6,7 +6,6 @@ import { scheduleActivePollClosure } from "./MoviePollScheduler.js";
 import { scheduleMovieReminders, getPendingReminders } from "./MovieReminders.js";
 import { scheduleMovieAutoEnd, clearScheduledMovieAutoEnd } from "./MovieLifecycle.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 import { registerVoiceListeners } from "./MovieAttendance.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
@@ -64,9 +63,10 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(time)) {
-        return await interaction.editReply({
+        await interaction.editReply({
             content: "Invalid time format. Use 24-hour HH:MM format (e.g. 20:30)."
         });
+        return;
     }
 
     const localDateTime = DateTime.fromISO(`${selectedDate}T${time}`, { zone: timezone });
@@ -81,14 +81,9 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     }
 
     // Prefer the most recently selected, unwatched movie
-    const movies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
+    const movies = await movieRepo.getAllMovies();
     const selectedMovies = movies
-        .filter((m) => !m.watched && m.selectedAt)
-        .map((m) => {
-            const selectedAtDate = m.selectedAt instanceof Date ? m.selectedAt : null;
-            return selectedAtDate ? { movie: m, selectedAt: selectedAtDate } : null;
-        })
-        .filter((entry): entry is { movie: Movie; selectedAt: Date } => entry !== null)
+        .flatMap((m) => (!m.watched && m.selectedAt ? [{ movie: m, selectedAt: m.selectedAt }] : []))
         .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
     movie = selectedMovies[0]?.movie ?? null;
@@ -143,9 +138,10 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const guild = interaction.guild;
     if (!guild) {
-        return interaction.editReply({
+        await interaction.editReply({
             content: "Could not identify the guild. Please try again in a server channel."
         });
+        return;
     }
 
     const channelId = guildConfig.channels?.movieNight;

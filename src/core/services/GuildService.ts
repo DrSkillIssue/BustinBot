@@ -120,12 +120,6 @@ export class GuildService {
         const defaultTaskSettings = DEFAULT_TASK_SETTINGS;
         const mentionSuppressedUntilMs = existing?.mentionSuppressedUntilMs;
 
-        const toggles = {
-            ...(existing?.toggles ?? {}),
-            // Extract last part of key if nested (e.g. "toggles.leaguesEnabled")
-            [key.split(".").pop()!]: enabled,
-        };
-
         const merged: Guild = {
             id: guildId,
             toggles: {

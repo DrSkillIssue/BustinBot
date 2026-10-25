@@ -20,10 +20,11 @@
     "typescript": "^7.0.2"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "firebase emulators:exec --only firestore --project demo-bustinbot \"vitest run\"",
+    "test:unit": "vitest run --project unit",
+    "test:watch": "firebase emulators:exec --only firestore --project demo-bustinbot \"vitest\"",
     "dev": "tsx src/index.ts",
-    "build": "tsc -p tsconfig.prod.json",
+    "build": "tsc",
     "start": "node dist/index.js",
     "changelog": "conventional-changelog -p conventionalcommits -i CHANGELOG.md -s"
   },
@@ -39,13 +40,23 @@
   },
   "homepage": "https://github.com/dossyb/BustinBot#readme",
   "devDependencies": {
+    "@discordjs/collection": "^2.1.1",
+    "@discordjs/ws": "^1.2.3",
+    "@tsconfig/node24": "^24.0.5",
     "@types/luxon": "^3.7.6",
     "@types/node": "^24.19.2",
-    "@vitest/coverage-v8": "^5.0.5",
-    "@vitest/ui": "^5.0.5",
+    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/ui": "^5.0.3",
     "conventional-changelog-cli": "^5.0.0",
+    "discord-api-types": "^0.38.56",
+    "firebase-tools": "^15.33.0",
+    "fishery": "^2.4.0",
+    "prettier": "^3.9.10",
+    "pure-rand": "^8.4.2",
     "tsx": "^4.23.15",
-    "vitest": "^5.0.5"
+    "undici": "^8.11.2",
+    "vitest": "^5.0.3",
+    "vitest-fail-on-console": "^0.10.1"
   },
   "allowScripts": {
     "protobufjs": false,

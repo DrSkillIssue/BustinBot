@@ -5,38 +5,15 @@ import type { MoviePoll } from "../../models/MoviePoll.js";
 import type { PollSession } from "../../models/PollSession.js";
 import { createMovieEmbed } from "./MovieEmbeds.js";
 import { pickRandomMovie, buildMovieEmbedWithMeta } from "./MovieLocalSelector.js";
-import { getManualPollSession, changeManualPollPage, clearManualPollSession, updateManualPollSelection, showMovieManualPollMenu } from "./MovieManualPoll.js";
+import { getManualPollSession, changeManualPollPage, clearManualPollSession, showMovieManualPollMenu } from "./MovieManualPoll.js";
 import { pollMovieRandom, pollMovieWithList } from "./MoviePolls.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { scheduleMovieAutoEnd } from "./MovieLifecycle.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
-
-function toMillis(value: unknown): number {
-    if (value instanceof Date) return value.getTime();
-
-    const maybeTimestamp = value as { toDate?: () => Date };
-    if (maybeTimestamp && typeof maybeTimestamp.toDate === "function") {
-        return maybeTimestamp.toDate().getTime();
-    }
-
-    if (typeof value === "string") {
-        const parsed = Date.parse(value);
-        return Number.isNaN(parsed) ? 0 : parsed;
-    }
-
-    if (typeof value === "number") {
-        return value;
-    }
-
-    return 0;
-}
-
 function getActiveMoviesSorted(movies: Movie[]): Movie[] {
     return movies
-        .map((movie) => normaliseFirestoreDates(movie))
         .filter((movie) => !movie.watched)
-        .sort((a, b) => toMillis(a.addedAt) - toMillis(b.addedAt));
+        .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
 }
 
 export async function saveCurrentMovie(services: ServiceContainer, movie: Movie, selectedBy?: string, client?: Client) {
@@ -68,12 +45,8 @@ export async function saveCurrentMovie(services: ServiceContainer, movie: Movie,
             };
             await movieRepo.createMovieEvent(updatedEvent);
 
-            if (client && updatedMovie.runtime && updatedEvent.startTime) {
-                const start =
-                    updatedEvent.startTime instanceof Date
-                        ? updatedEvent.startTime
-                        : new Date(updatedEvent.startTime);
-                await scheduleMovieAutoEnd(services, start.toISOString(), updatedMovie.runtime, client);
+            if (client && updatedMovie.runtime) {
+                await scheduleMovieAutoEnd(services, updatedEvent.startTime.toISOString(), updatedMovie.runtime, client);
             }
         }
         console.log(`[MovieStorage] Saved current movie: ${movie.title}`);

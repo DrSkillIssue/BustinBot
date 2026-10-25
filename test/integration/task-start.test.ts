@@ -1,0 +1,112 @@
+import { SnowflakeUtil } from "discord.js";
+import { DateTime } from "luxon";
+import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
+import { IDS } from "../discord/payloads.js";
+import { taskFactory, taskEventFactory } from "../factories.js";
+import { TaskCategory, type Task } from "../../src/models/Task.js";
+import { type TaskPoll } from "../../src/models/TaskPoll.js";
+import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
+
+const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
+    [1, 2, 3].map((n) =>
+        taskFactory.build({
+            id: `${prefix}00${n}`,
+            category,
+            taskName: `${prefix} task ${n}`,
+            amtBronze: n,
+            amtSilver: n * 2,
+            amtGold: n * 3,
+        }),
+    );
+
+async function storePoll(
+    factories: StoringFactories,
+    category: TaskCategory,
+    options: Task[],
+    votes: Record<string, string>,
+    overrides: Partial<TaskPoll> = {},
+): Promise<void> {
+    const messageId = SnowflakeUtil.generate().toString();
+    for (const task of options) await factories.task.create(task);
+    await factories.taskPoll.create({
+        id: messageId,
+        messageId,
+        category,
+        options,
+        votes,
+        endsAt: DateTime.now().minus({ seconds: 1 }).toJSDate(),
+        ...overrides,
+    });
+}
+
+describe("starting a category's task", () => {
+    test("breaks a tie in favour of the option listed first in the poll", async ({ discord, services, factories }) => {
+        await storePoll(factories, TaskCategory.PvM, tasksFor(TaskCategory.PvM, "PVM"), {
+            [SnowflakeUtil.generate().toString()]: "PVM003",
+            [SnowflakeUtil.generate().toString()]: "PVM002",
+        });
+        discord.acceptMessages(IDS.channel);
+
+        await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
+
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM002");
+    });
+
+    test("uses the poll that has just been closed, which is the usual case when polls end as tasks start", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await storePoll(
+            factories,
+            TaskCategory.PvM,
+            tasksFor(TaskCategory.PvM, "PVM"),
+            { [SnowflakeUtil.generate().toString()]: "PVM003" },
+            { isActive: false },
+        );
+        discord.acceptMessages(IDS.channel);
+
+        await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
+
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.task.id).toBe("PVM003");
+    });
+
+    test("posts nothing for a category without a poll", async ({ discord, services }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await startTaskEventForCategory(discord.client, services, TaskCategory.PvM, "Bustin");
+
+        expect(warn).toHaveBeenCalledWith(`[TaskStart] No active poll found for ${TaskCategory.PvM}.`);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+});
+
+describe("TaskRepository events", () => {
+    test("stores events and finds the latest and those ending in a range", async ({ services }) => {
+        await services.repos.taskRepo.createTaskEvent(
+            taskEventFactory.build({
+                id: "week-1",
+                createdAt: new Date("2026-01-05T00:00:00.000Z"),
+                endTime: new Date("2026-01-12T00:00:00.000Z"),
+            }),
+        );
+        await services.repos.taskRepo.createTaskEvent(
+            taskEventFactory.build({
+                id: "week-2",
+                createdAt: new Date("2026-01-12T00:00:00.000Z"),
+                endTime: new Date("2026-01-19T00:00:00.000Z"),
+            }),
+        );
+
+        expect(await services.repos.taskRepo.getTaskEventById("week-1")).toMatchObject({ id: "week-1" });
+        expect((await services.repos.taskRepo.getLatestTaskEvent())?.id).toBe("week-2");
+        expect(
+            (
+                await services.repos.taskRepo.getTaskEventsBetween(
+                    new Date("2026-01-13T00:00:00.000Z"),
+                    new Date("2026-01-31T00:00:00.000Z"),
+                )
+            ).map((event) => event.id),
+        ).toEqual(["week-2"]);
+    });
+});

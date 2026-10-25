@@ -5,7 +5,6 @@ import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardEntry, T
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { UserStats } from "../../models/UserStats.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
 
 const TIER_POINTS = {
     bronze: 1,
@@ -72,19 +71,16 @@ function incrementPendingPeriodPoints(
 
 const DEFAULT_PERIOD_EVENTS = 4;
 
+// Events that start on the same day belong to the same period
 function resolvePeriodKey(event: TaskEvent): string {
-    if (event.startTime instanceof Date) return `start:${event.startTime.toISOString().slice(0, 10)}`;
-    const keyword = event.keyword?.trim().toLowerCase();
-    if (keyword) return `kw:${keyword}`;
-    if (event.endTime instanceof Date) return `end:${event.endTime.toISOString().slice(0, 10)}`;
-    return `id:${event.id}`;
+    return `start:${event.startTime.toISOString().slice(0, 10)}`;
 }
 
 async function loadPeriodicEvents(services: ServiceContainer, eventIds: string[]): Promise<TaskEvent[]> {
     const taskRepo = services.repos.taskRepo;
 
     const events = await Promise.all(eventIds.map(async (eventId) => await taskRepo.getTaskEventById(eventId)));
-    return events.filter((event): event is TaskEvent => !!event).map((event) => normaliseFirestoreDates(event));
+    return events.filter((event): event is TaskEvent => !!event);
 }
 
 export async function getUniquePeriodCount(
@@ -117,8 +113,7 @@ export async function resolvePeriodicProgress(
     const periodEndTimes = new Map<string, number>();
     for (const event of events) {
         const key = resolvePeriodKey(event);
-        const endTime = event.endTime instanceof Date ? event.endTime.getTime() : null;
-        if (endTime === null) continue;
+        const endTime = event.endTime.getTime();
         const existing = periodEndTimes.get(key);
         if (existing === undefined || endTime > existing) {
             periodEndTimes.set(key, endTime);
@@ -858,7 +853,7 @@ export async function buildLeaderboardMessage(
         rankCounts.set(entry.rank, (rankCounts.get(entry.rank) ?? 0) + 1);
     }
 
-    const formattedRows = topEntries.map((entry, index) => {
+    const formattedRows = topEntries.map((entry) => {
         const rawName = nameMap.get(entry.userId) ?? entry.userId;
         const name =
             rawName.length > MAX_NAME_LENGTH ? `${rawName.slice(0, MAX_NAME_LENGTH - 3)}...` : rawName;

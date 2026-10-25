@@ -1,0 +1,11 @@
+{
+  // The tests, type-checked with the bot's settings; nothing is emitted
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    // Node 24's own ES2025 features (RegExp.escape), on top of what @tsconfig/node24 declares
+    "lib": ["es2025", "ESNext.Array", "ESNext.Collection", "ESNext.Error", "ESNext.Iterator", "ESNext.Promise"]
+  },
+  "include": ["**/*.ts", "../src", "../vitest.config.ts"]
+}
