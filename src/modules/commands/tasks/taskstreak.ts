@@ -1,4 +1,11 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    time,
+    TimestampStyles,
+    MessageFlags,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { calculateTaskStreakSummary } from "../../tasks/TaskStreaks.js";
@@ -23,7 +30,7 @@ const taskstreak: Command = {
         services: ServiceContainer;
     }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const taskRepo = services.repos.taskRepo;
 

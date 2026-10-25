@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { createMovieNightEmbed } from "../../movies/MovieEmbeds.js";
 import type { Movie } from "../../../models/Movie.js";
-import { UNPICKED_MOVIE_ID } from "../../../models/MovieEvent.js";
+import { isPlaceholderMovie } from "../../movies/MovieLifecycle.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { DateTime } from "luxon";
 
@@ -25,7 +25,7 @@ const currentmovie: Command = {
         services: ServiceContainer;
     }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const movieRepo = services.repos.movieRepo;
 
@@ -41,8 +41,8 @@ const currentmovie: Command = {
         const startTime = DateTime.fromJSDate(startDate);
         const unixTimestamp = Math.floor(startTime.toSeconds());
 
-        // The night's movie, unless none has been picked yet
-        const currentMovie: Movie | null = movieEvent.movie.id !== UNPICKED_MOVIE_ID ? movieEvent.movie : null;
+        // Fetch current movie (if any)
+        const currentMovie: Movie | null = isPlaceholderMovie(movieEvent.movie) ? null : movieEvent.movie;
 
         // Determine state message
         let stateMessage = "";

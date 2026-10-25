@@ -1,7 +1,5 @@
 import type { Movie } from "./Movie.js";
 
-export const UNPICKED_MOVIE_ID = "TBD";
-
 export interface MovieEvent {
     // Unique identifier for the event
     id: string;

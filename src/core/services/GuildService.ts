@@ -1,6 +1,6 @@
 import type { Guild } from "../../models/Guild.js";
 import type { IGuildRepository } from "../database/interfaces/IGuildRepo.js";
-import { ChatInputCommandInteraction, Message, type RepliableInteraction } from "discord.js";
+import { ChatInputCommandInteraction, Message, type RepliableInteraction, MessageFlags } from "discord.js";
 
 const DEFAULT_TASK_MILESTONE_ROLES = [
     { id: "task-participant", label: "Task Participant", roleId: "", requiredSubmissions: 5, enabled: true },
@@ -109,25 +109,28 @@ export class GuildService {
         this.cache.set(guildId, merged);
     }
 
-    async updateToggle(guildId: string, key: string, enabled: boolean, userId: string): Promise<void> {
-        await this.repo.updateToggle(guildId, key, enabled, userId);
+    async updateToggle(
+        guildId: string,
+        toggle: keyof Guild["toggles"],
+        enabled: boolean,
+        userId: string,
+    ): Promise<void> {
+        await this.repo.updateToggle(guildId, toggle, enabled, userId);
 
         const existing = this.cache.get(guildId);
         if (existing) {
-            // Extract last part of key if nested (e.g. "toggles.leaguesEnabled")
-            const toggleName = key.slice(key.lastIndexOf(".") + 1);
             this.cache.set(guildId, {
                 ...existing,
-                toggles: { ...existing.toggles, [toggleName]: enabled },
+                toggles: { ...existing.toggles, [toggle]: enabled },
                 updatedBy: userId,
             });
         }
 
-        console.log(`[GuildService] Toggled ${key} ${enabled ? "on" : "off"} for ${guildId}`);
+        console.log(`[GuildService] Toggled ${toggle} ${enabled ? "on" : "off"} for ${guildId}`);
     }
 
     async toggleScheduler(guildId: string, enabled: boolean, userId: string): Promise<void> {
-        await this.updateToggle(guildId, "toggles.taskScheduler", enabled, userId);
+        await this.updateToggle(guildId, "taskScheduler", enabled, userId);
     }
 
     async getAll(): Promise<Guild[]> {
@@ -147,7 +150,10 @@ export class GuildService {
             if (source instanceof Message) {
                 await source.reply("This command can only be used inside a server.");
             } else {
-                await source.reply({ content: "This command can only be used inside a server.", flags: 1 << 6 });
+                await source.reply({
+                    content: "This command can only be used inside a server.",
+                    flags: MessageFlags.Ephemeral,
+                });
             }
             return null;
         }
@@ -160,7 +166,7 @@ export class GuildService {
             if (source instanceof Message) {
                 await source.reply(replyContent);
             } else {
-                await source.reply({ content: replyContent, flags: 1 << 6 });
+                await source.reply({ content: replyContent, flags: MessageFlags.Ephemeral });
             }
 
             return null;

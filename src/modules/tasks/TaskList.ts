@@ -1,5 +1,6 @@
 import { EmbedBuilder, type InteractionEditReplyOptions } from "discord.js";
-import { textTable, truncate } from "../../utils/TextUtils.js";
+import table from "text-table";
+import { truncate } from "../../utils/TextUtils.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { listPage, pageButtons } from "../../utils/Pagination.js";
 import { TaskCategory, type Task } from "../../models/Task.js";
@@ -26,7 +27,7 @@ function formatTaskTable(tasks: Task[]): string {
     ]);
     return [
         "```",
-        textTable([["ID", "Task Name", "B", "S", "G"], ...rows], ["l", "l", "r", "r", "r"], "  "),
+        table([["ID", "Task Name", "B", "S", "G"], ...rows], { align: ["l", "l", "r", "r", "r"], hsep: "  " }),
         "```",
     ].join("\n");
 }
@@ -40,7 +41,7 @@ export async function buildTaskListPage(
     category: CategoryFilter,
     requestedPage: number,
 ): Promise<InteractionEditReplyOptions> {
-    const tasks = (await services.repos.taskRepo.getAllTasks())
+    const tasks = (await services.tasks.getAllTasks())
         .filter((task) => category === CATEGORY_ALL || task.category === category)
         .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: "base" }));
 

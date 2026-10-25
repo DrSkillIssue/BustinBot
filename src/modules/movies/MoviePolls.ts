@@ -1,4 +1,13 @@
-import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Client, time, TimestampStyles } from "discord.js";
+import {
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    EmbedBuilder,
+    Client,
+    time,
+    TimestampStyles,
+    MessageFlags,
+} from "discord.js";
 import type { RepliableInteraction } from "discord.js";
 import { randomUUID } from "node:crypto";
 import type { Movie } from "../../models/Movie.js";
@@ -160,7 +169,7 @@ export async function pollMovieWithList(
     if (activeSelection.length < 2 || activeSelection.length > MAX_CHOICES) {
         const msg = "You must select between 2 and 5 movies.";
         if (interaction.replied || interaction.deferred) await interaction.editReply(msg);
-        else await interaction.reply({ content: msg, flags: 1 << 6 });
+        else await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
         return;
     }
 
@@ -170,7 +179,7 @@ export async function pollMovieWithList(
         if (interaction.isButton()) {
             await interaction.deferUpdate();
         } else {
-            await interaction.deferReply({ flags: 1 << 6 });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         }
     }
 

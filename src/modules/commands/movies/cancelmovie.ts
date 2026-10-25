@@ -1,4 +1,10 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    DiscordAPIError,
+    RESTJSONErrorCodes,
+    MessageFlags,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -23,7 +29,7 @@ const cancelmovie: Command = {
         services: ServiceContainer;
     }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guild = interaction.guild;
         if (!guild) {
@@ -95,9 +101,9 @@ const cancelmovie: Command = {
 
             // Mark latest movie event as cancelled
             const latestEvent = await movieRepo.getActiveEvent();
-            if (latestEvent && !latestEvent.completed) {
+            if (latestEvent) {
                 fallbackAnnouncementChannelId = latestEvent.channelId;
-                await movieRepo.completeEvent(latestEvent.id);
+                await movieRepo.completeEvent(latestEvent.id, new Date());
                 services.movieAttendance.stop();
                 actions.push("Movie night event marked as cancelled");
 

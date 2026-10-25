@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { fetchMovieDetails } from "../../movies/MovieService.js";
 import { CommandModule, CommandRole, type Command } from "../../../models/Command.js";
 import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
@@ -20,7 +20,7 @@ const testmovie: Command = {
         if (!interaction) return;
 
         const query = interaction.options.getString("title", true);
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
             const metadata = await fetchMovieDetails(query);

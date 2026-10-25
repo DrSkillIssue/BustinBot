@@ -1,4 +1,4 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type CollectionReference, type Firestore } from "firebase-admin/firestore";
 import type { IGuildRepository } from "./interfaces/IGuildRepo.js";
 import type { Guild } from "../../models/Guild.js";
 import { guildConverter } from "./converters.js";
@@ -18,10 +18,10 @@ function isAllowedGuild(guildId: string): boolean {
 }
 
 export class GuildRepository implements IGuildRepository {
-    constructor(private readonly db: Firestore) {}
+    private readonly collection: CollectionReference<Guild>;
 
-    private get collection() {
-        return this.db.collection("guilds").withConverter(guildConverter);
+    constructor(db: Firestore) {
+        this.collection = db.collection("guilds").withConverter(guildConverter);
     }
 
     async getGuild(guildId: string): Promise<Guild | null> {
@@ -61,14 +61,19 @@ export class GuildRepository implements IGuildRepository {
         );
     }
 
-    async updateToggle(guildId: string, key: string, enabled: boolean, userId: string): Promise<void> {
+    async updateToggle(
+        guildId: string,
+        toggle: keyof Guild["toggles"],
+        enabled: boolean,
+        userId: string,
+    ): Promise<void> {
         if (!isAllowedGuild(guildId)) {
             console.warn(`[GuildRepository] Skipping toggle update for guild ${guildId} in dev mode.`);
             return;
         }
 
         await this.collection.doc(guildId).update({
-            [key]: enabled,
+            [`toggles.${toggle}`]: enabled,
             updatedBy: userId,
             updatedAt: FieldValue.serverTimestamp(),
         });

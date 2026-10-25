@@ -1,4 +1,11 @@
-import { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    LabelBuilder,
+    MessageFlags,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { Task } from "../../../models/Task.js";
@@ -28,12 +35,12 @@ const updatetask: Command = {
         ),
 
     async autocomplete({ interaction, services }) {
-        const repo = services.repos.taskRepo;
         const query = interaction.options.getFocused().trim();
         await interaction.respond(
-            query
-                ? (await repo.getTaskSearch()).search(query, { limit: 25 }).map((result) => taskChoice(result.item))
-                : (await repo.getAllTasks()).slice(0, 25).map(taskChoice),
+            (query
+                ? await services.tasks.searchTasks(query, 25)
+                : (await services.tasks.getAllTasks()).slice(0, 25)
+            ).map(taskChoice),
         );
     },
 
@@ -45,7 +52,7 @@ const updatetask: Command = {
 
         const task = await repo.getTaskById(taskId);
         if (!task) {
-            await interaction.reply({ content: `No task found with ID **${taskId}**.`, flags: 1 << 6 });
+            await interaction.reply({ content: `No task found with ID **${taskId}**.`, flags: MessageFlags.Ephemeral });
             return;
         }
 

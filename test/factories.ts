@@ -3,7 +3,7 @@ import { Factory } from "fishery";
 import { DateTime } from "luxon";
 import { TaskCategory, TaskType, type Task } from "../src/models/Task.js";
 import type { TaskEvent } from "../src/models/TaskEvent.js";
-import { newUserStats, type UserStats } from "../src/models/UserStats.js";
+import type { UserStats } from "../src/models/UserStats.js";
 import { SubmissionStatus, type TaskSubmission, type TaskSubmissionDraft } from "../src/models/TaskSubmission.js";
 import type { TaskPoll } from "../src/models/TaskPoll.js";
 import type { Guild, TaskMilestoneRole } from "../src/models/Guild.js";
@@ -61,9 +61,29 @@ export const taskEventFactory = TaskEventFactory.define(({ params }) => {
     };
 });
 
-export const userStatsFactory = Factory.define<UserStats>(() =>
-    newUserStats(IDS.user, new Date("2026-01-01T00:00:00.000Z")),
-);
+export const userStatsFactory = Factory.define<UserStats>(() => ({
+    userId: IDS.user,
+    joinedAt: new Date("2026-01-01T00:00:00.000Z"),
+    lastActiveAt: new Date("2026-01-01T00:00:00.000Z"),
+    commandsRun: 0,
+    moviesAdded: 0,
+    moviesWatched: 0,
+    moviesAttended: 0,
+    moviePollsVoted: 0,
+    tasksCompletedBronze: 0,
+    tasksCompletedSilver: 0,
+    tasksCompletedGold: 0,
+    taskStreak: 0,
+    longestTaskStreak: 0,
+    taskPollsVoted: 0,
+    taskPrizesWon: 0,
+    taskChampionFirsts: 0,
+    taskChampionSeconds: 0,
+    taskChampionThirds: 0,
+    legacyTasksCompleted: 0,
+    totalXP: 0,
+    leaderboardRank: 0,
+}));
 
 export const taskSubmissionFactory = Factory.define<TaskSubmission>(() => ({
     id: "submission-1",

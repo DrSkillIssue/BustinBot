@@ -76,19 +76,13 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         await this.eventsCollection.doc(payload.id).set(payload);
     }
 
-    async completeEvent(eventId: string, changes: Partial<MovieEvent> = {}): Promise<MovieEvent | null> {
+    async completeEvent(eventId: string, completedAt: Date, movie?: Movie): Promise<boolean> {
         const docRef = this.eventsCollection.doc(eventId);
         return this.db.runTransaction(async (transaction) => {
             const event = (await transaction.get(docRef)).data();
-            if (!event || event.completed) return null;
-            const completed: MovieEvent = {
-                ...event,
-                ...changes,
-                completed: true,
-                completedAt: changes.completedAt ?? new Date(),
-            };
-            transaction.set(docRef, completed);
-            return completed;
+            if (!event || event.completed) return false;
+            transaction.update(docRef, { completed: true, completedAt, movie });
+            return true;
         });
     }
 
@@ -107,8 +101,6 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     async getActiveEvent(): Promise<MovieEvent | null> {
         const snapshot = await this.eventsCollection.where("completed", "==", false).get();
 
-        if (snapshot.empty) return null;
-
         const events = snapshot.docs
             .map((doc) => doc.data())
             .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
@@ -118,8 +110,6 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
 
     async getLatestEvent(): Promise<MovieEvent | null> {
         const snapshot = await this.eventsCollection.orderBy("createdAt", "desc").limit(1).get();
-
-        if (snapshot.empty) return null;
         return snapshot.docs[0]?.data() ?? null;
     }
 

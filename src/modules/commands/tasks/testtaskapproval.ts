@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { sample } from "es-toolkit";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -48,7 +48,7 @@ const testtaskapproval: Command = {
     }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const taskRepo = services.repos.taskRepo;
 
@@ -84,14 +84,15 @@ const testtaskapproval: Command = {
 
         const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
-        // Start a draft and submit it, as a member's Submit click and DM do
-        const draft = await services.tasks.startSubmission(userId, taskEvent.id);
-        const outcome = await services.tasks.submit(
+        // Use the real submission flow: create → complete
+        await services.tasks.setPendingTask(userId, taskEvent.id);
+        const outcome = await services.tasks.completeSubmission(
             interaction.client,
-            draft,
+            userId,
+            taskEvent.id,
             [],
-            `[Test] Tier hint: ${tier}`,
             services,
+            `[Test] Tier hint: ${tier}`,
         );
         if (outcome.result !== "submitted") {
             await interaction.editReply({ content: `❌ The test submission couldn't be posted (${outcome.result}).` });

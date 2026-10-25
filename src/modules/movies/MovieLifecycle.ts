@@ -11,7 +11,7 @@ function getStartMillis(event: MovieEvent): number {
     return event.startTime.getTime();
 }
 
-function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
+export function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
     if (!movie) return true;
     const id = (movie.id || "").trim().toLowerCase();
     const title = (movie.title || "").trim().toLowerCase();
@@ -101,11 +101,7 @@ export async function finishMovieNight(
             ? { ...resolvedMovie, watched: true, watchedAt: now, selectedAt: undefined, selectedBy: undefined }
             : undefined;
 
-        const completed = await movieRepo.completeEvent(latestEvent.id, {
-            completedAt: now,
-            movie: finishedMovie ?? latestEvent.movie,
-        });
-        if (!completed) {
+        if (!(await movieRepo.completeEvent(latestEvent.id, now, finishedMovie))) {
             return { success: false, message: "That movie night has already ended." };
         }
 

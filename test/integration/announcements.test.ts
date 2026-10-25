@@ -99,7 +99,8 @@ describe("/announce", () => {
             }),
         ]);
         expect(warn).toHaveBeenCalledWith(
-            `[Channels] The announcements channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+            `[Channels] Discord refused the announcements channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
     });
 });

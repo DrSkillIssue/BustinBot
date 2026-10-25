@@ -1,7 +1,8 @@
 import { DateTime, Duration } from "luxon";
 import { time, TimestampStyles, type Client } from "discord.js";
 import type { Reminder } from "../../models/Reminder.js";
-import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
+import type { MovieEvent } from "../../models/MovieEvent.js";
+import { isPlaceholderMovie } from "./MovieLifecycle.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
@@ -59,7 +60,7 @@ export async function sendDueReminders(
     // Retrieve current state from Firestore
     const activePoll = await movieRepo.getActivePoll();
     // Determine movie state line
-    const title = event.movie.id !== UNPICKED_MOVIE_ID ? event.movie.title : null;
+    const title = isPlaceholderMovie(event.movie) ? null : event.movie.title;
     const stateLine = activePoll?.isActive
         ? `A movie poll is currently running! Go cast your vote before it closes.`
         : title

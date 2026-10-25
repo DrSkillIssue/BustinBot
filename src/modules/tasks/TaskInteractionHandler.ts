@@ -1,4 +1,4 @@
-import type { Interaction, Client } from "discord.js";
+import { MessageFlags, type Interaction } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { handleTaskFeedback } from "./HandleTaskFeedback.js";
 import { handleSubmitButton, handleAdminButton, handleRejectionModal } from "./TaskInteractions.js";
@@ -9,7 +9,7 @@ import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonCategory } from "./T
 import { buttonPage } from "../../utils/Pagination.js";
 import { NEW_TASK_MODAL, handleNewTaskModal } from "./HandleNewTaskModal.js";
 
-export async function handleTaskInteraction(interaction: Interaction, _client: Client, services: ServiceContainer) {
+export async function handleTaskInteraction(interaction: Interaction, services: ServiceContainer) {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
             await handleTaskPollVoteInteraction(interaction, services);
@@ -27,7 +27,7 @@ export async function handleTaskInteraction(interaction: Interaction, _client: C
 
         // Buttons posted before 2025-11-03 use the older task-feedback-up-<task>-<event> ids
         if (interaction.customId.startsWith("task-feedback|") || interaction.customId.startsWith("task-feedback-")) {
-            return handleTaskFeedback(interaction, services.tasks.repository);
+            return handleTaskFeedback(interaction, services.tasks);
         }
 
         if (interaction.customId.startsWith("task-leaderboard|")) {
@@ -73,7 +73,7 @@ export async function handleTaskInteraction(interaction: Interaction, _client: C
             if (!selections || missing.length) {
                 await interaction.reply({
                     content: `Please select: ${missing.join(", ")} before confirming.`,
-                    flags: 1 << 6,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }

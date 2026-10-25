@@ -53,34 +53,8 @@ export interface TaskSubmission {
     screenshotMessage?: string;
 }
 
-export const TIERS = [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold] as const;
-export type SubmissionTier = (typeof TIERS)[number];
-
-export function isTier(status: SubmissionStatus): status is SubmissionTier {
-    return (TIERS as readonly SubmissionStatus[]).includes(status);
-}
-
-export function tierRank(tier: SubmissionTier | null): number {
-    return tier ? TIERS.indexOf(tier) + 1 : 0;
-}
-
-export function highestTier(statuses: SubmissionStatus[]): SubmissionTier | null {
-    return statuses
-        .filter(isTier)
-        .reduce<SubmissionTier | null>((best, tier) => (tierRank(tier) > tierRank(best) ? tier : best), null);
-}
-
 export interface TaskSubmissionDraft {
     userId: string;
     taskEventId: string;
     createdAt: Date;
 }
-
-export type SubmissionReview = { submissionId: string; reviewedBy: string } & (
-    { decision: SubmissionTier } | { decision: SubmissionStatus.Rejected; rejectionReason: string }
-);
-
-export type SubmissionReviewOutcome =
-    | { result: "notFound" }
-    | { result: "alreadyReviewed"; submission: TaskSubmission }
-    | { result: "reviewed"; submission: TaskSubmission; heldTier: SubmissionTier | null };

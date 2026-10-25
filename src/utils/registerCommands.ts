@@ -1,8 +1,7 @@
-import { Routes, type REST } from "discord.js";
-import type { RESTPutAPIApplicationCommandsJSONBody } from "discord-api-types/v10";
+import { Routes, type REST, type RESTPutAPIApplicationCommandsJSONBody } from "discord.js";
 import type { Command } from "../models/Command.js";
 
-export function slashCommandPayloads(commands: Map<string, Command>): RESTPutAPIApplicationCommandsJSONBody {
+function slashCommandPayloads(commands: Map<string, Command>): RESTPutAPIApplicationCommandsJSONBody {
     return [...new Set(commands.values())].flatMap((command) =>
         command.slashData ? [command.slashData.toJSON()] : [],
     );

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { Command } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -23,7 +23,7 @@ const importtasks: Command = {
         services: ServiceContainer;
     }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const attachment = interaction.options.getAttachment("file");
         if (!attachment || !attachment.name.toLowerCase().endsWith(".csv")) {
@@ -31,15 +31,13 @@ const importtasks: Command = {
             return;
         }
 
-        const taskRepo = services.repos.taskRepo;
-
         try {
             const res = await fetch(attachment.url);
             if (!res.ok) {
                 throw new Error(`Failed to download ${attachment.name}: HTTP ${res.status}`);
             }
 
-            const result = await importTasks(taskRepo, parseTasksCsv(await res.text()));
+            const result = await importTasks(services.tasks, parseTasksCsv(await res.text()));
 
             await interaction.editReply({
                 content: `✅ Import complete.\n• ${result.newCount} new tasks added\n• ${result.skipped} skipped (existing)\n• ${result.total} total in file.`,

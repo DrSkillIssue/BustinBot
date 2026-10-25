@@ -1,7 +1,6 @@
-import type { ModalSubmitInteraction } from "discord.js";
+import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
 import { DateTime } from "luxon";
 import { TaskType, type Task } from "../../models/Task.js";
-import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
 import { refreshTaskEventMessage } from "./HandleTaskStart.js";
@@ -12,7 +11,7 @@ function parseTaskType(input: string): TaskType | null {
 }
 
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const repo = services.repos.taskRepo;
 
@@ -46,7 +45,7 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     };
 
     try {
-        await saveAndRedraw(interaction, repo, updated);
+        await saveAndRedraw(interaction, services, updated);
     } catch (err) {
         console.error(`[HandleUpdateTaskModal] Failed to save task ${taskId}:`, err);
         await interaction.editReply({ content: `Couldn't save task **${taskId}**. Please try again.` });
@@ -56,8 +55,13 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     await interaction.editReply({ content: `Task **${taskId}** updated successfully.` });
 }
 
-async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRepository, task: Task): Promise<void> {
-    await repo.createTask(task);
+async function saveAndRedraw(
+    interaction: ModalSubmitInteraction,
+    services: ServiceContainer,
+    task: Task,
+): Promise<void> {
+    const repo = services.repos.taskRepo;
+    await services.tasks.createTask(task);
 
     const now = new Date();
     const activeEvents = (

@@ -1,15 +1,13 @@
-import { unzip } from "es-toolkit";
+import type { Guild as DiscordGuild } from "discord.js";
 
 export function truncate(text: string, length: number): string {
     return text.length > length ? `${text.slice(0, length - 3)}...` : text;
 }
 
-export function textTable(rows: string[][], align: ("l" | "r")[], gap: string): string {
-    const columns = unzip(rows).map((cells, column) => {
-        const width = Math.max(...cells.map((cell) => cell.length));
-        return cells.map((cell) => (align[column] === "r" ? cell.padStart(width) : cell.padEnd(width)));
-    });
-    return unzip(columns)
-        .map((row) => row.join(gap))
-        .join("\n");
+export function channelLabel(guild: DiscordGuild, channelId: string | undefined): string {
+    return channelId ? `#${guild.channels.cache.get(channelId)?.name ?? channelId}` : "None";
+}
+
+export function roleLabel(guild: DiscordGuild, roleId: string | undefined): string {
+    return roleId ? `@${guild.roles.cache.get(roleId)?.name ?? roleId}` : "None";
 }

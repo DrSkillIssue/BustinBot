@@ -24,7 +24,6 @@ import { Skill, TaskCategory, TaskType } from "../../src/models/Task.js";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { taskFactory } from "../factories.js";
-import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
 
 const CSV = [
     "ID,Task Name,Category,Type,Skill,Bronze Amount,Silver Amount,Gold Amount,Weight,Short Name,Wilderness Required?",
@@ -312,12 +311,10 @@ describe("the update task form", () => {
         factories,
     }) => {
         const tasks = services.repos.taskRepo;
-        await storeRunningEvent(factories, runningEvent);
-        await factories.taskSubmission.create({ id: "approved", userId: completer, taskEventId: "PVM001-week" });
-        await tasks.reviewSubmission({
-            submissionId: "approved",
-            reviewedBy: IDS.user,
-            decision: SubmissionStatus.Bronze,
+        await storeRunningEvent(factories, {
+            ...runningEvent,
+            completionCounts: { bronze: 1, silver: 0, gold: 0 },
+            completedUserIds: [completer],
         });
         await factories.taskPoll.open().create({
             messageId: pollMessage,
@@ -604,7 +601,7 @@ describe("/newtask", () => {
         factories,
     }) => {
         await factories.task.create({ id: "PVM063", category: TaskCategory.PvM });
-        await services.repos.taskRepo.getTaskSearch();
+        await services.tasks.searchTasks("vorkath", 25);
 
         const submit = await interact(modalSubmitInteraction("new_task_modal|PvM|KC|Slayer", form));
 
@@ -624,9 +621,7 @@ describe("/newtask", () => {
             amtGold: 1000,
             weight: 50,
         });
-        expect(
-            (await services.repos.taskRepo.getTaskSearch()).search("vorkath").map((result) => result.item.id),
-        ).toEqual(["PVM064"]);
+        expect((await services.tasks.searchTasks("vorkath", 25)).map((task) => task.id)).toEqual(["PVM064"]);
     });
 
     test("saves the task under a typed ID", async ({ discord, interact, services }) => {

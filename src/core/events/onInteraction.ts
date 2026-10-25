@@ -1,10 +1,18 @@
-import type { Interaction } from "discord.js";
+import { MessageFlags, type ChatInputCommandInteraction, type Interaction } from "discord.js";
 import type { Command } from "../../models/Command.js";
 import { CommandModule, CommandRole } from "../../models/Command.js";
 import type { ServiceContainer } from "../services/ServiceContainer.js";
 import type { GuildSetupComplete } from "../../models/Guild.js";
 import { createTimezoneModal, timezoneService } from "../services/TimezoneService.js";
 import { memberRoleIds } from "../../utils/MemberUtils.js";
+
+async function memberRoleNames(
+    interaction: ChatInputCommandInteraction<"raw" | "cached">,
+    roleIds: string[],
+): Promise<string[]> {
+    const guild = await interaction.client.guilds.fetch(interaction.guildId);
+    return roleIds.flatMap((roleId) => guild.roles.cache.get(roleId)?.name ?? []);
+}
 
 export async function handleInteraction(
     interaction: Interaction,
@@ -23,7 +31,7 @@ export async function handleInteraction(
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command) {
-            await interaction.reply({ content: "Command not found.", flags: 1 << 6 });
+            await interaction.reply({ content: "Command not found.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -31,24 +39,22 @@ export async function handleInteraction(
         if (!interaction.inGuild()) {
             await interaction.reply({
                 content: "Unable to determine your server membership. Please try again from within the guild.",
-                flags: 1 << 6,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
 
-        const guild = await interaction.client.guilds.fetch(interaction.guildId);
         const userRoleIds = memberRoleIds(interaction.member);
-        const userRoleNames = userRoleIds.flatMap((roleId) => guild.roles.cache.get(roleId)?.name ?? []);
 
         if (isSetupCommand) {
             const adminRoleName = "BustinBot Admin";
 
-            const hasAdminRole = userRoleNames.includes(adminRoleName);
+            const hasAdminRole = (await memberRoleNames(interaction, userRoleIds)).includes(adminRoleName);
 
             if (!hasAdminRole) {
                 await interaction.reply({
                     content: `Only members with the **${adminRoleName}** role can run \`/setup\`. Please have a server admin create and assign this role first.`,
-                    flags: 1 << 6,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
@@ -64,6 +70,7 @@ export async function handleInteraction(
             if (!guildConfig) return;
 
             const guildRoles = guildConfig.roles ?? {};
+            const userRoleNames = await memberRoleNames(interaction, userRoleIds);
 
             const hasRole = (configured?: string, fallbackEnv?: string) => {
                 const value = configured ?? fallbackEnv;
@@ -88,7 +95,10 @@ export async function handleInteraction(
             });
 
             if (!roleMatch) {
-                await interaction.reply({ content: "You don't have permission to use this command.", flags: 1 << 6 });
+                await interaction.reply({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
         }
@@ -104,7 +114,7 @@ export async function handleInteraction(
         if (!setupMap.core && !isSetupCommand) {
             await interaction.reply({
                 content: "The bot has not been set up yet. Please run `/setup` first to configure the core channels.",
-                flags: 1 << 6,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -123,7 +133,7 @@ export async function handleInteraction(
 
             await interaction.reply({
                 content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`,
-                flags: 1 << 6,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -138,12 +148,13 @@ export async function handleInteraction(
             await command.execute({ interaction, services });
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
+            const content = "There was an error executing that command.";
             if (interaction.deferred && !interaction.replied) {
-                await interaction.editReply({ content: "There was an error executing that command." });
+                await interaction.editReply({ content });
             } else if (interaction.replied) {
-                await interaction.followUp({ content: "There was an error executing that command.", flags: 1 << 6 });
+                await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
             } else {
-                await interaction.reply({ content: "There was an error executing that command.", flags: 1 << 6 });
+                await interaction.reply({ content, flags: MessageFlags.Ephemeral });
             }
         }
         return;
@@ -157,7 +168,10 @@ export async function handleInteraction(
             const selections = services.setup.getSelections("core", userId);
             const missing = services.setup.getMissingFields("core", selections);
             if (!selections || missing.length) {
-                await interaction.reply({ content: `Please select: ${missing.join(", ")}`, flags: 1 << 6 });
+                await interaction.reply({
+                    content: `Please select: ${missing.join(", ")}`,
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
 
@@ -189,7 +203,7 @@ export async function handleInteraction(
         const userId = interaction.user.id;
         const channelId = interaction.values[0];
         if (!channelId) {
-            await interaction.reply({ content: "No channel selected.", flags: 1 << 6 });
+            await interaction.reply({ content: "No channel selected.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -219,7 +233,7 @@ export async function handleInteraction(
             await interaction.reply({
                 content:
                     "Could not recognise that timezone. Please try again using an IANA name (e.g., `Australia/Melbourne`, `America/New_York`).",
-                flags: 1 << 6,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -230,7 +244,7 @@ export async function handleInteraction(
         const currentTime = timezoneService.getCurrentTimeInZone(matchedZone);
         await interaction.reply({
             content: `Timezone set to **${matchedZone}**.\nCurrent local time: **${currentTime}**`,
-            flags: 1 << 6,
+            flags: MessageFlags.Ephemeral,
         });
 
         console.log(`[Setup] Timezone updated for ${guildId}: ${matchedZone}`);

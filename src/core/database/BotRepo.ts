@@ -1,13 +1,13 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import type { IBotRepository } from "./interfaces/IBotRepo.js";
 import type { BotStats } from "../../models/BotStats.js";
 import { botStatsConverter } from "./converters.js";
 
 export class BotRepository implements IBotRepository {
-    constructor(private readonly db: Firestore) {}
+    private readonly docRef: DocumentReference<BotStats>;
 
-    private get docRef() {
-        return this.db.collection("bot").doc("stats").withConverter(botStatsConverter);
+    constructor(db: Firestore) {
+        this.docRef = db.collection("bot").doc("stats").withConverter(botStatsConverter);
     }
 
     async getBotStats(): Promise<BotStats | null> {

@@ -220,7 +220,7 @@ describe("/leagues", () => {
         services,
         factories,
     }) => {
-        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", false, IDS.user);
+        await services.guilds.updateToggle(IDS.guild, "leaguesEnabled", false, IDS.user);
         await storePollableTasks(factories, Object.values(TaskCategory));
         discord.acceptMessages(IDS.channel);
 
@@ -236,7 +236,7 @@ describe("/leagues", () => {
     });
 
     test("switches Leagues back off", async ({ discord, interact, services }) => {
-        await services.guilds.updateToggle(IDS.guild, "toggles.leaguesEnabled", true, IDS.user);
+        await services.guilds.updateToggle(IDS.guild, "leaguesEnabled", true, IDS.user);
 
         const command = await interact(chatInputInteraction("leagues", [], AS.taskAdmin));
 

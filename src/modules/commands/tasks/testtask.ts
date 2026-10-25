@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { sample } from "es-toolkit";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
@@ -25,9 +25,9 @@ const testtask: Command = {
     }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const taskData = await services.repos.taskRepo.getAllTasks();
+        const taskData = await services.tasks.getAllTasks();
 
         if (!taskData.length) {
             await interaction.editReply({ content: "No tasks available." });

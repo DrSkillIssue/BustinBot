@@ -5,6 +5,7 @@ import {
     type Client,
     type ButtonInteraction,
     type GuildTextBasedChannel,
+    MessageFlags,
 } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import type { Task } from "../../models/Task.js";
@@ -61,7 +62,7 @@ function buildPollMessage(poll: Omit<TaskPoll, "id" | "messageId">) {
 }
 
 export async function handleTaskPollVoteInteraction(interaction: ButtonInteraction, services: ServiceContainer) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const [, categoryRaw, voteId] = interaction.customId.split("_");
     const category = Object.values(TaskCategory).find((value) => value === categoryRaw);
@@ -166,7 +167,7 @@ export async function postTaskPollForCategory(
 
     const repo = services.repos.taskRepo;
 
-    const allTasks: Task[] = await repo.getAllTasks();
+    const allTasks: Task[] = await services.tasks.getAllTasks();
     const taskData = allTasks.filter((t) => t.category === category);
     if (taskData.length < 3) {
         console.warn(`[TaskPoll] Not enough tasks to create a poll for category ${category}`);

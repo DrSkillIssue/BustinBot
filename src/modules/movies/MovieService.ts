@@ -4,13 +4,17 @@ import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
-function tmdbUrl(path: string, params: Record<string, string> = {}): URL {
+export function tmdbApiKey(): string {
     const key = process.env.TMDB_API_KEY;
     if (!key) {
         throw new Error("TMDB_API_KEY is not set in your environment variables.");
     }
+    return key;
+}
+
+function tmdbUrl(path: string, params: Record<string, string> = {}): URL {
     const url = new URL(`${TMDB_BASE_URL}${path}`);
-    url.search = new URLSearchParams({ api_key: key, ...params }).toString();
+    url.search = new URLSearchParams({ api_key: tmdbApiKey(), ...params }).toString();
     return url;
 }
 

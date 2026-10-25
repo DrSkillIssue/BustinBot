@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { packageVersion } from "../../../utils/version.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { isMovieNightAdmin } from "../../movies/MovieSelector.js";
 
 const moviehelp: Command = {
@@ -15,21 +14,9 @@ const moviehelp: Command = {
         .setName("moviehelp")
         .setDescription("Learn how movie nights work and what commands can be used."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
-
-        const guildConfig = await services.guilds.get(interaction.guildId);
-        if (!guildConfig) {
-            await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
-            return;
-        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const isPrivilegedUser = await isMovieNightAdmin(services, interaction);
 

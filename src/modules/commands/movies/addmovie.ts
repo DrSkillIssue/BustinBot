@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { checkCanAddMovie, presentMovieSelection } from "../../movies/MovieSelector.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const addmovie: Command = {
     name: "addmovie",
@@ -20,21 +19,9 @@ const addmovie: Command = {
             option.setName("year").setDescription("(Optional) Release year of the movie").setRequired(false),
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
-
-        const guildConfig = await services.guilds.get(interaction.guildId);
-        if (!guildConfig) {
-            await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
-            return;
-        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
             const refusal = await checkCanAddMovie(services, interaction);

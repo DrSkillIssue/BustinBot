@@ -5,5 +5,3 @@ export interface TaskFeedback {
     userId: string;
     vote: "up" | "down";
 }
-
-export type TaskFeedbackOutcome = "added" | "changed" | "unchanged" | "taskNotFound";

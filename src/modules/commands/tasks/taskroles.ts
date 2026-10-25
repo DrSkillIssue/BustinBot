@@ -1,14 +1,7 @@
-import {
-    SlashCommandBuilder,
-    type ChatInputCommandInteraction,
-    EmbedBuilder,
-    type Role,
-    type Guild as DiscordGuild,
-} from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, type Role, type Guild as DiscordGuild, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import type { Guild as GuildConfig, GuildRoles } from "../../../models/Guild.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { getHighestMilestone, getTotalTaskCompletions, resolveMilestones } from "../../tasks/TaskMilestones.js";
 
 const ROLE_ID_MATCH = /^(?:<@&(\d+)>|(\d{17,}))$/;
@@ -147,23 +140,13 @@ const taskroles: Command = {
             sub.setName("init").setDescription("Sync task roles with server roles and grant them to eligible users."),
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
         const guildConfig = await services.guilds.get(guildId);
-        if (!guildConfig) {
-            await interaction.editReply({ content: "Guild configuration not found." });
-            return;
-        }
 
         const guild = interaction.guild;
         if (!guild) {
@@ -174,12 +157,12 @@ const taskroles: Command = {
         await guild.roles.fetch();
 
         const sub = interaction.options.getSubcommand();
-        const current = resolveMilestones(guildConfig.taskSettings?.milestoneRoles).slice();
+        const current = resolveMilestones(guildConfig?.taskSettings?.milestoneRoles).slice();
         const championSettings = {
             first: true,
             second: true,
             third: true,
-            ...(guildConfig.taskSettings?.championRoles ?? {}),
+            ...(guildConfig?.taskSettings?.championRoles ?? {}),
         };
         const milestoneEnabled = current.length === 0 ? true : current.every((milestone) => milestone.enabled);
         const championEnabled = championSettings.first && championSettings.second && championSettings.third;
@@ -196,9 +179,9 @@ const taskroles: Command = {
                     : ["No milestone roles configured."];
 
             const championRoles = [
-                { label: "1st", roleId: guildConfig.roles?.taskChampionFirst },
-                { label: "2nd", roleId: guildConfig.roles?.taskChampionSecond },
-                { label: "3rd", roleId: guildConfig.roles?.taskChampionThird },
+                { label: "1st", roleId: guildConfig?.roles?.taskChampionFirst },
+                { label: "2nd", roleId: guildConfig?.roles?.taskChampionSecond },
+                { label: "3rd", roleId: guildConfig?.roles?.taskChampionThird },
             ].map((entry) => {
                 const roleName = entry.roleId
                     ? (guild.roles.cache.get(entry.roleId)?.name ?? "Missing role")
@@ -325,7 +308,7 @@ const taskroles: Command = {
                     item.roleId === role.id || (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase()),
             );
             const milestone = current[milestoneIndex];
-            const championPlacement = resolveChampionPlacement(role.id, guildConfig.roles);
+            const championPlacement = resolveChampionPlacement(role.id, guildConfig?.roles);
 
             if (milestone && championPlacement) {
                 await interaction.editReply({
@@ -443,7 +426,7 @@ const taskroles: Command = {
                 (item) =>
                     item.roleId === role.id || (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase()),
             );
-            const championPlacement = resolveChampionPlacement(role.id, guildConfig.roles);
+            const championPlacement = resolveChampionPlacement(role.id, guildConfig?.roles);
 
             if (milestoneIndex !== -1 && championPlacement) {
                 await interaction.editReply({
@@ -522,9 +505,9 @@ const taskroles: Command = {
                     const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
                     const champions = leaderboard?.champions;
                     const removalTargets = [
-                        { roleId: guildConfig.roles?.taskChampionFirst, userIds: champions?.first ?? [] },
-                        { roleId: guildConfig.roles?.taskChampionSecond, userIds: champions?.second ?? [] },
-                        { roleId: guildConfig.roles?.taskChampionThird, userIds: champions?.third ?? [] },
+                        { roleId: guildConfig?.roles?.taskChampionFirst, userIds: champions?.first ?? [] },
+                        { roleId: guildConfig?.roles?.taskChampionSecond, userIds: champions?.second ?? [] },
+                        { roleId: guildConfig?.roles?.taskChampionThird, userIds: champions?.third ?? [] },
                     ];
 
                     for (const target of removalTargets) {
@@ -632,7 +615,7 @@ const taskroles: Command = {
 
             const roleUpdates: GuildRoles = {};
             for (const definition of championDefinitions) {
-                const configuredId = guildConfig.roles?.[definition.key];
+                const configuredId = guildConfig?.roles?.[definition.key];
                 let role = configuredId ? (guild.roles.cache.get(configuredId) ?? null) : null;
 
                 if (!role) {
@@ -713,9 +696,9 @@ const taskroles: Command = {
             }
 
             const championRoleIds = {
-                first: roleUpdates.taskChampionFirst ?? guildConfig.roles?.taskChampionFirst,
-                second: roleUpdates.taskChampionSecond ?? guildConfig.roles?.taskChampionSecond,
-                third: roleUpdates.taskChampionThird ?? guildConfig.roles?.taskChampionThird,
+                first: roleUpdates.taskChampionFirst ?? guildConfig?.roles?.taskChampionFirst,
+                second: roleUpdates.taskChampionSecond ?? guildConfig?.roles?.taskChampionSecond,
+                third: roleUpdates.taskChampionThird ?? guildConfig?.roles?.taskChampionThird,
             };
 
             if (!championEnabled) {

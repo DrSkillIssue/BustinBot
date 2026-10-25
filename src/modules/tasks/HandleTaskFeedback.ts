@@ -1,9 +1,8 @@
-import { ButtonInteraction } from "discord.js";
-import type { TaskFeedbackOutcome } from "../../models/TaskFeedback.js";
-import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
+import { ButtonInteraction, MessageFlags } from "discord.js";
+import type { TaskService } from "./TaskService.js";
 
-export async function handleTaskFeedback(interaction: ButtonInteraction, repo: ITaskRepository) {
-    await interaction.deferReply({ flags: 1 << 6 });
+export async function handleTaskFeedback(interaction: ButtonInteraction, tasks: TaskService) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
         const customId = interaction.customId;
@@ -51,16 +50,32 @@ export async function handleTaskFeedback(interaction: ButtonInteraction, repo: I
             return;
         }
 
-        const outcome = await repo.recordFeedback({ taskId, eventId, userId: interaction.user.id, vote: direction });
-        const replies: Record<TaskFeedbackOutcome, string> = {
-            added: "Thanks for your feedback!",
-            changed: "Feedback updated!",
-            unchanged: `You already gave this task a ${direction === "up" ? "👍" : "👎"}.`,
-            taskNotFound: "Task not found.",
-        };
-        await interaction.editReply({ content: replies[outcome] });
+        const userId = interaction.user.id;
+        const task = await tasks.repository.getTaskById(taskId);
+
+        if (!task) {
+            await interaction.editReply({ content: "Task not found." });
+            return;
+        }
+
+        const previous = await tasks.repository.voteOnTaskOnce({ taskId, eventId, userId, vote: direction });
+        let message: string;
+
+        if (!previous) {
+            // First time vote
+            await tasks.incrementWeight(taskId, direction === "up" ? +1 : -1);
+            message = "Thanks for your feedback!";
+        } else if (previous === direction) {
+            // Same vote again
+            message = `You already gave this task a ${direction === "up" ? "👍" : "👎"}.`;
+        } else {
+            // Changed vote
+            await tasks.incrementWeight(taskId, direction === "up" ? +2 : -2);
+            message = "Feedback updated!";
+        }
+        await interaction.editReply({ content: message });
     } catch (err) {
-        console.error("[TaskFeedback] Failed to record feedback:", err);
-        await interaction.editReply({ content: "Couldn't record your feedback. Please try again." });
+        console.error("[TaskFeedback] File error:", err);
+        await interaction.editReply({ content: "Error reading task data." });
     }
 }

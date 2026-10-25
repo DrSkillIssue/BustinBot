@@ -55,7 +55,7 @@ const newtask: Command = {
         if (!category) return;
         const type = interaction.options.getString("type", true);
         const skill = interaction.options.getString("skill") ?? "";
-        const nextId = nextTaskId(await services.repos.taskRepo.getAllTasks(), category);
+        const nextId = nextTaskId(await services.tasks.getAllTasks(), category);
 
         const modal = new ModalBuilder()
             .setCustomId(`${NEW_TASK_MODAL}${category}|${type}|${skill}`)

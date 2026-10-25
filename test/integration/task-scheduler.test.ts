@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import cron from "node-cron";
-import { ChannelType } from "discord-api-types/v10";
+import { ChannelType, RESTJSONErrorCodes } from "discord-api-types/v10";
 import { beforeEach, describe, expect, storePollableTasks, test, vi } from "../fixtures.js";
 import { firestoreUnavailable } from "../firestoreEmulator.js";
 import { DiscordError, IDS, AS, chatInputInteraction, subcommand } from "../discord/payloads.js";
@@ -167,7 +167,8 @@ describe("the task channel", () => {
 
         expect(await configuredChannel(discord.client, services, "taskChannel")).toBeNull();
         expect(warn).toHaveBeenCalledWith(
-            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+            `[Channels] Discord refused the taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
     });
 });
@@ -212,7 +213,7 @@ describe("/tasktoggle schedule", () => {
 
 describe("/tasktoggle leaderboard", () => {
     test("switches periodic leaderboard automation off and back on", async ({ discord, interact, services }) => {
-        await services.guilds.updateToggle(IDS.guild, "toggles.taskLeaderboard", true, IDS.user);
+        await services.guilds.updateToggle(IDS.guild, "taskLeaderboard", true, IDS.user);
 
         const off = await interact(chatInputInteraction("tasktoggle", [subcommand("leaderboard")], AS.botAdmin));
         expect(discord.originalEdits(off)).toEqual([

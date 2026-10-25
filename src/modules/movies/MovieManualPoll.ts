@@ -1,4 +1,4 @@
-import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
 import type { MessageComponentInteraction } from "discord.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
@@ -51,7 +51,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
     if (!allMovies.length) {
         await interaction.followUp({
             content: "No active movies found.",
-            flags: 1 << 6,
+            flags: MessageFlags.Ephemeral,
         });
         return;
     }

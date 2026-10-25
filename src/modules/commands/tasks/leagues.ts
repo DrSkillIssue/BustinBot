@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 
@@ -15,7 +15,7 @@ const leagues: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
         if (!guildId) {
@@ -31,7 +31,7 @@ const leagues: Command = {
         const current = guildConfig?.toggles?.leaguesEnabled ?? false;
 
         const newState = !current;
-        await services.guilds.updateToggle(guildId, "toggles.leaguesEnabled", newState, userId);
+        await services.guilds.updateToggle(guildId, "leaguesEnabled", newState, userId);
 
         const status = newState ? "**enabled**" : "**disabled**";
 

@@ -3,7 +3,7 @@ import path from "path";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
-import { SubmissionStatus, type SubmissionTier, type TaskSubmission } from "../../models/TaskSubmission.js";
+import { SubmissionStatus } from "../../models/TaskSubmission.js";
 import { TaskInstructions } from "./TaskInstructions.js";
 
 const assetIconDir = path.join(import.meta.dirname, "../../../assets/icons");
@@ -148,42 +148,44 @@ export function buildTaskInfoEmbed(task: Task) {
     };
 }
 
-const TIER_LABELS: Record<SubmissionTier, string> = {
-    [SubmissionStatus.Bronze]: "🥉 Bronze",
-    [SubmissionStatus.Silver]: "🥈 Silver",
-    [SubmissionStatus.Gold]: "🥇 Gold",
+export const TIER_DISPLAY: Partial<Record<SubmissionStatus, { emoji: string; name: string }>> = {
+    [SubmissionStatus.Bronze]: { emoji: "🥉", name: "Bronze" },
+    [SubmissionStatus.Silver]: { emoji: "🥈", name: "Silver" },
+    [SubmissionStatus.Gold]: { emoji: "🥇", name: "Gold" },
 };
 
-export function getTierLabel(tier: SubmissionTier): string {
-    return TIER_LABELS[tier];
-}
-
 // Embed shown in task verification channel when a submission is received
-export function buildSubmissionEmbed(submission: TaskSubmission, event: TaskEvent, heldTier: SubmissionTier | null) {
-    const submittedAt = submission.submittedAt ?? submission.createdAt;
+export function buildSubmissionEmbed(
+    submission: any,
+    taskName: string,
+    event: TaskEvent,
+    heldStatus?: SubmissionStatus,
+) {
+    const submissionTime = new Date();
     const eventEndTime = event.endTime;
 
     const embed = new EmbedBuilder()
         .setTitle("Task Submission")
         .addFields(
             { name: "User", value: `<@${submission.userId}>`, inline: true },
-            { name: "Task", value: submission.taskName ?? `Task ${submission.taskEventId}`, inline: true },
+            { name: "Task", value: taskName, inline: true },
             { name: "Message", value: submission.notes || "No message included" },
             {
                 name: "Tier Amounts",
                 value: `🥉 **${shortenAmount(event.amounts?.bronze ?? 0)}** 🥈 **${shortenAmount(event.amounts?.silver ?? 0)}** 🥇 **${shortenAmount(event.amounts?.gold ?? 0)}**`,
             },
         )
-        .setTimestamp(submittedAt);
+        .setTimestamp();
 
-    if (heldTier) {
+    const held = heldStatus && TIER_DISPLAY[heldStatus];
+    if (held) {
         embed.addFields({
             name: "⚠️ WARNING",
-            value: `This user already holds **${getTierLabel(heldTier)}** for this task.`,
+            value: `This user already holds **${held.emoji} ${held.name}** for this task.`,
         });
     }
 
-    if (submittedAt.getTime() > eventEndTime.getTime()) {
+    if (eventEndTime && submissionTime.getTime() > eventEndTime.getTime()) {
         embed.addFields({
             name: "⚠️ WARNING",
             value: `This submission was made after the task event ended (${eventEndTime.toUTCString()}).`,
@@ -194,22 +196,18 @@ export function buildSubmissionEmbed(submission: TaskSubmission, event: TaskEven
 }
 
 // Embed sent to archive once approved/rejected
-export function buildArchiveEmbed(submission: TaskSubmission) {
+export function buildArchiveEmbed(submission: any, status: string, taskName: string, reviewedBy: string) {
     return new EmbedBuilder()
-        .setTitle(`Task Submission (${submission.status})`)
+        .setTitle(`Task Submission (${status})`)
         .addFields(
             { name: "User", value: `<@${submission.userId}>`, inline: true },
-            { name: "Task", value: submission.taskName ?? `Task ${submission.taskEventId}`, inline: true },
+            { name: "Task", value: taskName, inline: true },
             { name: "Message", value: submission.notes || "No message included" },
             ...(submission.rejectionReason ? [{ name: "Reason", value: submission.rejectionReason }] : []),
-            {
-                name: "Reviewed By",
-                value: submission.reviewedBy ? `<@${submission.reviewedBy}>` : "Unknown",
-                inline: true,
-            },
+            { name: "Reviewed By", value: `<@${reviewedBy}>`, inline: true },
             { name: "Screenshots", value: "See attached screenshots(s) below." },
         )
-        .setTimestamp(submission.reviewedAt ?? null);
+        .setTimestamp();
 }
 
 // Embed shown when a prize draw winner is announced

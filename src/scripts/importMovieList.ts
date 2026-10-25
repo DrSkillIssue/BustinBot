@@ -35,7 +35,7 @@ function makeMovieId(title: string, userId: string): string {
 
 async function importMovieList() {
     const rawData = fs.readFileSync(inputPath, "utf-8");
-    const movies = JSON.parse(rawData) as LegacyMovie[];
+    const movies: LegacyMovie[] = JSON.parse(rawData);
 
     console.log(`Found ${movies.length} movies in legacy list.`);
     const collectionRef = db.collection(`guilds/${guildId}/movies`);

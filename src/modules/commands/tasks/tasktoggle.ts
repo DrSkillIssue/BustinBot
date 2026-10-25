@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { initTaskScheduler, stopTaskScheduler } from "../../tasks/TaskScheduler.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const tasktoggle: Command = {
     name: "tasktoggle",
@@ -18,16 +17,10 @@ const tasktoggle: Command = {
             sub.setName("leaderboard").setDescription("Toggle periodic leaderboard automation on and off."),
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
         const guildService = services.guilds;
@@ -50,7 +43,7 @@ const tasktoggle: Command = {
             }
 
             try {
-                await guildService.updateToggle(guildId, "toggles.taskScheduler", newState, interaction.user.id);
+                await guildService.updateToggle(guildId, "taskScheduler", newState, interaction.user.id);
             } catch (err) {
                 if (newState) {
                     await stopTaskScheduler(guildId);
@@ -72,7 +65,7 @@ const tasktoggle: Command = {
             const currentState = guildConfig?.toggles?.taskLeaderboard ?? true;
             const newState = !currentState;
 
-            await guildService.updateToggle(guildId, "toggles.taskLeaderboard", newState, interaction.user.id);
+            await guildService.updateToggle(guildId, "taskLeaderboard", newState, interaction.user.id);
 
             await interaction.editReply({
                 content: newState

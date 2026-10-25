@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createFirestore } from "../core/database/firestore.js";
-import { newUserStats } from "../models/UserStats.js";
+import { Timestamp } from "firebase-admin/firestore";
 import "dotenv/config";
 
 const db = createFirestore();
@@ -11,7 +11,7 @@ interface LegacyStat {
     submissions: number;
 }
 
-const guildId = process.env.DISCORD_GUILD_ID;
+const guildId = process.env.DISCORD_GUILD_ID!;
 const inputPath = path.resolve(process.cwd(), "data/legacy-taskstats.json");
 
 if (!guildId) {
@@ -26,8 +26,8 @@ if (!fs.existsSync(inputPath)) {
 
 async function importLegacyStats() {
     const rawData = fs.readFileSync(inputPath, "utf-8");
-    const parsed = JSON.parse(rawData) as LegacyStat[] | { users: LegacyStat[] };
-    const users = Array.isArray(parsed) ? parsed : parsed.users;
+    const parsed = JSON.parse(rawData);
+    const users: LegacyStat[] = Array.isArray(parsed) ? parsed : parsed.users;
 
     if (!Array.isArray(users)) {
         throw new Error("Invalid JSON structure: expected an array or an object with a 'users' field.");
@@ -58,12 +58,16 @@ async function importLegacyStats() {
                 updated++;
                 console.log(`Updated ${userId}: ${submissions}`);
             } else {
-                await docRef.set({ ...newUserStats(userId, new Date()), legacyTasksCompleted: submissions });
+                await docRef.set({
+                    userId,
+                    legacyTasksCompleted: submissions,
+                    createdAt: Timestamp.now(),
+                });
                 created++;
                 console.log(`Created ${userId}: ${submissions}`);
             }
         } catch (err) {
-            console.error(`Failed for ${userId}:`, err);
+            console.error(`Failed for ${userId}:`, (err as Error).message);
             failed++;
         }
     }

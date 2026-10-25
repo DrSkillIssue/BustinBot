@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 
@@ -10,16 +10,14 @@ const faq: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
 
-    slashData: new SlashCommandBuilder()
-        .setName("faq")
-        .setDescription("Get the link to the BustinBot FAQ."),
+    slashData: new SlashCommandBuilder().setName("faq").setDescription("Get the link to the BustinBot FAQ."),
 
     async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
         if (!interaction) return;
 
         await interaction.reply({
             content: `Need help? Click here to view the BustinBot FAQ: ${FAQ_LINK}`,
-            flags: 1 << 6,
+            flags: MessageFlags.Ephemeral,
         });
     },
 };

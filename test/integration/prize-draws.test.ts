@@ -10,7 +10,7 @@ import {
 } from "../../src/modules/tasks/HandlePrizeDraw.js";
 import { runPrizeDrawJob } from "../../src/modules/tasks/TaskScheduler.js";
 import assert from "node:assert";
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, RESTJSONErrorCodes } from "discord-api-types/v10";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -256,7 +256,8 @@ describe("announcing a prize draw winner", () => {
         expect(await announcePrizeDrawWinner(discord.client, services, services.repos.prizeRepo, "draw-1")).toBe(false);
 
         expect(warn).toHaveBeenCalledWith(
-            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+            `[Channels] Discord refused the taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
         expect(discord.requests.filter((request) => request.method === "POST")).toEqual([]);
     });

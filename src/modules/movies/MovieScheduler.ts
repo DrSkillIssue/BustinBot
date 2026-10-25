@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
     StringSelectMenuInteraction,
     ModalBuilder,
@@ -8,14 +9,15 @@ import {
     Client,
     time,
     TimestampStyles,
+    MessageFlags,
 } from "discord.js";
 import cron, { type ScheduledTask } from "node-cron";
 import { DateTime } from "luxon";
 import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
 import type { Movie } from "../../models/Movie.js";
-import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
+import type { MovieEvent } from "../../models/MovieEvent.js";
 import { getPendingReminders, sendDueReminders } from "./MovieReminders.js";
-import { finishMovieNight, movieNightEndsAt } from "./MovieLifecycle.js";
+import { finishMovieNight, isPlaceholderMovie, movieNightEndsAt } from "./MovieLifecycle.js";
 import { closeActiveMoviePoll } from "./MoviePolls.js";
 import { getActiveVoiceMemberIds } from "./MovieAttendance.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
@@ -58,7 +60,7 @@ export async function sweepMovieNight(client: Client, services: ServiceContainer
     if (!event) return;
 
     await step("Sending reminders", () => sendDueReminders(client, services, event, now));
-    if (event.movie.id === UNPICKED_MOVIE_ID) return;
+    if (isPlaceholderMovie(event.movie)) return;
 
     await step("Counting attendance", () => trackAttendance(client, services, event, now));
 
@@ -138,7 +140,7 @@ export async function handleMovieNightDate(interaction: StringSelectMenuInteract
 
 export async function handleMovieNightTime(interaction: ModalSubmitInteraction, services: ServiceContainer) {
     // Defer reply immediately to avoid 3-second timeout
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { repos } = services;
     const movieRepo = repos.movieRepo;
@@ -235,18 +237,19 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const existingEvents = await movieRepo.getAllEvents();
     const activeEvents = existingEvents.filter((event) => !event.completed);
     if (activeEvents.length) {
-        await Promise.all(activeEvents.map((event) => movieRepo.completeEvent(event.id)));
+        const completedAt = new Date();
+        await Promise.all(activeEvents.map((event) => movieRepo.completeEvent(event.id, completedAt)));
         services.movieAttendance.stop();
     }
 
     // Prepare movie event record; announcement details filled after send
-    const eventId = `event-${Date.now()}`;
+    const eventId = randomUUID();
     const baseEvent = {
         id: eventId,
         createdAt: new Date(),
         startTime: utcDateTime.toJSDate(),
         movie: movie ?? {
-            id: UNPICKED_MOVIE_ID,
+            id: "TBD",
             title: "TBD",
             addedBy: interaction.user.id,
             addedAt: new Date(),

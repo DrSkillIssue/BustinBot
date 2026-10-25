@@ -18,16 +18,16 @@ import type { TaskFeedback } from "../../models/TaskFeedback.js";
 import type { TaskLeaderboard } from "../../models/TaskLeaderboard.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import type { TaskSubmission, TaskSubmissionDraft } from "../../models/TaskSubmission.js";
-import { newUserStats, type UserStats } from "../../models/UserStats.js";
+import type { UserStats } from "../../models/UserStats.js";
 
-function storedDocument(snapshot: QueryDocumentSnapshot): DocumentData {
-    return cloneDeepWith(snapshot.data(), (value) => (value instanceof Timestamp ? value.toDate() : undefined));
+function storedDocument<T extends DocumentData>(snapshot: QueryDocumentSnapshot): T {
+    return cloneDeepWith(snapshot.data(), (value) => (value instanceof Timestamp ? value.toDate() : undefined)) as T;
 }
 
 function converter<T extends DocumentData>(): FirestoreDataConverter<T> {
     return {
         toFirestore: (model) => model,
-        fromFirestore: (snapshot) => storedDocument(snapshot) as T,
+        fromFirestore: (snapshot) => storedDocument<T>(snapshot),
     };
 }
 
@@ -44,22 +44,9 @@ export const taskLeaderboardConverter = converter<TaskLeaderboard>();
 export const prizeDrawConverter = converter<PrizeDraw>();
 export const keywordConverter = converter<Keyword>();
 export const botStatsConverter = converter<BotStats>();
+export const userStatsConverter = converter<UserStats>();
 
 export const guildConverter: FirestoreDataConverter<Guild> = {
     toFirestore: (guild) => guild,
-    fromFirestore: (snapshot) => ({ ...(storedDocument(snapshot) as Omit<Guild, "id">), id: snapshot.id }),
-};
-
-interface StoredUserStats extends Partial<UserStats> {
-    userId: string;
-    createdAt?: Date;
-}
-
-export const userStatsConverter: FirestoreDataConverter<UserStats> = {
-    toFirestore: (stats) => stats,
-    fromFirestore: (snapshot) => {
-        const { createdAt, joinedAt, ...stored } = storedDocument(snapshot) as StoredUserStats;
-        const joined = joinedAt ?? createdAt ?? snapshot.createTime.toDate();
-        return { ...newUserStats(stored.userId, joined), ...stored, lastActiveAt: stored.lastActiveAt ?? joined };
-    },
+    fromFirestore: (snapshot) => ({ ...storedDocument<Omit<Guild, "id">>(snapshot), id: snapshot.id }),
 };

@@ -225,7 +225,8 @@ describe("the weekly leaderboard update", () => {
         await postPeriodicLeaderboardUpdate(discord.client, services);
 
         expect(warn).toHaveBeenCalledWith(
-            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+            `[Channels] Discord refused the taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
         expect(discord.memberRoleChanges("PUT")).toHaveLength(1);
         expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
@@ -258,12 +259,9 @@ describe("/taskboard", () => {
                     "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
             }),
         ]);
-        expect(warn).toHaveBeenCalledWith(
+        expect(warn).toHaveBeenCalledExactlyOnceWith(
             `[Channels] Discord refused the taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
             expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
-        );
-        expect(warn).toHaveBeenCalledWith(
-            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
         );
     });
 });
@@ -308,7 +306,8 @@ describe("the warning before a period ends", () => {
         await warnPendingLeaderboardFinalization(discord.client, services);
 
         expect(warn).toHaveBeenCalledWith(
-            `[Channels] The taskVerification channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+            `[Channels] Discord refused the taskVerification channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
         );
     });
 });

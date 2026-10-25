@@ -1,7 +1,7 @@
 import { describe, expect, test } from "../fixtures.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 import { IDS, buttonInteraction, PRIVATE_DEFERRAL } from "../discord/payloads.js";
-import { taskFactory, taskFeedbackFactory } from "../factories.js";
+import { taskFeedbackFactory } from "../factories.js";
 
 describe("task feedback buttons", () => {
     test("thank a member for their first vote and raise the task's weight", async ({
@@ -66,6 +66,28 @@ describe("task feedback buttons", () => {
         });
     });
 
+    test("treat a vote stored under an older id as the member's previous vote, and move it", async ({
+        discord,
+        interact,
+        services,
+        db,
+        factories,
+    }) => {
+        await factories.task.create({ id: "PVM001", weight: 51 });
+        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({
+            id: "1730000000000",
+            ...taskFeedbackFactory.build({ eventId: "week-1", vote: "up" }),
+        });
+
+        const change = await interact(buttonInteraction("task-feedback|down|PVM001|week-1"));
+
+        expect(discord.originalEdits(change)).toEqual([expect.objectContaining({ content: "Feedback updated!" })]);
+        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 49 });
+        expect((await db.collection(`guilds/${IDS.guild}/taskFeedback`).get()).docs.map((doc) => doc.id)).toEqual([
+            `PVM001_${IDS.user}`,
+        ]);
+    });
+
     test("reject a direction they don't know", async ({ discord, interact }) => {
         const click = await interact(buttonInteraction("task-feedback|sideways|PVM001|PVM001-20260105"));
 
@@ -76,29 +98,5 @@ describe("task feedback buttons", () => {
         const click = await interact(buttonInteraction("task-feedback|up|PVM404|PVM404-20260105"));
 
         expect(discord.originalEdits(click)).toEqual([expect.objectContaining({ content: "Task not found." })]);
-    });
-});
-
-describe("TaskRepository feedback", () => {
-    test("treats a vote stored under an older id as the member's previous vote and moves it", async ({
-        services,
-        db,
-    }) => {
-        await services.repos.taskRepo.createTask(taskFactory.build({ id: "PVM001", weight: 51 }));
-        await db.doc(`guilds/${IDS.guild}/taskFeedback/1730000000000`).set({
-            id: "1730000000000",
-            ...taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "up" }),
-        });
-
-        expect(
-            await services.repos.taskRepo.recordFeedback(
-                taskFeedbackFactory.build({ eventId: "week-1", userId: IDS.user, vote: "down" }),
-            ),
-        ).toBe("changed");
-
-        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ weight: 49 });
-        expect((await db.collection(`guilds/${IDS.guild}/taskFeedback`).get()).docs.map((doc) => doc.id)).toEqual([
-            `PVM001_${IDS.user}`,
-        ]);
     });
 });

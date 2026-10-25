@@ -8,18 +8,26 @@ export async function configuredChannel(
     purpose: keyof GuildChannels,
 ): Promise<GuildTextBasedChannel | null> {
     const channelId = (await services.guilds.get(services.guildId))?.channels?.[purpose];
-    const channel = channelId
-        ? await client.channels.fetch(channelId).catch((err) => {
-              console.warn(
-                  `[Channels] Discord refused the ${purpose} channel ${channelId} of guild ${services.guildId}:`,
-                  err,
-              );
-              return null;
-          })
-        : null;
+    if (!channelId) {
+        console.warn(
+            `[Channels] The ${purpose} channel (not set) of guild ${services.guildId} isn't set or can't be reached.`,
+        );
+        return null;
+    }
+
+    let channel;
+    try {
+        channel = await client.channels.fetch(channelId);
+    } catch (err) {
+        console.warn(
+            `[Channels] Discord refused the ${purpose} channel ${channelId} of guild ${services.guildId}:`,
+            err,
+        );
+        return null;
+    }
     if (!channel?.isTextBased() || channel.isDMBased()) {
         console.warn(
-            `[Channels] The ${purpose} channel ${channelId || "(not set)"} of guild ${services.guildId} isn't set or can't be reached.`,
+            `[Channels] The ${purpose} channel ${channelId} of guild ${services.guildId} isn't set or can't be reached.`,
         );
         return null;
     }

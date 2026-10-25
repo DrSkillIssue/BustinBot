@@ -27,8 +27,8 @@ import {
     AS,
     PRIVATE_DEFERRAL,
 } from "../discord/payloads.js";
-import { taskSubmissionFactory, taskEventFactory, submissionDraftFactory } from "../factories.js";
-import { SubmissionStatus, type TaskSubmission, type SubmissionTier } from "../../src/models/TaskSubmission.js";
+import { taskSubmissionFactory, submissionDraftFactory } from "../factories.js";
+import { SubmissionStatus, type TaskSubmission } from "../../src/models/TaskSubmission.js";
 import { handleDirectMessage } from "../../src/modules/tasks/TaskInteractions.js";
 import { DateTime } from "luxon";
 import { TaskCategory } from "../../src/models/Task.js";
@@ -112,7 +112,7 @@ describe("submitting a task", () => {
         services: ServiceContainer,
         payload: GatewayMessageCreateDispatchData,
     ): Promise<void> {
-        await handleDirectMessage(await discord.sendMessage(payload), discord.client, [services]);
+        await handleDirectMessage(await discord.sendMessage(payload), discord.client, services);
     }
 
     test("asks for screenshots in DMs, then posts them for review and stores the submission", async ({
@@ -180,7 +180,7 @@ describe("submitting a task", () => {
                 content: "✅ Submission for **Kill Zulrah** received with 2 screenshots and sent for review!",
             }),
         ]);
-        expect(await services.tasks.getSubmissionDraft(IDS.user)).toBeNull();
+        expect(await services.tasks.peekPendingTask(IDS.user)).toBeUndefined();
     });
 
     test("asks again when the DM has no image, and takes the screenshots sent next", async ({
@@ -189,7 +189,7 @@ describe("submitting a task", () => {
         factories,
     }) => {
         await storeRunningEvent(factories, runningEvent);
-        await services.tasks.startSubmission(IDS.user, EVENT);
+        await services.tasks.setPendingTask(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
         discord.acceptMessages(IDS.channel);
@@ -212,7 +212,7 @@ describe("submitting a task", () => {
     }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeRunningEvent(factories, runningEvent);
-        await services.tasks.startSubmission(IDS.user, EVENT);
+        await services.tasks.setPendingTask(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
         discord.refuse("POST", `/channels/${IDS.channel}/messages`, DiscordError.missingPermissions);
@@ -228,7 +228,7 @@ describe("submitting a task", () => {
         ]);
         expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toEqual([]);
         expect(warn).toHaveBeenCalledWith(
-            expect.stringMatching(/^\[TaskService\] Couldn't post submission \w+ for review:$/),
+            expect.stringMatching(/^\[TaskService\] Couldn't post submission [\w-]+ for review:$/),
             expect.objectContaining({ code: RESTJSONErrorCodes.MissingPermissions }),
         );
 
@@ -242,7 +242,7 @@ describe("submitting a task", () => {
         "takes one submission when two DMs arrive at once, removing the other's review post",
         async ({ discord, services, factories }) => {
             await storeRunningEvent(factories, runningEvent);
-            await services.tasks.startSubmission(IDS.user, EVENT);
+            await services.tasks.setPendingTask(IDS.user, EVENT);
             const screenshot = apiAttachment();
             discord.serveAttachment(screenshot);
             discord.acceptMessages(IDS.channel);
@@ -253,7 +253,7 @@ describe("submitting a task", () => {
                 await discord.sendMessage(directMessage("second", { attachments: [screenshot] })),
             ];
 
-            await Promise.all(messages.map((message) => handleDirectMessage(message, discord.client, [services])));
+            await Promise.all(messages.map((message) => handleDirectMessage(message, discord.client, services)));
 
             const replies = discord.messagesSentTo(IDS.dm).map((reply) => reply.content);
             expect(replies).toHaveLength(2);
@@ -281,7 +281,7 @@ describe("submitting a task", () => {
     }) => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         await storeRunningEvent(factories, runningEvent);
-        await services.tasks.startSubmission(IDS.user, EVENT);
+        await services.tasks.setPendingTask(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
         discord.acceptMessages(IDS.channel);
@@ -298,7 +298,7 @@ describe("submitting a task", () => {
         expect(discord.messagesSentTo(IDS.channel)).toHaveLength(2);
         expect(discord.messageDeletions(IDS.channel)).toHaveLength(2);
         expect(await services.repos.taskRepo.getSubmissionsByUser(IDS.user)).toEqual([]);
-        expect(await services.tasks.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: EVENT });
+        expect(await services.tasks.peekPendingTask(IDS.user)).toBe(EVENT);
         expect(error).toHaveBeenCalledWith("[TaskDM] Failed to store submission:", unavailable);
     });
 
@@ -310,7 +310,7 @@ describe("submitting a task", () => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storeRunningEvent(factories, runningEvent);
         await services.guilds.update(IDS.guild, { channels: { taskVerification: "" } });
-        await services.tasks.startSubmission(IDS.user, EVENT);
+        await services.tasks.setPendingTask(IDS.user, EVENT);
         discord.acceptMessages(IDS.dm);
 
         await sendDirectMessage(discord, services, directMessage("", { attachments: [apiAttachment()] }));
@@ -322,12 +322,9 @@ describe("submitting a task", () => {
             }),
         ]);
         expect(warn).toHaveBeenCalledWith(
-            expect.stringMatching(/^\[TaskService\] Couldn't post submission \w+ for review:$/),
-            expect.objectContaining({
-                message: `The task verification channel for guild ${IDS.guild} is not configured or can't be reached.`,
-            }),
+            `[Channels] The taskVerification channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
         );
-        expect(await services.tasks.getSubmissionDraft(IDS.user)).toMatchObject({ taskEventId: EVENT });
+        expect(await services.tasks.peekPendingTask(IDS.user)).toBe(EVENT);
     });
 
     test("ignores DMs from members who haven't clicked Submit", async ({ discord, services }) => {
@@ -343,7 +340,7 @@ describe("submitting a task", () => {
     }) => {
         await storeRunningEvent(factories, runningEvent);
         await storeApproval(services, factories, SubmissionStatus.Bronze);
-        await services.tasks.startSubmission(IDS.user, EVENT);
+        await services.tasks.setPendingTask(IDS.user, EVENT);
         const screenshot = apiAttachment();
         discord.serveAttachment(screenshot);
         discord.acceptMessages(IDS.channel);
@@ -431,7 +428,7 @@ describe("approving a submission", () => {
         expect(discord.messagesSentTo(dm)).toEqual([
             expect.objectContaining({
                 content: expect.stringMatching(
-                    /^✅ Your submission for \*\*Kill Zulrah\*\* has been approved for 🥈 Silver tier!\n🔥 Task streak: \*\*1\*\*/,
+                    /^✅ Your submission for \*\*Kill Zulrah\*\* has been approved for 🥈 \*\*Silver tier\*\*!\n🔥 Task streak: \*\*1\*\*/,
                 ),
             }),
         ]);
@@ -575,9 +572,34 @@ describe("approving a submission", () => {
         expect(discord.messagesSentTo(dm)).toEqual([
             expect.objectContaining({
                 content:
-                    "✅ Your submission for **Kill Zulrah** has been approved for 🥉 Bronze tier. You already hold 🥈 Silver for this task, so your tier is unchanged.",
+                    "✅ Your submission for **Kill Zulrah** has been approved for 🥉 **Bronze tier**. You already hold 🥈 **Silver tier** for this task, so your tier is unchanged.",
             }),
         ]);
+    });
+
+    test("still counts from the member's highest tier after an approval below it", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await storeRunningEvent(factories, runningEvent);
+        await storeApproval(services, factories, SubmissionStatus.Silver);
+        const below = await storePendingSubmission(factories, { id: "below" });
+        const above = await storePendingSubmission(factories, { id: "above" });
+        await acceptReviewEffects(discord, services);
+
+        await approve(discord, interact, below, "bronze");
+        await approve(discord, interact, above, "gold");
+
+        expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({
+            completionCounts: { bronze: 0, silver: 0, gold: 1 },
+        });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({
+            tasksCompletedBronze: 0,
+            tasksCompletedSilver: 0,
+            tasksCompletedGold: 1,
+        });
     });
 
     test("still completes when the member can't be DMed and the archive channel refuses the copy", async ({
@@ -619,7 +641,7 @@ describe("approving a submission", () => {
         services,
         factories,
     }) => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
         await storeRunningEvent(factories, runningEvent);
         const submission = await storePendingSubmission(factories);
         // Registered first, so it answers before the route that serves the post
@@ -634,8 +656,8 @@ describe("approving a submission", () => {
         expect(await services.repos.taskRepo.getTaskEventById(EVENT)).toMatchObject({
             completionCounts: { bronze: 0, silver: 1, gold: 0 },
         });
-        expect(warn).toHaveBeenCalledWith(
-            `[TaskService] Failed to redraw task event ${EVENT}:`,
+        expect(error).toHaveBeenCalledWith(
+            `[UpdateTaskCounter] Failed to update task embed for event ${EVENT}:`,
             expect.objectContaining({ code: RESTJSONErrorCodes.UnknownMessage }),
         );
     });
@@ -978,24 +1000,6 @@ describe("/testtaskapproval", () => {
     });
 });
 
-describe("TaskRepository submissions", () => {
-    test("finds the highest tier a member holds for a task", async ({ services }) => {
-        const eventId = "week-1";
-        await services.repos.taskRepo.createSubmission(
-            taskSubmissionFactory.build({ id: "silver", taskEventId: eventId, status: SubmissionStatus.Silver }),
-        );
-        await services.repos.taskRepo.createSubmission(
-            taskSubmissionFactory.build({ id: "bronze", taskEventId: eventId, status: SubmissionStatus.Bronze }),
-        );
-        await services.repos.taskRepo.createSubmission(
-            taskSubmissionFactory.build({ id: "rejected", taskEventId: eventId, status: SubmissionStatus.Rejected }),
-        );
-
-        expect(await services.repos.taskRepo.getHeldTier(IDS.user, eventId)).toBe(SubmissionStatus.Silver);
-        expect(await services.repos.taskRepo.getHeldTier(otherUser, eventId)).toBeNull();
-    });
-});
-
 describe("TaskRepository submission drafts", () => {
     test("keeps one draft per member, the latest replacing the one before", async ({ services }) => {
         await services.repos.taskRepo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-1" }));
@@ -1008,59 +1012,4 @@ describe("TaskRepository submission drafts", () => {
         );
         expect(await services.repos.taskRepo.getSubmissionDraft(otherUser)).toBeNull();
     });
-
-    test("refuses a submission for another task than the draft is for", async ({ services }) => {
-        await services.repos.taskRepo.saveSubmissionDraft(submissionDraftFactory.build({ taskEventId: "week-2" }));
-
-        expect(await services.repos.taskRepo.submitDraft(taskSubmissionFactory.build({ taskEventId: "week-1" }))).toBe(
-            false,
-        );
-        expect(await services.repos.taskRepo.getSubmissionDraft(IDS.user)).not.toBeNull();
-    });
-});
-
-describe("TaskRepository reviews", () => {
-    const approve = (submissionId: string, decision: SubmissionTier) => ({
-        submissionId,
-        reviewedBy: reviewer,
-        decision,
-    });
-
-    test("reviews a submission once", async ({ services }) => {
-        const event = taskEventFactory.build();
-        await services.repos.taskRepo.createTaskEvent(event);
-        await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
-        await services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Bronze));
-
-        expect(await services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Gold))).toMatchObject({
-            result: "alreadyReviewed",
-            submission: { status: "bronze" },
-        });
-        expect(await services.repos.taskRepo.reviewSubmission(approve("missing", SubmissionStatus.Gold))).toEqual({
-            result: "notFound",
-        });
-        expect(await services.repos.taskRepo.getTaskEventById(event.id)).toMatchObject({
-            completionCounts: { bronze: 1, silver: 0, gold: 0 },
-        });
-    });
-
-    test(
-        "counts one tier for a member when two of their submissions are approved at the same moment",
-        async ({ services }) => {
-            const event = taskEventFactory.build();
-            await services.repos.taskRepo.createTaskEvent(event);
-            await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "a" }));
-            await services.repos.taskRepo.createSubmission(taskSubmissionFactory.build({ id: "b" }));
-
-            await Promise.all([
-                services.repos.taskRepo.reviewSubmission(approve("a", SubmissionStatus.Bronze)),
-                services.repos.taskRepo.reviewSubmission(approve("b", SubmissionStatus.Silver)),
-            ]);
-
-            expect(await services.repos.taskRepo.getTaskEventById(event.id)).toMatchObject({
-                completionCounts: { bronze: 0, silver: 1, gold: 0 },
-            });
-        },
-        CONCURRENT_TRANSACTION_TIMEOUT_MS,
-    );
 });

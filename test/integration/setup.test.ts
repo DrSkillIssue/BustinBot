@@ -226,7 +226,7 @@ describe("/setup choices", () => {
         const confirmElsewhere = await discord.sendInteraction(
             buttonInteraction("setup_confirm", undefined, { guild_id: IDS.otherGuild }),
         );
-        await routeInteraction(confirmElsewhere, discord.client, commands, otherGuild);
+        await routeInteraction(confirmElsewhere, commands, otherGuild);
 
         expect(discord.callbacks(confirmElsewhere)).toEqual([
             expect.objectContaining({
@@ -400,7 +400,7 @@ describe("GuildService", () => {
         );
         await guilds.get(guildId);
 
-        await guilds.updateToggle(guildId, "toggles.taskScheduler", true, admin);
+        await guilds.updateToggle(guildId, "taskScheduler", true, admin);
 
         const expected = {
             toggles: { taskScheduler: true, leaguesEnabled: true, taskLeaderboard: false },

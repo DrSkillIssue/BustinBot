@@ -225,7 +225,7 @@ export const test = base
     .extend("commands", { scope: "file" }, () => loadCommands(COMMANDS_DIR))
     .extend("interact", ({ discord, services, commands }): Interact => async (payload) => {
         const interaction = await discord.sendInteraction(payload);
-        await routeInteraction(interaction, discord.client, commands, services);
+        await routeInteraction(interaction, commands, services);
         return interaction;
     })
     .extend("voice", ({ discord, services }) => async (state: GatewayVoiceStateUpdateDispatchData): Promise<void> => {

@@ -65,42 +65,53 @@ export async function startBot(
     }
 
     const inProgress = new Set<Promise<void>>();
-    const track = (work: Promise<void>) => {
-        inProgress.add(work);
-        void work.finally(() => inProgress.delete(work));
+    const track = (work: () => Promise<void>) => {
+        const running = work();
+        inProgress.add(running);
+        void running.finally(() => inProgress.delete(running));
     };
 
     // Register message handler
-    const onMessageCreate = (message: Message) => track(handleMessageEvent(message));
-    const handleMessageEvent = async (message: Message) => {
-        try {
-            if (message.channel.type === ChannelType.DM) {
-                // A DM belongs to no guild, so every guild the bot is in is asked whether it expects one
-                await handleDirectMessage(
-                    message,
-                    client,
-                    client.guilds.cache.map((guild) => getServices(guild.id)),
-                );
-            } else if (message.guildId) {
-                const services = getServices(message.guildId);
-                await handleMessage(message, commands, services);
+    const onMessageCreate = (message: Message) =>
+        track(async () => {
+            try {
+                if (message.channel.type === ChannelType.DM) {
+                    let services: ServiceContainer | undefined;
+
+                    for (const existingServices of servicesByGuild.values()) {
+                        if (await existingServices.tasks.hasPendingTask(message.author.id)) {
+                            services = existingServices;
+                            break;
+                        }
+                    }
+
+                    if (!services) {
+                        // Fall back to the guild the DM originated from (if tracked) or the primary guild.
+                        const fallbackGuild = message.guildId ?? primaryGuildId;
+                        services = getServices(fallbackGuild);
+                    }
+
+                    await handleDirectMessage(message, client, services);
+                } else if (message.guildId) {
+                    const services = getServices(message.guildId);
+                    await handleMessage(message, commands, services);
+                }
+            } catch (error) {
+                console.error("Error handling message:", error);
             }
-        } catch (error) {
-            console.error("Error handling message:", error);
-        }
-    };
+        });
     client.on("messageCreate", onMessageCreate);
 
     // Register interaction handler
-    const onInteractionCreate = (interaction: Interaction) => track(handleInteractionEvent(interaction));
-    const handleInteractionEvent = async (interaction: Interaction) => {
-        try {
-            const guildId = interaction.guildId ?? primaryGuildId;
-            await routeInteraction(interaction, client, commands, getServices(guildId));
-        } catch (error) {
-            console.error("Error handling interaction:", error);
-        }
-    };
+    const onInteractionCreate = (interaction: Interaction) =>
+        track(async () => {
+            try {
+                const guildId = interaction.guildId ?? primaryGuildId;
+                await routeInteraction(interaction, commands, getServices(guildId));
+            } catch (error) {
+                console.error("Error handling interaction:", error);
+            }
+        });
     client.on("interactionCreate", onInteractionCreate);
 
     const onVoiceStateUpdate = (oldState: VoiceState, newState: VoiceState) => {

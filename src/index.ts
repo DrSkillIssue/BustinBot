@@ -5,6 +5,7 @@ import { loadCommands } from "./core/services/CommandService.js";
 import { createFirestore } from "./core/database/firestore.js";
 import { startBot } from "./bot.js";
 import { clientOptions } from "./clientOptions.js";
+import { tmdbApiKey } from "./modules/movies/MovieService.js";
 const isDryRun = process.argv.includes("--dryrun") || process.argv.includes("--dry-run");
 
 // Load environment variables (only for global secrets)
@@ -12,29 +13,27 @@ config();
 
 const commandsDir = path.join(import.meta.dirname, "modules", "commands");
 const isDevMode = process.env.BOT_MODE === "dev";
+const botToken = isDevMode
+    ? process.env.DISCORD_TOKEN_DEV
+    : (process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV);
 
 function resolveCommandSync(): { token: string; clientId: string } | null {
     const enableSync = process.env.ENABLE_GUILD_COMMAND_SYNC === "true" || isDevMode;
     if (!enableSync) return null;
 
-    const token = isDevMode
-        ? process.env.DISCORD_TOKEN_DEV
-        : (process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV);
     const clientId = isDevMode
         ? process.env.DISCORD_CLIENT_ID_DEV
         : (process.env.DISCORD_CLIENT_ID ?? process.env.DISCORD_CLIENT_ID_DEV);
 
-    if (!token || !clientId) {
+    if (!botToken || !clientId) {
         console.warn("[SlashCommands] Skipping guild sync; missing token or client ID env vars.");
         return null;
     }
-    return { token, clientId };
+    return { token: botToken, clientId };
 }
 
 async function main(): Promise<void> {
-    if (!process.env.TMDB_API_KEY) {
-        throw new Error("TMDB_API_KEY is not set in your environment variables.");
-    }
+    tmdbApiKey();
 
     if (isDryRun) {
         console.log("Loading commands...");
@@ -45,10 +44,7 @@ async function main(): Promise<void> {
     }
 
     // Login to Discord with the appropriate bot token
-    const loginToken = isDevMode
-        ? process.env.DISCORD_TOKEN_DEV
-        : (process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV);
-    if (!loginToken) {
+    if (!botToken) {
         throw new Error("No Discord bot token available. Check DISCORD_TOKEN_LIVE / DISCORD_TOKEN_DEV.");
     }
 
@@ -78,7 +74,7 @@ async function main(): Promise<void> {
         });
     }
 
-    await client.login(loginToken);
+    await client.login(botToken);
 }
 
 main().catch((err) => {

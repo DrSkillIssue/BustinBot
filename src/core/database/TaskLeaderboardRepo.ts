@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import type { TaskLeaderboard, TaskLeaderboardId } from "../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardId, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import type { ITaskLeaderboardRepository } from "./interfaces/ITaskLeaderboardRepo.js";
 import { taskLeaderboardConverter } from "./converters.js";
 
@@ -24,21 +24,20 @@ export class TaskLeaderboardRepository
         await this.collection.doc(id).update(data);
     }
 
-    async incrementPoints(id: TaskLeaderboardId, userId: string, amount: number): Promise<void> {
-        await this.collection.doc(id).update({
-            [`points.${userId}`]: FieldValue.increment(amount),
-            updatedAt: new Date().toISOString(),
-        });
-    }
-
-    async incrementTierCount(
+    async incrementPoints(
         id: TaskLeaderboardId,
         userId: string,
-        tier: "bronze" | "silver" | "gold",
         amount: number,
+        tierCounts: Partial<TaskTierCounts> = {},
     ): Promise<void> {
         await this.collection.doc(id).update({
-            [`tierCounts.${userId}.${tier}`]: FieldValue.increment(amount),
+            [`points.${userId}`]: FieldValue.increment(amount),
+            ...Object.fromEntries(
+                Object.entries(tierCounts).map(([tier, count]) => [
+                    `tierCounts.${userId}.${tier}`,
+                    FieldValue.increment(count),
+                ]),
+            ),
             updatedAt: new Date().toISOString(),
         });
     }

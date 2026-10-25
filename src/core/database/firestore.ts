@@ -3,7 +3,6 @@ import { getFirestore, type Firestore, type Settings } from "firebase-admin/fire
 import fs from "fs";
 import path from "path";
 
-// Optional model fields are often undefined (e.g. TMDb metadata), which Firestore otherwise rejects on write
 export const FIRESTORE_SETTINGS: Settings = { ignoreUndefinedProperties: true };
 
 function loadServiceAccount(): ServiceAccount | undefined {
@@ -59,7 +58,6 @@ export function createFirestore(): Firestore {
         const app = initializeApp({
             credential: cert(serviceAccount),
         });
-        // settings() may only be called once, before the instance is first used
         const db = getFirestore(app);
         db.settings(FIRESTORE_SETTINGS);
         return db;

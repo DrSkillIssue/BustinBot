@@ -1,4 +1,4 @@
-import type { ModalSubmitInteraction } from "discord.js";
+import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
 import { Skill, TaskCategory, TaskType, type Task } from "../../models/Task.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { AMOUNTS_ERROR, nextTaskId, parseAmounts } from "./TaskForm.js";
@@ -6,9 +6,7 @@ import { AMOUNTS_ERROR, nextTaskId, parseAmounts } from "./TaskForm.js";
 export const NEW_TASK_MODAL = "new_task_modal|";
 
 export async function handleNewTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
-    await interaction.deferReply({ flags: 1 << 6 });
-
-    const repo = services.repos.taskRepo;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const [rawCategory, rawType, rawSkill] = interaction.customId.slice(NEW_TASK_MODAL.length).split("|");
     const category = Object.values(TaskCategory).find((value) => value === rawCategory);
@@ -25,7 +23,8 @@ export async function handleNewTaskModal(interaction: ModalSubmitInteraction, se
         return;
     }
 
-    const id = interaction.fields.getTextInputValue("id").trim() || nextTaskId(await repo.getAllTasks(), category);
+    const id =
+        interaction.fields.getTextInputValue("id").trim() || nextTaskId(await services.tasks.getAllTasks(), category);
     if (!id) {
         await interaction.editReply({
             content: `There are no ${category} tasks to number from yet, so an ID is needed. Nothing was saved.`,
@@ -43,7 +42,7 @@ export async function handleNewTaskModal(interaction: ModalSubmitInteraction, se
         ...amounts,
         weight: 50,
     };
-    if (!(await repo.addTask(task))) {
+    if (!(await services.tasks.addTask(task))) {
         await interaction.editReply({ content: `Task **${id}** already exists. Nothing was saved.` });
         return;
     }

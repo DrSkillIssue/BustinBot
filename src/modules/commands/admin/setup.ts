@@ -5,10 +5,11 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ChannelType,
+    MessageFlags,
 } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { channelLabel } from "../../../core/services/SetupService.js";
+import { channelLabel } from "../../../utils/TextUtils.js";
 
 const setup: Command = {
     name: "setup",
@@ -23,7 +24,7 @@ const setup: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
         const guild = await interaction.client.guilds.fetch(guildId);

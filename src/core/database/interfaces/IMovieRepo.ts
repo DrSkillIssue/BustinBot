@@ -14,7 +14,7 @@ export interface IMovieRepository {
     clearPolls(): Promise<void>;
 
     createMovieEvent(event: MovieEvent): Promise<void>;
-    completeEvent(eventId: string, changes?: Partial<MovieEvent>): Promise<MovieEvent | null>;
+    completeEvent(eventId: string, completedAt: Date, movie?: Movie): Promise<boolean>;
     claimReminders(eventId: string, labels: string[]): Promise<string[]>;
     getActiveEvent(): Promise<MovieEvent | null>;
     getLatestEvent(): Promise<MovieEvent | null>;

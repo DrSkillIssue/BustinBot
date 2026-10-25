@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, time, TimestampStyles } from "discord.js";
+import { SlashCommandBuilder, time, TimestampStyles, MessageFlags } from "discord.js";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
 const suppress: Command = {
     name: "suppress",
@@ -22,22 +21,12 @@ const suppress: Command = {
                 .setMaxValue(1440),
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
-        if (!guildId) {
-            await interaction.editReply({ content: "This command can only be used in a server." });
-            return;
-        }
 
         const minutes = interaction.options.getInteger("minutes", true);
         const until = DateTime.now().plus({ minutes }).toJSDate();

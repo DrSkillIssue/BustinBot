@@ -8,7 +8,6 @@ import {
     taskSubmissionFactory,
     submissionDraftFactory,
     taskFactory,
-    taskFeedbackFactory,
 } from "../factories.js";
 import { IDS } from "../discord/payloads.js";
 import { TaskRepository } from "../../src/core/database/TaskRepo.js";
@@ -63,23 +62,24 @@ describe("TaskRepository dates", () => {
     });
 });
 
-describe("TaskRepository kept tasks", () => {
+describe("TaskService kept tasks", () => {
     test("are read once, so a change written straight to Firestore isn't picked up", async ({ services, db }) => {
-        const tasks = services.repos.taskRepo;
+        const tasks = services.tasks;
         await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Zulrah" }));
-        await tasks.getTaskSearch();
+        await tasks.searchTasks("zulrah", 25);
 
         await db.doc(`guilds/${IDS.guild}/tasks/PVM001`).update({ taskName: "Kill {amount} Vorkath" });
 
         expect(await tasks.getAllTasks()).toEqual([expect.objectContaining({ taskName: "Kill {amount} Zulrah" })]);
-        expect((await tasks.getTaskSearch()).search("vorkath")).toEqual([]);
+        expect(await tasks.searchTasks("vorkath", 25)).toEqual([]);
     });
 
     test("follow the bot's own writes, matching a fresh read of what is stored", async ({ services, db }) => {
-        const tasks = services.repos.taskRepo;
+        const tasks = services.tasks;
         const stored = () => new TaskRepository(db, IDS.guild).getAllTasks();
+        const found = async (query: string) => (await tasks.searchTasks(query, 25)).map((task) => task.id);
         await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Zulrah", weight: 50 }));
-        await tasks.getTaskSearch();
+        await tasks.searchTasks("zulrah", 25);
 
         await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Vorkath", weight: 50 }));
         await tasks.createTask(taskFactory.build({ id: "PVM002", taskName: "Kill {amount} Zuk" }));
@@ -88,21 +88,16 @@ describe("TaskRepository kept tasks", () => {
         await tasks.seedTasks([taskFactory.build({ id: "PVM003", taskName: "Kill {amount} Nex" })]);
         await tasks.addTask(taskFactory.build({ id: "PVM004", taskName: "Kill {amount} Araxxor" }));
         expect(await tasks.addTask(taskFactory.build({ id: "PVM002", taskName: "Kill {amount} Hespori" }))).toBe(false);
-        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM001", vote: "up" }));
-        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM001", vote: "down" }));
-        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM002", userId: "someone-else", vote: "up" }));
+        await tasks.incrementWeight("PVM001", 1);
+        await tasks.incrementWeight("PVM001", -2);
+        await tasks.incrementWeight("PVM002", 1);
 
         expect(await tasks.getAllTasks()).toEqual(await stored());
         expect(await tasks.getAllTasks()).toContainEqual(expect.objectContaining({ id: "PVM001", weight: 49 }));
-        const search = await tasks.getTaskSearch();
-        expect(search.search("vorkath").map((result) => result.item.id)).toEqual(["PVM001"]);
-        expect(search.search("zulrah")).toEqual([]);
-        expect(search.search("nex").map((result) => result.item.id)).toEqual(["PVM003"]);
-        expect(search.search("araxxor").map((result) => result.item.id)).toEqual(["PVM004"]);
-        expect(search.search("hespori")).toEqual([]);
-
-        await tasks.deleteAllTasks();
-        expect(await tasks.getAllTasks()).toEqual(await stored());
-        expect((await tasks.getTaskSearch()).search("vorkath")).toEqual([]);
+        expect(await found("vorkath")).toEqual(["PVM001"]);
+        expect(await found("zulrah")).toEqual([]);
+        expect(await found("nex")).toEqual(["PVM003"]);
+        expect(await found("araxxor")).toEqual(["PVM004"]);
+        expect(await found("hespori")).toEqual([]);
     });
 });

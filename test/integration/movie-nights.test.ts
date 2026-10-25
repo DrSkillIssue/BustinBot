@@ -1,4 +1,4 @@
-import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../src/models/MovieEvent.js";
+import type { MovieEvent } from "../../src/models/MovieEvent.js";
 import assert from "node:assert";
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { DateTime } from "luxon";
@@ -11,6 +11,7 @@ import {
     AS,
     DiscordError,
     IDS,
+    NAMES,
     apiMessage,
     apiRole,
     apiUser,
@@ -197,7 +198,7 @@ describe("scheduling a movie night", () => {
             `A poll is currently running in <#${pollChannel}>`,
         );
         expect(await services.repos.movieRepo.getActiveEvent()).toMatchObject({
-            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
+            movie: { id: "TBD", title: "TBD" },
         });
     });
 
@@ -334,7 +335,7 @@ describe("the movie night sweep", () => {
         });
         await storeNight(factories, {
             startTime: now.plus({ hours: 3 }).toJSDate(),
-            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
+            movie: { id: "TBD", title: "TBD" },
         });
         discord.serveMessage(apiMessage({ id: poll.messageId }));
         discord.acceptMessageEdits(IDS.channel);
@@ -489,6 +490,34 @@ describe("/endmovie", () => {
             expect.objectContaining({ content: "No active movie event found to end." }),
         ]);
     });
+
+    test("ends a night whose movie was never picked, keeping its placeholder", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const night = await storeNight(factories, { movie: { id: "TBD", title: "TBD" } });
+        discord.acceptMessages(IDS.channel);
+
+        const command = await interact(chatInputInteraction("endmovie", [], AS.movieAdmin));
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({
+                content: "The movie night has ended, but no selected movie was found to archive.",
+            }),
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+        expect(await services.repos.movieRepo.getLatestEvent()).toEqual({
+            ...night,
+            completed: true,
+            completedAt: expect.any(Date),
+        });
+        expect(warn).toHaveBeenCalledWith(
+            `[MovieLifecycle] Movie night ended by ${NAMES.username}, but no selected movie record could be resolved for event ${night.id}.`,
+        );
+    });
 });
 
 describe("/closemoviepoll", () => {
@@ -627,7 +656,7 @@ describe("/currentmovie", () => {
         const host = apiUser({ id: SnowflakeUtil.generate().toString(), username: "host" });
         discord.serveUser(host);
         const night = await factories.movieEvent.create({
-            movie: { id: UNPICKED_MOVIE_ID, title: "TBD" },
+            movie: { id: "TBD", title: "TBD" },
             hostedBy: host.id,
         });
         const start = night.startTime;
@@ -678,18 +707,17 @@ describe("MovieRepository events", () => {
         await services.repos.movieRepo.createMovieEvent(event);
         const completedAt = new Date("2026-01-03T12:00:00.000Z");
 
-        expect(
-            await services.repos.movieRepo.completeEvent(event.id, {
-                completedAt,
-                movie: movieFactory.build({ watched: true }),
-            }),
-        ).toMatchObject({
+        const movie = movieFactory.build({ watched: true });
+
+        expect(await services.repos.movieRepo.completeEvent(event.id, completedAt, movie)).toBe(true);
+        expect(await services.repos.movieRepo.getLatestEvent()).toEqual({
+            ...event,
             completed: true,
             completedAt,
-            movie: { watched: true },
+            movie,
         });
-        expect(await services.repos.movieRepo.completeEvent(event.id)).toBeNull();
-        expect(await services.repos.movieRepo.completeEvent("missing")).toBeNull();
+        expect(await services.repos.movieRepo.completeEvent(event.id, new Date())).toBe(false);
+        expect(await services.repos.movieRepo.completeEvent("missing", new Date())).toBe(false);
         expect(await services.repos.movieRepo.getActiveEvent()).toBeNull();
     });
 
@@ -700,8 +728,8 @@ describe("MovieRepository events", () => {
             await services.repos.movieRepo.createMovieEvent(event);
 
             const completed = await Promise.all([
-                services.repos.movieRepo.completeEvent(event.id),
-                services.repos.movieRepo.completeEvent(event.id),
+                services.repos.movieRepo.completeEvent(event.id, new Date()),
+                services.repos.movieRepo.completeEvent(event.id, new Date()),
             ]);
 
             expect(completed.filter(Boolean)).toHaveLength(1);

@@ -85,7 +85,7 @@ export async function handleMoviePickChooseModalSubmit(
     services: ServiceContainer,
     interaction: ModalSubmitInteraction,
 ) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const movieRepo = services.repos.movieRepo;
 
@@ -157,7 +157,7 @@ export async function handleRandomPollCountSelect(
 ) {
     const selectedValue = interaction.values[0];
     if (!selectedValue) {
-        await interaction.reply({ content: "No movie count selected.", flags: 1 << 6 });
+        await interaction.reply({ content: "No movie count selected.", flags: MessageFlags.Ephemeral });
         return;
     }
 
@@ -166,7 +166,7 @@ export async function handleRandomPollCountSelect(
 }
 
 export async function handleConfirmRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const embed = interaction.message.embeds[0];
     const channel = interaction.channel;
@@ -252,7 +252,7 @@ export async function handleRerollRandomMovie(services: ServiceContainer, intera
 }
 
 export async function handleMoviePollVote(services: ServiceContainer, interaction: ButtonInteraction) {
-    await interaction.deferReply({ flags: 1 << 6 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const movieRepo = services.repos.movieRepo;
 

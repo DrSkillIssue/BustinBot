@@ -1,4 +1,4 @@
-import type { Client, Interaction } from "discord.js";
+import type { Interaction } from "discord.js";
 import type { Command } from "../../models/Command.js";
 import type { ServiceContainer } from "../services/ServiceContainer.js";
 import { handleInteraction } from "./onInteraction.js";
@@ -7,11 +7,10 @@ import { handleTaskInteraction } from "../../modules/tasks/TaskInteractionHandle
 
 export async function routeInteraction(
     interaction: Interaction,
-    client: Client,
     commands: Map<string, Command>,
     services: ServiceContainer,
 ): Promise<void> {
     await handleInteraction(interaction, commands, services);
     await handleMovieInteraction(interaction, services);
-    await handleTaskInteraction(interaction, client, services);
+    await handleTaskInteraction(interaction, services);
 }

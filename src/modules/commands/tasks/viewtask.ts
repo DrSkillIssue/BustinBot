@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -26,19 +26,17 @@ const viewtask: Command = {
     }) {
         if (!interaction) return;
 
-        await interaction.deferReply({ flags: 1 << 6 });
-
-        const taskRepo = services.repos.taskRepo;
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const query = interaction.options.getString("search", true);
-        const tasks = await taskRepo.getAllTasks();
+        const tasks = await services.tasks.getAllTasks();
         if (!tasks.length) {
             await interaction.editReply("No tasks were found in the database.");
             return;
         }
 
         const search = query.trim();
-        const bestMatch = search ? (await taskRepo.getTaskSearch()).search(search, { limit: 1 })[0]?.item : undefined;
+        const [bestMatch] = search ? await services.tasks.searchTasks(search, 1) : [];
         if (!bestMatch) {
             await interaction.editReply(`No task found matching \`${query}\`.`);
             return;

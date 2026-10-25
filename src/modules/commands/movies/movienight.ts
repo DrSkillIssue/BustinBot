@@ -3,6 +3,7 @@ import {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ChatInputCommandInteraction,
+    MessageFlags,
 } from "discord.js";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
@@ -48,7 +49,7 @@ const movienight: Command = {
         await interaction.reply({
             content: "📆 Choose a date for the next movie night:",
             components: [row],
-            flags: 1 << 6,
+            flags: MessageFlags.Ephemeral,
         });
     },
 };

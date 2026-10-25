@@ -1,4 +1,4 @@
-import type { Interaction } from "discord.js";
+import { MessageFlags, type Interaction } from "discord.js";
 import {
     handleMoviePickChooseModalSubmit,
     handleConfirmRandomMovie,
@@ -76,7 +76,7 @@ export async function handleMovieInteraction(interaction: Interaction, services:
             if (!selections || missing.length) {
                 await interaction.reply({
                     content: `Please select: ${missing.join(", ")} before confirming.`,
-                    flags: 1 << 6,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
@@ -123,7 +123,7 @@ export async function handleMovieInteraction(interaction: Interaction, services:
         const userId = interaction.user.id;
         const channelId = interaction.values[0];
         if (!channelId) {
-            await interaction.reply({ content: "No channel selected.", flags: 1 << 6 });
+            await interaction.reply({ content: "No channel selected.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -145,7 +145,7 @@ export async function handleMovieInteraction(interaction: Interaction, services:
         const userId = interaction.user.id;
         const roleId = interaction.values[0];
         if (!roleId) {
-            await interaction.reply({ content: "No role selected.", flags: 1 << 6 });
+            await interaction.reply({ content: "No role selected.", flags: MessageFlags.Ephemeral });
             return;
         }
 

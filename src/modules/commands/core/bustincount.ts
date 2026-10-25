@@ -1,7 +1,7 @@
 import { appendBustinEmote } from "../../../utils/EmoteHelper.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { SlashCommandBuilder } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 
 const bustincount: Command = {
     name: "bustincount",
@@ -19,7 +19,7 @@ const bustincount: Command = {
         const guild = message?.guild ?? interaction?.guild ?? null;
         const response = appendBustinEmote(baseResponse, guild);
 
-        if (interaction) await interaction.reply({ content: response, flags: 1 << 6 });
+        if (interaction) await interaction.reply({ content: response, flags: MessageFlags.Ephemeral });
         else if (message) await message.reply(response);
     },
 };
