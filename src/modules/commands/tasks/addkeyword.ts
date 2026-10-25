@@ -21,14 +21,7 @@ const addkeyword: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
-        const repo = services.repos?.keywordRepo;
-        if (!repo) {
-            await interaction.reply({
-                content: "Keyword repository unavailable.",
-                flags: 1 << 6,
-            });
-            return;
-        }
+        const repo = services.repos.keywordRepo;
 
         const word = interaction.options.getString("word", true).trim();
         const existing = await repo.getKeywordById(

@@ -21,7 +21,7 @@ const suppress: Command = {
                 .setMaxValue(1440)
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction || !services) return;
 
         const guildId = interaction.guildId;

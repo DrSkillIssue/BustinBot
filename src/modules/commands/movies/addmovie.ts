@@ -41,10 +41,6 @@ const addmovie: Command = {
         if (!guildConfig) return;
 
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const guild = interaction.guild!;
         const member = interaction.member as GuildMember;

@@ -72,7 +72,23 @@ export function createTaskServiceHarness(overrides: PartialRepo = {}) {
 
   const services = {
     guildId: 'guild-1',
-    repos: { taskRepo: repo },
+    repos: {
+      taskRepo: repo,
+      userRepo: {
+        getUserById: vi.fn().mockResolvedValue(null),
+        getAllUsers: vi.fn().mockResolvedValue([]),
+        incrementStat: vi.fn().mockResolvedValue(undefined),
+        updateTierStat: vi.fn().mockResolvedValue(undefined),
+        updateUser: vi.fn().mockResolvedValue(undefined),
+      },
+      taskLeaderboardRepo: {
+        getLeaderboard: vi.fn().mockResolvedValue(null),
+        createLeaderboard: vi.fn().mockResolvedValue(undefined),
+        updateLeaderboard: vi.fn().mockResolvedValue(undefined),
+        incrementPoints: vi.fn().mockResolvedValue(undefined),
+        incrementTierCount: vi.fn().mockResolvedValue(undefined),
+      },
+    },
     tasks: service,
     // plain object mock is fine; no need to fake the private field
     taskEvents: {

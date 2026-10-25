@@ -27,10 +27,6 @@ const cancelmovie: Command = {
         }
 
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const guildConfig = await services.guilds.get(guild.id);
         const client = interaction.client;

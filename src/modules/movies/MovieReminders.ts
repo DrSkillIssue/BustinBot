@@ -23,10 +23,6 @@ export function getPendingReminders(movieStart: DateTime, now: DateTime = DateTi
 
 export async function restoreMovieReminders(services: ServiceContainer, client: Client) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieReminders] Movie repository not found in services.");
-        return;
-    }
 
     const latestEvent = await movieRepo.getActiveEvent();
     if (!latestEvent?.startTime) {
@@ -46,10 +42,6 @@ export async function restoreMovieReminders(services: ServiceContainer, client: 
 
 export async function scheduleMovieReminders(services: ServiceContainer, movieStart: DateTime, client: Client) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieReminders] Movie repository not found in services.");
-        return;
-    }
 
     const reminders = getPendingReminders(movieStart);
     const guildId = services.guildId;

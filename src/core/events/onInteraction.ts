@@ -183,14 +183,10 @@ export async function handleInteraction(
 
         try {
             const userRepo = services.repos.userRepo;
-            if (userRepo) {
-                try {
-                    await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
-                } catch (err) {
-                    console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
-                }
-            } else {
-                console.warn("[Stats] UserRepo unavailable; skipping commandsRun increment.");
+            try {
+                await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
+            } catch (err) {
+                console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
             }
             await command.execute({ interaction, services });
         } catch (error) {

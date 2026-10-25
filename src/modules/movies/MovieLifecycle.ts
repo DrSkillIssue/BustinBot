@@ -63,7 +63,6 @@ async function resolveEventToFinish(
     targetEventId?: string
 ): Promise<MovieEvent | null> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return null;
 
     if (typeof movieRepo.getAllEvents !== 'function') {
         return movieRepo.getActiveEvent();
@@ -129,10 +128,6 @@ export async function finishMovieNight(
     targetEventId?: string
 ): Promise<{ success: boolean; message: string; finishedMovie?: Movie }> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error('[MovieLifecycle] Movie repository not found.');
-        return { success: false, message: 'Internal error: repository missing.' };
-    }
 
     try {
         clearScheduledMovieAutoEnd(services.guildId);
@@ -215,10 +210,6 @@ export async function finishMovieNight(
 
 export async function scheduleMovieAutoEnd(services: ServiceContainer, startTimeISO: string, runtimeMinutes: number, client: Client) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieLifecycle] Movie repository not found; cannot shcedule auto-end.");
-        return;
-    }
 
     const startDateTime = DateTime.fromISO(startTimeISO);
     const latestEvent = await movieRepo.getActiveEvent();

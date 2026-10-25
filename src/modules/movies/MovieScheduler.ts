@@ -53,10 +53,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     const { repos } = services;
     const movieRepo = repos.movieRepo;
-    if (!movieRepo) {
-        console.error("[MovieScheduler] No movie repository found in services.");
-        return interaction.editReply({ content: "Internal error: missing movie repository." });
-    }
 
     const guildConfig = await services.guilds.requireConfig(interaction);
     if (!guildConfig) return;

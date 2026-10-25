@@ -27,10 +27,6 @@ export async function resolveGuildContext(client: Client, services: ServiceConta
 
 export async function pickRandomMovie(services: ServiceContainer): Promise<Movie | null> {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error('[MovieLocalSelector] Movie repository not found in ServiceContainer.');
-        return null;
-    }
 
     try {
         let movies = await movieRepo.getAllMovies();

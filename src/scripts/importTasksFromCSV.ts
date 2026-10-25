@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse/sync";
-import { db } from "../core/database/firestore.js";
+import { createFirestore } from "../core/database/firestore.js";
 import { Timestamp } from "firebase-admin/firestore";
 import "dotenv/config";
 
@@ -33,6 +33,7 @@ function normalizeKey(key: string): string {
 }
 
 export async function importTasksFromCsv(guildId: string, filePath: string) {
+  const db = createFirestore();
   const csvData = fs.readFileSync(filePath, "utf-8");
   const records = parse<CsvRow>(csvData, {
     columns: (header) => header.map(normalizeKey),

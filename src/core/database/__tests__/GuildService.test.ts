@@ -1,44 +1,20 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
-
-// 👇 Must come before imports that use Firestore
-vi.mock("../../database/firestore", () => ({
-  db: {
-    collection: vi.fn(() => ({
-      doc: vi.fn(() => ({
-        set: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn().mockResolvedValue(undefined),
-        get: vi.fn().mockResolvedValue({ exists: true, data: () => ({}) }),
-      })),
-      get: vi.fn().mockResolvedValue({ docs: [] }),
-    })),
-  },
-}));
-
-// Mock the repo itself
-vi.mock("../GuildRepo", () => {
-  const getGuild = vi.fn();
-  const updateGuild = vi.fn();
-  const updateToggle = vi.fn();
-  const getAllGuilds = vi.fn();
-
-  return {
-    GuildRepository: vi.fn().mockImplementation(function () {
-      return {
-        getGuild,
-        updateGuild,
-        updateToggle,
-        getAllGuilds,
-      };
-    }),
-  };
-});
-
-import { GuildRepository } from "../GuildRepo.js";
+import { describe, it, beforeEach, expect, vi, type Mocked } from "vitest";
 import { GuildService } from "../../services/GuildService.js";
+import type { IGuildRepository } from "../interfaces/IGuildRepo.js";
 import type { Guild } from "../../../models/Guild.js";
 
+function createGuildRepo(): Mocked<IGuildRepository> {
+  return {
+    getGuild: vi.fn(),
+    initGuild: vi.fn(),
+    updateGuild: vi.fn(),
+    updateToggle: vi.fn(),
+    getAllGuilds: vi.fn(),
+  };
+}
+
 describe("GuildService", () => {
-  let repo: any;
+  let repo: Mocked<IGuildRepository>;
   let service: GuildService;
 
   const baseGuild: Guild = {
@@ -59,12 +35,10 @@ describe("GuildService", () => {
     },
     setupComplete: { core: true, movie: true, task: true },
     updatedBy: "tester",
-    updatedAt: new Date() as any,
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    repo = new GuildRepository();
+    repo = createGuildRepo();
     service = new GuildService(repo);
   });
 

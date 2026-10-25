@@ -1,48 +1,22 @@
-import { db } from "./firestore.js";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { IUserRepository } from "./interfaces/IUserRepo.js";
-import type { UserStats } from "../../models/UserStats.js";
+import { newUserStats, type UserStats } from "../../models/UserStats.js";
+import { userStatsConverter } from "./converters.js";
 
 export class UserRepository extends GuildScopedRepository<UserStats> implements IUserRepository {
-    constructor(guildId: string) {
-        super(guildId, 'userStats');
-    }
-
-    private createDefaultUserStats(userId: string): UserStats {
-        return {
-            userId,
-            joinedAt: new Date(),
-            lastActiveAt: new Date(),
-            commandsRun: 0,
-            moviesAdded: 0,
-            moviesWatched: 0,
-            moviesAttended: 0,
-            moviePollsVoted: 0,
-            tasksCompletedBronze: 0,
-            tasksCompletedSilver: 0,
-            tasksCompletedGold: 0,
-            taskStreak: 0,
-            longestTaskStreak: 0,
-            taskPollsVoted: 0,
-            taskPrizesWon: 0,
-            taskChampionFirsts: 0,
-            taskChampionSeconds: 0,
-            taskChampionThirds: 0,
-            legacyTasksCompleted: 0,
-            totalXP: 0,
-            leaderboardRank: 0,
-        };
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'userStats', userStatsConverter);
     }
 
     async getAllUsers(): Promise<UserStats[]> {
         const snapshot = await this.collection.get();
-        return snapshot.docs.map((doc) => doc.data() as UserStats);
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async getUserById(userId: string): Promise<UserStats | null> {
         const doc = await this.collection.doc(userId).get();
-        return doc.exists ? (doc.data() as UserStats) : null;
+        return doc.data() ?? null;
     }
 
     async createUser(user: UserStats): Promise<void> {
@@ -59,7 +33,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
 
     async clearAllUsers(): Promise<void> {
         const snapshot = await this.collection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
@@ -73,7 +47,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         const doc = await docRef.get();
 
         if (!doc.exists) {
-            const newStats = this.createDefaultUserStats(userId);
+            const newStats = newUserStats(userId, new Date());
             (newStats as any)[field] = amount;
             await docRef.set(newStats);
             return;
@@ -95,7 +69,7 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         const doc = await docRef.get();
 
         if (!doc.exists) {
-            const newStats = this.createDefaultUserStats(userId);
+            const newStats = newUserStats(userId, new Date());
             (newStats as any)[toField] = 1;
             await docRef.set(newStats);
             return;

@@ -32,10 +32,6 @@ const setstreak: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const userRepo = services.repos.userRepo;
-        if (!userRepo) {
-            await interaction.editReply("User repository not available.");
-            return;
-        }
 
         const targetUser = interaction.options.getUser("user", true);
         const streakValue = interaction.options.getInteger("streak", true);

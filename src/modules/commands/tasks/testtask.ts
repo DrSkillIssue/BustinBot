@@ -18,7 +18,7 @@ const testtask: Command = {
         .setName('testtask')
         .setDescription('Post a fake task event for testing.'),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         const filePath = path.resolve(process.cwd(), 'data/tasks.json');
@@ -62,9 +62,7 @@ const testtask: Command = {
         const { embeds, components } = buildTaskEventEmbed(event);
 
         await channel.send({ embeds, components });
-        if (services?.taskEvents) {
-            await services.taskEvents.storeTaskEvent(event);
-        }
+        await services.taskEvents.storeTaskEvent(event);
         await interaction.reply({ content: 'Test task event posted!', flags: 1 << 6 });
     },
 };

@@ -1,24 +1,24 @@
-import { db } from "./firestore.js";
+import type { Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { IMovieRepository } from "./interfaces/IMovieRepo.js";
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
 import type { MovieEvent } from "../../models/MovieEvent.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
+import { movieConverter, movieEventConverter, moviePollConverter } from "./converters.js";
 
 export class MovieRepository extends GuildScopedRepository<Movie> implements IMovieRepository {
-    constructor(guildId: string) {
-        super(guildId, 'movies');
+    constructor(db: Firestore, guildId: string) {
+        super(db, guildId, 'movies', movieConverter);
     }
 
     async getAllMovies(): Promise<Movie[]> {
         const snapshot = await this.collection.get();
-        return snapshot.docs.map((doc) => doc.data() as Movie);
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async getMovieById(id: string): Promise<Movie | null> {
         const doc = await this.collection.doc(id).get();
-        return doc.exists ? (doc.data() as Movie): null;
+        return doc.data() ?? null;
     }
 
     async upsertMovie(movie: Movie): Promise<void> {
@@ -30,7 +30,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     private get pollsCollection() {
-        return db.collection(`guilds/${this.guildId}/moviePolls`);
+        return this.guildCollection('moviePolls', moviePollConverter);
     }
 
     async createPoll(poll: MoviePoll): Promise<void> {
@@ -40,32 +40,11 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     async getActivePoll(): Promise<MoviePoll | null> {
         const snapshot = await this.pollsCollection.where('isActive', '==', true).get();
 
-        if (snapshot.empty) return null;
-
         const polls = snapshot.docs
-            .map((doc) => {
-                const raw = doc.data() as MoviePoll & Record<string, unknown>;
-                const data = normaliseFirestoreDates(raw);
-                const createdAt = data.createdAt instanceof Date ? data.createdAt : new Date(0);
-                const endsAt = data.endsAt instanceof Date ? data.endsAt : null;
-                return {
-                    ...data,
-                    id: doc.id,
-                    createdAt,
-                    endsAt: endsAt ?? createdAt,
-                };
-            })
+            .map((doc) => doc.data())
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-        const activePoll = polls[0];
-        if (!activePoll) return null;
-
-        if (!activePoll.endsAt) {
-            console.warn('[MovieRepository] Active poll is missing endsAt. Using createdAt as fallback.');
-            activePoll.endsAt = activePoll.createdAt;
-        }
-
-        return activePoll;
+        return polls[0] ?? null;
     }
 
     async closePoll(pollId: string): Promise<void> {
@@ -75,13 +54,13 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
 
     async clearPolls(): Promise<void> {
         const snapshot = await this.pollsCollection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
     private get eventsCollection() {
-        return db.collection(`guilds/${this.guildId}/movieEvents`);
+        return this.guildCollection('movieEvents', movieEventConverter);
     }
 
     async createMovieEvent(event: MovieEvent): Promise<void> {
@@ -100,12 +79,8 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         if (snapshot.empty) return null;
 
         const events = snapshot.docs
-            .map(doc => normaliseFirestoreDates(doc.data() as MovieEvent))
-            .sort((a, b) => {
-                const aTime = a.startTime instanceof Date ? a.startTime.getTime() : 0;
-                const bTime = b.startTime instanceof Date ? b.startTime.getTime() : 0;
-                return bTime - aTime;
-            });
+            .map((doc) => doc.data())
+            .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
 
         return events[0] ?? null;
     }
@@ -117,27 +92,27 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         .get();
 
         if (snapshot.empty) return null;
-        return normaliseFirestoreDates(snapshot.docs[0]!.data() as MovieEvent);
+        return snapshot.docs[0]?.data() ?? null;
     }
 
     async getAllEvents(): Promise<MovieEvent[]> {
         const snapshot = await this.eventsCollection.orderBy('createdAt', 'desc').get();
-        return snapshot.docs.map((doc) => normaliseFirestoreDates(doc.data() as MovieEvent));
+        return snapshot.docs.map((doc) => doc.data());
     }
 
     async clearEvents(): Promise<void> {
         const snapshot = await this.eventsCollection.get();
-        const batch = db.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
     }
 
     async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: MoviePoll; }> {
         const pollRef = this.pollsCollection.doc(pollId);
-        return db.runTransaction(async (tx) => {
+        return this.db.runTransaction(async (tx) => {
             const snap = await tx.get(pollRef);
-            if (!snap.exists) throw new Error("Poll not found.");
-            const poll = snap.data() as MoviePoll;
+            const poll = snap.data();
+            if (!poll) throw new Error("Poll not found.");
 
             poll.votes = poll.votes ?? {};
             const firstTime = !poll.votes[userId];

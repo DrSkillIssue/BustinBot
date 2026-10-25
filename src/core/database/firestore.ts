@@ -1,11 +1,8 @@
 import { initializeApp, cert, getApps, type ServiceAccount } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { config as loadEnv } from 'dotenv';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
 import { getDirname } from '../../utils/PathUtils.js';
-
-loadEnv();
 
 function loadServiceAccount(): ServiceAccount | undefined {
     const raw = process.env.FIREBASE_SERVICE_KEY;
@@ -48,16 +45,18 @@ function loadServiceAccount(): ServiceAccount | undefined {
     return undefined;
 }
 
-const serviceAccount = loadServiceAccount();
+// Connects to Firestore using FIREBASE_SERVICE_KEY. The caller is responsible for loading the environment first.
+export function createFirestore(): Firestore {
+    if (!getApps().length) {
+        const serviceAccount = loadServiceAccount();
+        if (!serviceAccount) {
+            throw new Error('FIREBASE_SERVICE_KEY is not configured and default service account file is missing.');
+        }
 
-if (!serviceAccount) {
-    throw new Error('FIREBASE_SERVICE_KEY is not configured and default service account file is missing.');
+        initializeApp({
+            credential: cert(serviceAccount),
+        });
+    }
+
+    return getFirestore();
 }
-
-if (!getApps().length) {
-    initializeApp({
-        credential: cert(serviceAccount),
-    });
-}
-
-export const db = getFirestore();

@@ -22,10 +22,6 @@ const taskstreak: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply("Task repository not available.");
-            return;
-        }
 
         const now = new Date();
         let summary: Awaited<ReturnType<typeof calculateTaskStreakSummary>>;
@@ -41,17 +37,15 @@ const taskstreak: Command = {
         let displayLongest = summary.longestStreak;
 
         const userRepo = services.repos.userRepo;
-        if (userRepo) {
-            try {
-                const raw = await userRepo.getUserById(interaction.user.id);
-                const stats: UserStats | null = raw ? normaliseFirestoreDates(raw) : null;
-                if (stats) {
-                    displayCurrent = stats.taskStreak ?? displayCurrent;
-                    displayLongest = stats.longestTaskStreak ?? displayLongest;
-                }
-            } catch (err) {
-                console.warn(`[TaskStreak] Failed to load user streak stats for ${interaction.user.id}:`, err);
+        try {
+            const raw = await userRepo.getUserById(interaction.user.id);
+            const stats: UserStats | null = raw ? normaliseFirestoreDates(raw) : null;
+            if (stats) {
+                displayCurrent = stats.taskStreak ?? displayCurrent;
+                displayLongest = stats.longestTaskStreak ?? displayLongest;
             }
+        } catch (err) {
+            console.warn(`[TaskStreak] Failed to load user streak stats for ${interaction.user.id}:`, err);
         }
 
         let deadlineLine = "No active task period right now.";

@@ -28,7 +28,7 @@ const sendas: Command = {
                 .setRequired(true)
         ) as SlashCommandBuilder,
 
-    async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services?: ServiceContainer }) {
+    async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services: ServiceContainer }) {
         if (message) {
             await message.reply('The `!sendas` command has been replaced with a slash command. Please use `/sendas` instead.');
             return;

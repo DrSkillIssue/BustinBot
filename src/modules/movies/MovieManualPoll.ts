@@ -20,13 +20,6 @@ function normalizeLabel(title: string): string {
 
 export async function showMovieManualPollMenu(services: ServiceContainer, interaction: RepliableInteraction) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        await interaction.followUp({
-            content: "Movie repository unavailable.",
-            flags: 1 << 6,
-        });
-        return;
-    }
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies())
         .map((movie) => normaliseFirestoreDates(movie))
@@ -164,7 +157,6 @@ export async function changeManualPollPage(
     delta: number
 ) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) return;
 
     const allMovies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
     if (!allMovies.length) return;

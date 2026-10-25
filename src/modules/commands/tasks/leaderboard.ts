@@ -14,7 +14,7 @@ const leaderboard: Command = {
         .setName("leaderboard")
         .setDescription("View the task leaderboards."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction || !services) return;
 
         await interaction.deferReply({ flags: 1 << 6 });

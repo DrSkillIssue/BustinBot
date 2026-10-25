@@ -98,11 +98,6 @@ export async function finaliseAttendance(services: ServiceContainer) {
     console.log(`[MovieAttendance] There were ${attendees.length} attendees for movie night.`);
 
     const userRepo = services.repos.userRepo;
-    if (!userRepo) {
-        console.error('[MovieAttendance] User repository not available in ServiceContainer.');
-        cleanupTrackingState();
-        return attendees;
-    }
 
     for (const userId of attendees) {
         try {

@@ -27,10 +27,6 @@ const removemovie: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const query = interaction.options.getString('title', true);
         const userId = interaction.user.id;

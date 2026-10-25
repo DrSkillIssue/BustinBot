@@ -136,26 +136,6 @@ describe("TaskLeaderboards placements", () => {
     });
 });
 
-describe("TaskLeaderboards initialisation", () => {
-    it("throws when user stats are unavailable", async () => {
-        const taskLeaderboardRepo = {
-            getLeaderboard: vi.fn().mockResolvedValue(null),
-            createLeaderboard: vi.fn(),
-            updateLeaderboard: vi.fn(),
-        };
-
-        const services = {
-            guildId: "guild-1",
-            guilds: { get: vi.fn().mockResolvedValue({ taskSettings: { periodEvents: 4 } }) },
-            repos: { taskLeaderboardRepo },
-        };
-
-        await expect(
-            ensureTaskLeaderboardsInitialized(services as any)
-        ).rejects.toThrow("Leaderboard initialisation failed");
-    });
-});
-
 describe("TaskLeaderboards periodic submissions", () => {
     it("keeps every category event from the fourth week in the completing period", async () => {
         const events = [

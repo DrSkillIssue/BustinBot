@@ -35,10 +35,6 @@ export async function handleTaskPollVoteInteraction(
     }
 
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) {
-        await interaction.reply({ content: "Task repository unavailable.", flags: 1 << 6 });
-        return;
-    }
 
     const poll = await taskRepo.getTaskPollById(interaction.message.id);
     if (!poll?.isActive) {
@@ -75,14 +71,10 @@ export async function handleTaskPollVoteInteraction(
 
     if (firstTime) {
         const userRepo = services.repos.userRepo;
-        if (userRepo) {
-            try {
-                await userRepo.incrementStat(interaction.user.id, "taskPollsVoted", 1);
-            } catch (err) {
-                console.warn(`[Stats] Failed to increment taskPollsVoted for ${interaction.user.username}:`, err);
-            }
-        } else {
-            console.warn("[Stats] UserRepo unavailable; skipping taskPollsVoted increment.");
+        try {
+            await userRepo.incrementStat(interaction.user.id, "taskPollsVoted", 1);
+        } catch (err) {
+            console.warn(`[Stats] Failed to increment taskPollsVoted for ${interaction.user.username}:`, err);
         }
     }
 
@@ -189,7 +181,6 @@ export async function postTaskPollForCategory(
     channelId = channelId || channel.id;
 
     const repo = services.repos.taskRepo;
-    if (!repo) return;
 
     const allTasks: Task[] = await repo.getAllTasks();
     const taskData = allTasks.filter(t => t.category === category);
@@ -294,14 +285,10 @@ export async function postTaskPollForCategory(
 
         if (firstTime) {
             const userRepo = services.repos.userRepo;
-            if (userRepo) {
-                try {
-                    await userRepo.incrementStat(userId, "taskPollsVoted", 1);
-                } catch (err) {
-                    console.warn(`[Stats] Failed to increment taskPollsVoted for ${interaction.user.username}:`, err);
-                }
-            } else {
-                console.warn("[Stats] UserRepo unavailable; skipping taskPollsVoted increment.");
+            try {
+                await userRepo.incrementStat(userId, "taskPollsVoted", 1);
+            } catch (err) {
+                console.warn(`[Stats] Failed to increment taskPollsVoted for ${interaction.user.username}:`, err);
             }
         }
 

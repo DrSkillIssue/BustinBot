@@ -57,3 +57,29 @@ export interface UserStats {
     // Cached leaderboard rank
     leaderboardRank?: number;
 }
+
+export function newUserStats(userId: string, joinedAt: Date): UserStats {
+    return {
+        userId,
+        joinedAt,
+        lastActiveAt: joinedAt,
+        commandsRun: 0,
+        moviesAdded: 0,
+        moviesWatched: 0,
+        moviesAttended: 0,
+        moviePollsVoted: 0,
+        tasksCompletedBronze: 0,
+        tasksCompletedSilver: 0,
+        tasksCompletedGold: 0,
+        taskStreak: 0,
+        longestTaskStreak: 0,
+        taskPollsVoted: 0,
+        taskPrizesWon: 0,
+        taskChampionFirsts: 0,
+        taskChampionSeconds: 0,
+        taskChampionThirds: 0,
+        legacyTasksCompleted: 0,
+        totalXP: 0,
+        leaderboardRank: 0,
+    };
+}

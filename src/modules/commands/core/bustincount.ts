@@ -12,7 +12,7 @@ const bustincount: Command = {
         .setName('bustincount')
         .setDescription('Check how many times someone made the bot feel good.'),
     async execute({ interaction, message, services }) {
-        const stats = services?.botStats.getStats();
+        const stats = services.botStats.getStats();
         const count = stats?.funStats.bustinCount ?? 0;
         const baseResponse = `The \`/bustin\` command has been used ${count} time${count !== 1 ? 's' : ''}.`;
 

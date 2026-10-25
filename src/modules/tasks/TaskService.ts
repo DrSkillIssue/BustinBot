@@ -207,14 +207,10 @@ export class TaskService {
             const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
             streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
 
-            if (services.repos.userRepo) {
-                await services.repos.userRepo.updateUser(submission.userId, {
-                    taskStreak: streakSummary.currentStreak,
-                    longestTaskStreak: streakSummary.longestStreak,
-                });
-            } else {
-                console.warn(`[TaskService] UserRepo unavailable; skipping streak stat update for ${submission.userId}.`);
-            }
+            await services.repos.userRepo.updateUser(submission.userId, {
+                taskStreak: streakSummary.currentStreak,
+                longestTaskStreak: streakSummary.longestStreak,
+            });
         } catch (err) {
             console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
         }

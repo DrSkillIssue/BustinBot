@@ -14,8 +14,8 @@ const badbot: Command = {
 
     async execute({ interaction, message, services }) {
         const emoji = '😭';
-        await services?.botStats.incrementBadBot();
-        const count = services?.botStats.getBadBotCount();
+        await services.botStats.incrementBadBot();
+        const count = services.botStats.getBadBotCount();
 
         const reply = `*BustinBot has been called a bad bot ${count} time${count !== 1 ? 's' : ''}!*`;
 

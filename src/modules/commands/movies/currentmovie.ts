@@ -21,10 +21,6 @@ const currentmovie: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         // Fetch latest scheduled movie event
         const movieEvent = await movieRepo.getActiveEvent();

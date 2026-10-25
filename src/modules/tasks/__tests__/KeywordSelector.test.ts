@@ -24,7 +24,7 @@ describe('KeywordSelector', () => {
         const keywords = Array.from({ length: 30 }, (_, i) => ({
             id: `kw-${i}`,
             word: `Word ${i}`,
-            lastUsedAt: { toMillis: () => Date.now() - i * 1000 },
+            lastUsedAt: new Date(Date.now() - i * 1000),
         }));
 
         repo.getAllKeywords.mockResolvedValue(keywords as any);

@@ -56,10 +56,6 @@ const listmovies: Command = {
 
         // Load movies from file
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const toMillis = (value: unknown): number => {
             if (!value) return 0;

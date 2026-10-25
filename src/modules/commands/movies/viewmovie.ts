@@ -26,10 +26,6 @@ const viewmovie: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
        const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const titleQuery = interaction.options.getString("title", true);
 

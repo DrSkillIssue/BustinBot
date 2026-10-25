@@ -154,7 +154,7 @@ const taskroles: Command = {
                 .setDescription("Sync task roles with server roles and grant them to eligible users.")
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction || !services) return;
 
         const guildId = interaction.guildId!;
@@ -569,10 +569,6 @@ const taskroles: Command = {
             };
 
             const userRepo = services.repos.userRepo;
-            if (!userRepo) {
-                await respond("User stats are unavailable for role initialisation.");
-                return;
-            }
 
             const updates: Partial<GuildConfig> = {};
             const updatedMilestones = current.map((milestone) => ({ ...milestone }));

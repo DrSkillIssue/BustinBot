@@ -10,10 +10,6 @@ let pollTimeout: NodeJS.Timeout | null = null;
 // Schedule auto-closure of the current active poll based on endsAt field
 export async function scheduleActivePollClosure(services: ServiceContainer, client: Client) {
     const movieRepo = services.repos.movieRepo;
-    if (!movieRepo) {
-        console.error('[MoviePollScheduler] Movie repository not found.');
-        return;
-    }
 
     const activePoll = await movieRepo.getActivePoll();
     if (!activePoll || !activePoll.isActive || !activePoll.endsAt) {

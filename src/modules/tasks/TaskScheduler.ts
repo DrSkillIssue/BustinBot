@@ -134,13 +134,7 @@ export function initTaskScheduler(
 ) {
     console.log('[TaskScheduler] Initialising default task schedule...');
 
-    const { tasks, taskEvents, keywords, repos } = services;
-
-    if (!tasks || !taskEvents || !keywords || !repos?.taskRepo || !repos?.prizeRepo) {
-        throw new Error(
-            "[TaskScheduler] Missing one or more required services (tasks, taskEvents, keywords, or repos)."
-        );
-    }
+    const { repos } = services;
 
     // Shortcuts for readability
     const taskRepo = repos.taskRepo;

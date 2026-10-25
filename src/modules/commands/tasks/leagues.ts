@@ -15,14 +15,7 @@ const leagues: Command = {
     async execute({ interaction, services }) {
         if (!interaction) return;
 
-        const repo = services.repos?.guildRepo;
-        if (!repo) {
-            await interaction.reply({
-                content: "Guild repository unavailable.",
-                flags: 1 << 6,
-            });
-            return;
-        }
+        const repo = services.repos.guildRepo;
 
         const guildId = interaction.guildId;
         if (!guildId) {

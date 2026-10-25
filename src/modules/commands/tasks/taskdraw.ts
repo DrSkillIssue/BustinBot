@@ -38,11 +38,6 @@ const taskdraw: Command = {
         const prizeRepo = services.repos.prizeRepo;
         const taskRepo = services.repos.taskRepo;
 
-        if (!prizeRepo || !taskRepo) {
-            await interaction.reply({ content: 'Required repositories are unavailable.', flags: 1 << 6 });
-            return;
-        }
-
         const action = interaction.options.getString('action', true);
         const snapshotId = interaction.options.getString('snapshot_id') ?? '';
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);

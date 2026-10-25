@@ -13,7 +13,7 @@ const bustin: Command = {
         .setDescription('Ping the bot to see if it is responsive (it makes him feel good).'),
     async execute({ message, interaction, services }) {
         const baseResponse = 'Bustin makes me feel good!';
-        await services?.botStats.incrementBustin();
+        await services.botStats.incrementBustin();
         
         const guild = message?.guild ?? interaction?.guild ?? null;
         const response = appendBustinEmote(baseResponse, guild);

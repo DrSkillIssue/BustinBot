@@ -29,11 +29,6 @@ const stats: Command = {
         const targetUser = interaction.options.getUser("user") ?? interaction.user;
         const userRepo = services.repos.userRepo;
 
-        if (!userRepo) {
-            await interaction.editReply("User repository not available.");
-            return;
-        }
-
         let stats: UserStats | null = null;
         try {
             const raw = await userRepo.getUserById(targetUser.id);

@@ -7,11 +7,7 @@ import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
 
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
-    const repo = services.repos?.taskRepo;
-    if (!repo) {
-        await interaction.reply({ content: 'Task repository unavailable.', flags: 1 << 6 });
-        return;
-    }
+    const repo = services.repos.taskRepo;
 
     const taskId = interaction.customId.replace('update_task_modal_', '');
     const task = await repo.getTaskById(taskId);

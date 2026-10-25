@@ -340,7 +340,6 @@ export async function postWeeklyLeaderboardSnapshot(
     services: ServiceContainer
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     try {
         await ensureTaskLeaderboardsInitialized(services);
@@ -385,7 +384,6 @@ export async function postFinalLeaderboardSnapshot(
     services: ServiceContainer
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     try {
         await ensureTaskLeaderboardsInitialized(services);
@@ -454,7 +452,6 @@ export async function postPeriodicLeaderboardUpdate(
     services: ServiceContainer
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
 
     if (!(await isPeriodicLeaderboardEnabled(services))) {
         return;
@@ -554,7 +551,6 @@ export async function warnPendingLeaderboardFinalization(
     services: ServiceContainer
 ): Promise<void> {
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) return;
 
     if (!(await isPeriodicLeaderboardEnabled(services))) {
         return;

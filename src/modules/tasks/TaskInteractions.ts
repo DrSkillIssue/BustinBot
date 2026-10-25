@@ -29,10 +29,6 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     }
 
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) {
-        await interaction.editReply({ content: "Task repository unavailable." });
-        return;
-    }
 
     const taskEvent = await taskRepo.getTaskEventById(taskEventId);
     if (!taskEvent) {
@@ -199,13 +195,6 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
         }
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.update({
-                content: 'Task repository unavailable.',
-                components: [],
-            });
-            return;
-        }
 
         await interaction.deferUpdate();
         await interaction.editReply({
@@ -252,22 +241,18 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             }
 
             const userRepo = services.repos.userRepo;
-            if (userRepo) {
-                const { userId } = result;
-                const prevStat = result.previousStatus ? TIER_STAT_MAP[result.previousStatus] : undefined;
-                const newStat = TIER_STAT_MAP[tier];
+            const { userId } = result;
+            const prevStat = result.previousStatus ? TIER_STAT_MAP[result.previousStatus] : undefined;
+            const newStat = TIER_STAT_MAP[tier];
 
-                try {
-                    if (prevStat && newStat) {
-                        await userRepo.updateTierStat(userId, prevStat, newStat);
-                    } else if (newStat) {
-                        await userRepo.incrementStat(userId, newStat, 1);
-                    }
-                } catch (err) {
-                    console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
+            try {
+                if (prevStat && newStat) {
+                    await userRepo.updateTierStat(userId, prevStat, newStat);
+                } else if (newStat) {
+                    await userRepo.incrementStat(userId, newStat, 1);
                 }
-            } else {
-                console.warn("[Stats] UserRepo unavailable; skipping task completion increment.");
+            } catch (err) {
+                console.warn(`[Stats] Failed to update tier stats for ${userId}:`, err);
             }
 
             const points = getTierPoints(tier);

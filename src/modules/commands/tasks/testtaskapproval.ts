@@ -36,15 +36,6 @@ const testtaskapproval: Command = {
         if (!interaction) return;
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.reply({ content: '❌ Task repository unavailable.', flags: 1 << 6 });
-            return;
-        }
-
-        if (!services.tasks) {
-            await interaction.reply({ content: '❌ Task service unavailable.', flags: 1 << 6 });
-            return;
-        }
 
         // Resolve tier
         const tierArg = interaction.options.getString('tier');

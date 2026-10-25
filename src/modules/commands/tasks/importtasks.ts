@@ -19,7 +19,7 @@ const importtasks: Command = {
             option.setName("file").setDescription("CSV file to import").setRequired(true)
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services?: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 

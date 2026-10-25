@@ -24,11 +24,7 @@ const updatetask: Command = {
         if (!interaction) return;
 
         const taskId = interaction.options.getString('id', true);
-        const repo = services.repos?.taskRepo;
-        if (!repo) {
-            await interaction.reply('Task repository unavailable.');
-            return;
-        }
+        const repo = services.repos.taskRepo;
 
         const task = await repo.getTaskById(taskId);
         if (!task) {
