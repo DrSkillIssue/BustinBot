@@ -5,8 +5,6 @@ import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { getHighestMilestone, getTotalTaskCompletions, resolveMilestones } from "../../tasks/TaskMilestones.js";
 
-type RoleType = "milestone" | "champion";
-
 const ROLE_ID_MATCH = /^(?:<@&(\d+)>|(\d{17,}))$/;
 // TODO: Confirm the neutral milestone role color preference.
 const NEUTRAL_ROLE_COLOR = 0x95a5a6;
@@ -160,7 +158,7 @@ const taskroles: Command = {
         ),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -229,7 +227,7 @@ const taskroles: Command = {
 
         if (sub === "add") {
             const roleInput = interaction.options.getString("role", true);
-            const type = interaction.options.getString("type", true) as RoleType;
+            const type = interaction.options.getString("type", true);
             const value = interaction.options.getInteger("value", true);
 
             if (type === "milestone" && value <= 0) {
@@ -494,7 +492,7 @@ const taskroles: Command = {
         }
 
         if (sub === "toggle") {
-            const type = interaction.options.getString("type", true) as RoleType;
+            const type = interaction.options.getString("type", true);
             const enabled = interaction.options.getBoolean("enabled", true);
 
             if (type === "milestone") {
@@ -516,7 +514,7 @@ const taskroles: Command = {
 
             if (!enabled) {
                 try {
-                    const leaderboard = await services.repos.taskLeaderboardRepo?.getLeaderboard("periodic");
+                    const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
                     const champions = leaderboard?.champions;
                     const removalTargets = [
                         { roleId: guildConfig.roles?.taskChampionFirst, userIds: champions?.first ?? [] },
@@ -728,7 +726,7 @@ const taskroles: Command = {
                     }
                 }
             } else {
-                const leaderboard = await services.repos.taskLeaderboardRepo?.getLeaderboard("periodic");
+                const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
                 const champions = leaderboard?.champions ?? {};
                 const championAssignments = [
                     { roleId: championRoleIds.first, userIds: champions.first ?? [] },

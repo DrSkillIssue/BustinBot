@@ -14,7 +14,7 @@ const moviesetup: Command = {
         .setDescription('Configure channels and roles for the movie module.'),
 
     async execute({ interaction, services }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

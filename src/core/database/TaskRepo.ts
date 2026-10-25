@@ -44,13 +44,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
 
     async getTaskPollById(pollId: string): Promise<TaskPoll | null> {
         const doc = await this.pollsCollection.doc(pollId).get();
-        const data = doc.data();
-        if (!data) return null;
-
-        return {
-            ...data,
-            id: doc.id,
-        };
+        return doc.data() ?? null;
     }
 
     async getActiveTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null> {
@@ -60,19 +54,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
             .limit(1)
             .get();
 
-        if (snapshot.empty) {
-            return null;
-        }
-
-        const doc = snapshot.docs[0];
-        if (!doc) return null;
-
-        const data = doc.data();
-
-        return {
-            ...data,
-            id: doc.id,
-        };
+        return snapshot.docs[0]?.data() ?? null;
     }
 
     async getLatestTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null> {
@@ -82,17 +64,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
             .limit(1)
             .get();
 
-        if (snapshot.empty) return null;
-
-        const doc = snapshot.docs[0];
-        if (!doc) return null;
-
-        const data = doc.data();
-
-        return {
-            ...data,
-            id: doc.id,
-        };
+        return snapshot.docs[0]?.data() ?? null;
     }
 
     async updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void> {
@@ -224,11 +196,9 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
             if (!submission) return { result: "notFound" };
             if (submission.status !== SubmissionStatus.Pending) return { result: "alreadyReviewed", submission };
 
-            // Retrieve any previous submission by the same user for this task
             const approved = await transaction.get(this.approvedSubmissions(submission.userId, submission.taskEventId));
             const heldTier = highestTier(approved.docs.map(doc => doc.data().status));
 
-            // Update submission details
             const reviewed: TaskSubmission = {
                 ...submission,
                 status: review.decision,
@@ -238,7 +208,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
                     ? { rejectionReason: review.rejectionReason }
                     : { prizeRolls: 1 }),
             };
-            // Persist updates
             transaction.set(submissionRef, reviewed);
 
             if (isTier(review.decision) && tierRank(review.decision) > tierRank(heldTier)) {
@@ -261,7 +230,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         const { taskId, userId, vote } = feedback;
         const taskRef = this.collection.doc(taskId);
         const voteRef = this.feedbackCollection.doc(`${taskId}_${userId}`);
-        const step = vote === "up" ? 1 : -1;
 
         return this.db.runTransaction(async (transaction) => {
             const task = await transaction.get(taskRef);
@@ -273,9 +241,9 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
                 ? []
                 : (await transaction.get(this.feedbackCollection.where("taskId", "==", taskId).where("userId", "==", userId))).docs;
             const previous = stored.data()?.vote ?? legacy[0]?.data().vote;
-            // Same vote again
             if (previous === vote) return "unchanged";
 
+            const step = vote === "up" ? 1 : -1;
             transaction.set(voteRef, { ...feedback, id: voteRef.id });
             for (const old of legacy) transaction.delete(old.ref);
             // Changing a vote undoes the old one as well as adding the new one

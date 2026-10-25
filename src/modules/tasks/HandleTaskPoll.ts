@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Client, ButtonInteraction } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Client, type ButtonInteraction, type GuildTextBasedChannel } from 'discord.js';
 import type { Task } from '../../models/Task.js';
 import type { TaskPoll } from '../../models/TaskPoll.js';
 import { TaskCategory } from '../../models/Task.js';
@@ -6,6 +6,7 @@ import { selectTasksForCategory } from './TaskSelector.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { buildTaskPollEmbed, getTaskPollIconFile } from './TaskEmbeds.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
+import { configuredChannel } from '../../utils/ChannelUtils.js';
 
 const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣'];
 const PROD_TASK_POLL_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -29,7 +30,7 @@ function buildVoteMapFromPoll(poll: Pick<TaskPoll, "options" | "votes">): Map<st
 }
 
 function buildPollMessage(poll: Omit<TaskPoll, 'id' | 'messageId'>) {
-    const category = poll.category as TaskCategory;
+    const { category } = poll;
     const embed = buildTaskPollEmbed(
         category,
         poll.options,
@@ -58,7 +59,7 @@ export async function handleTaskPollVoteInteraction(
     await interaction.deferReply({ flags: 1 << 6 });
 
     const [, categoryRaw, voteId] = interaction.customId.split('_');
-    const category = categoryRaw as TaskCategory | undefined;
+    const category = Object.values(TaskCategory).find((value) => value === categoryRaw);
     if (!category || !voteId) {
         await interaction.editReply({ content: "Invalid poll vote option." });
         return;
@@ -72,7 +73,7 @@ export async function handleTaskPollVoteInteraction(
         return;
     }
 
-    if ((poll.category as TaskCategory | undefined) !== category) {
+    if (poll.category !== category) {
         await interaction.editReply({ content: "This poll message is outdated." });
         return;
     }
@@ -112,18 +113,13 @@ export async function handleTaskPollVoteInteraction(
 }
 
 export async function postAllTaskPolls(client: Client, services: ServiceContainer) {
-    const guildId = services.guildId;
-    if (!guildId) {
-        console.warn('[TaskPoll] No guild ID available in services.');
-        return;
-    }
-    const guildConfig = await services.guilds.get(guildId);
+    const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig) {
-        console.warn(`[TaskPoll] Guild configuration missing for ${guildId}.`);
+        console.warn(`[TaskPoll] Guild configuration missing for ${services.guildId}.`);
         return;
     }
 
-    const leaguesEnabled = guildConfig?.toggles?.leaguesEnabled ?? false;
+    const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
 
     const categories: TaskCategory[] = [
         TaskCategory.PvM,
@@ -135,28 +131,18 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
         categories.push(TaskCategory.Leagues);
     }
 
-    const channelId = guildConfig.channels?.taskChannel;
-    if (!channelId) {
-        console.warn('[TaskPoll] Task channel not configured.');
-        return;
-    }
-
-    const guild = await client.guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel?.isTextBased()) {
-        console.warn('[TaskPoll] Configured task channel is not text-based.');
-        return;
-    }
+    const channel = await configuredChannel(client, services, 'taskChannel');
+    if (!channel) return;
 
     const roleId = guildConfig.roles?.taskUser;
-    const role = roleId ? guild.roles.cache.get(roleId) : null;
-    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
+    const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
     const mention = role ? `<@&${role.id}>` : '';
     if (!role) {
         console.warn(`[TaskPoll] Task user role not configured or not found.`);
     }
-    await (channel as TextChannel).send(
+    await channel.send(
         withSuppressedMentions(
             { content: `${mention} **New task polls are live!** Cast your votes for each category below:` },
             suppressMentions
@@ -164,7 +150,7 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
     );
 
     for (const category of categories) {
-        await postTaskPollForCategory(client, services, category, channel as TextChannel);
+        await postTaskPollForCategory(client, services, category, channel);
     }
 }
 
@@ -172,39 +158,10 @@ export async function postTaskPollForCategory(
     client: Client,
     services: ServiceContainer,
     category: TaskCategory,
-    channelOverride?: TextChannel
+    channelOverride?: GuildTextBasedChannel
 ) {
-    const guildId = services.guildId;
-    if (!guildId) {
-        console.warn('[TaskPoll] No guild ID available while posting category poll.');
-        return;
-    }
-
-    const guildConfig = await services.guilds.get(guildId);
-    if (!guildConfig) {
-        console.warn(`[TaskPoll] Guild configuration missing for ${guildId}.`);
-        return;
-    }
-
-    let channel = channelOverride as TextChannel | undefined;
-    let channelId = '';
-    if (!channel) {
-        channelId = guildConfig.channels?.taskChannel ?? '';
-        if (!channelId) {
-            console.warn('[TaskPoll] Task channel not configured.');
-            return;
-        }
-
-        const guild = await client.guilds.fetch(guildId);
-        const fetchedChannel = await guild.channels.fetch(channelId);
-        if (!fetchedChannel?.isTextBased()) {
-            console.warn('[TaskPoll] Configured task channel is not text-based.');
-            return;
-        }
-
-        channel = fetchedChannel as TextChannel;
-    }
-    channelId = channelId || channel.id;
+    const channel = channelOverride ?? (await configuredChannel(client, services, 'taskChannel'));
+    if (!channel) return;
 
     const repo = services.repos.taskRepo;
 
@@ -226,7 +183,7 @@ export async function postTaskPollForCategory(
         type: "task",
         category,
         options: selectedTasks,
-        channelId,
+        channelId: channel.id,
         createdAt,
         endsAt: new Date(createdAt.getTime() + getTaskPollDurationMs()),
         isActive: true,
@@ -243,7 +200,7 @@ export async function refreshTaskPollMessage(client: Client, poll: TaskPoll) {
     const channel = await client.channels.fetch(poll.channelId).catch(() => null);
     if (!channel?.isTextBased()) return;
 
-    const message = await (channel as TextChannel).messages.fetch(poll.messageId).catch(() => null);
+    const message = await channel.messages.fetch(poll.messageId).catch(() => null);
     if (!message) return;
 
     await message.edit(buildPollMessage(poll));

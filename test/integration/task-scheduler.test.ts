@@ -1,10 +1,13 @@
 import assert from "node:assert";
+import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import cron from "node-cron";
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
+import { ChannelType, ApplicationCommandOptionType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, storePollableTasks, test, vi } from "../fixtures.js";
+import { DiscordError } from "../discord/harness.js";
 import { IDS, AS, chatInputInteraction } from "../discord/payloads.js";
 import { TaskCategory } from "../../src/models/Task.js";
+import { configuredChannel } from "../../src/utils/ChannelUtils.js";
 import {
     getNextEventDate,
     getNextPollDate,
@@ -132,6 +135,38 @@ describe("the dev-mode task cycle", () => {
         expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
         expect(await services.repos.prizeRepo.getAllPrizeDraws()).toEqual([]);
         expect(discord.requests()).toEqual([]);
+    });
+});
+
+describe("the task channel", () => {
+    test("is missing when the configured channel is not a text channel", async ({ discord, services }) => {
+        const category = SnowflakeUtil.generate().toString();
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: category } });
+        discord.channel({
+            id: category,
+            type: ChannelType.GuildCategory,
+            guild_id: IDS.guild,
+            name: "Tasks",
+            position: 0,
+            permission_overwrites: [],
+        });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        expect(await configuredChannel(discord.client, services, "taskChannel")).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel ${category} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+    });
+
+    test("is reported missing when the configured channel no longer exists", async ({ discord, services }) => {
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        expect(await configuredChannel(discord.client, services, "taskChannel")).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
     });
 });
 

@@ -6,6 +6,7 @@ import {
     type APIMessageTopLevelComponent,
     type APISectionComponent,
     type APITextDisplayComponent,
+    type MessageCreateOptions,
 } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -80,7 +81,7 @@ const announce: Command = {
             return;
         }
 
-        const data = JSON.parse(fs.readFileSync(announcementsPath, "utf8"));
+        const data = JSON.parse(fs.readFileSync(announcementsPath, "utf8")) as Record<string, Announcement>;
         const currentVersion = packageVersion;
         const announcement: Announcement | undefined = data[currentVersion];
 
@@ -132,10 +133,8 @@ const announce: Command = {
             : false;
 
         // Send announcement
-        await channel.send(withSuppressedMentions({
-            flags: MessageFlags.IsComponentsV2 as MessageFlags.IsComponentsV2,
-            components,
-        }, suppressMentions));
+        const message: MessageCreateOptions = { flags: MessageFlags.IsComponentsV2, components };
+        await channel.send(withSuppressedMentions(message, suppressMentions));
 
         await interaction.editReply({
             content: `Announcement for **v${currentVersion}** posted in <#${channelId}>.`,

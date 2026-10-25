@@ -30,7 +30,7 @@ const mytask: Command = {
                     { name: 'Current Minigame/Misc Task', value: 'current_minigame' },
                     { name: 'Current Leagues Task', value: 'current_leagues' }
                 )
-        ) as SlashCommandBuilder,
+        ),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
@@ -39,6 +39,7 @@ const mytask: Command = {
         const userId = interaction.user.id;
         const taskEventChoice = interaction.options.getString('task_event');
         const taskRepo = services.repos.taskRepo;
+
 
         try {
             const now = new Date();

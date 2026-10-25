@@ -1,5 +1,6 @@
 import type { Guild as DiscordGuild } from "discord.js";
 import type { GuildService } from "./GuildService.js";
+import type { Guild } from "../../models/Guild.js";
 
 type SetupType = "core" | "movie" | "task";
 type SelectionMap = Record<string, string>;
@@ -10,7 +11,8 @@ const REQUIRED_FIELDS: Record<SetupType, string[]> = {
     task: ["taskAdmin", "taskUser", "taskChannel", "taskVerification"],
 };
 
-type PayloadBuilder = (selections: SelectionMap) => Record<string, unknown>;
+type SetupPayload = Pick<Partial<Guild>, "channels" | "roles" | "taskSettings" | "setupComplete">;
+type PayloadBuilder = (selections: SelectionMap) => SetupPayload;
 
 const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
     core: (selections) => ({
@@ -45,11 +47,7 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
             taskChannel: selections.taskChannel ?? "",
             taskVerification: selections.taskVerification ?? "",
         },
-        taskSettings: selections.taskPeriodEvents
-            ? {
-                  periodEvents: Number(selections.taskPeriodEvents),
-              }
-            : undefined,
+        ...(selections.taskPeriodEvents ? { taskSettings: { periodEvents: Number(selections.taskPeriodEvents) } } : {}),
         setupComplete: {
             task: true,
         }
@@ -96,20 +94,20 @@ export class SetupService {
         // Merge setupComplete state
         payload.setupComplete = {
             ...currentSetup,
-            ...(payload.setupComplete as Record<string, boolean>),
+            ...payload.setupComplete,
         };
 
         // Merge channels/roles to avoid overwriting other module configs
         if (payload.channels) {
             payload.channels = {
                 ...existingChannels,
-                ...(payload.channels as Record<string, string>),
+                ...payload.channels,
             };
         }
         if (payload.roles) {
             payload.roles = {
                 ...existingRoles,
-                ...(payload.roles as Record<string, string>),
+                ...payload.roles,
             };
         }
         // Persist full merged payload

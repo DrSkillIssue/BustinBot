@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime, Duration } from "luxon";
-import { describe, expect, type StoringFactories, storePollableTasks, test } from "../fixtures.js";
+import { describe, expect, type StoringFactories, storePollableTasks, test, vi } from "../fixtures.js";
 import { componentsIn } from "../discord/harness.js";
 import {
     IDS,
@@ -16,6 +16,7 @@ import { taskFactory, taskPollFactory } from "../factories.js";
 import { TaskCategory } from "../../src/models/Task.js";
 import { type TaskPoll } from "../../src/models/TaskPoll.js";
 import { postAllTaskPolls } from "../../src/modules/tasks/HandleTaskPoll.js";
+import { runTaskPollJob } from "../../src/modules/tasks/TaskScheduler.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 
@@ -62,6 +63,22 @@ describe("posting the weekly task polls", () => {
                 Duration.fromObject({ hours: 24 }).toMillis(),
             );
         }
+    });
+});
+
+describe("the scheduled task poll job", () => {
+    test("posts nothing when no task channel is configured", async ({ discord, services, factories }) => {
+        await storePollableTasks(factories);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await runTaskPollJob(discord.client, services);
+
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+
+        expect(await services.repos.taskRepo.getActiveTaskPollByCategory(TaskCategory.PvM)).toBeNull();
     });
 });
 

@@ -1,6 +1,15 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { GuildScopedRepository } from "./CoreRepo.js";
-import type { TaskLeaderboard, TaskLeaderboardId, TaskTierChange } from "../../models/TaskLeaderboard.js";
+import {
+    leaderboardEntries,
+    rankPeriodicEntries,
+    resolvePeriodicPlacements,
+    type FinalisedPeriod,
+    type TaskLeaderboard,
+    type TaskLeaderboardCompletedPeriod,
+    type TaskLeaderboardId,
+    type TaskTierChange,
+} from "../../models/TaskLeaderboard.js";
 import type { ITaskLeaderboardRepository } from "./interfaces/ITaskLeaderboardRepo.js";
 import { taskLeaderboardConverter } from "./converters.js";
 
@@ -25,16 +34,38 @@ export class TaskLeaderboardRepository extends GuildScopedRepository<TaskLeaderb
         await this.collection.doc(id).update(data);
     }
 
-    async updateLeaderboardWith<T>(
-        id: TaskLeaderboardId,
-        change: (current: TaskLeaderboard | null) => { update: Partial<TaskLeaderboard>; result: T } | null
-    ): Promise<T | null> {
-        const ref = this.collection.doc(id);
+    async endPeriod(periodIndex: number, nextLength: number): Promise<FinalisedPeriod | null> {
+        const ref = this.collection.doc("periodic");
         return this.db.runTransaction(async (transaction) => {
-            const decided = change((await transaction.get(ref)).data() ?? null);
-            if (!decided) return null;
-            transaction.update(ref, decided.update);
-            return decided.result;
+            const leaderboard = (await transaction.get(ref)).data();
+            if (!leaderboard?.period || leaderboard.period.index !== periodIndex) return null;
+
+            const now = new Date().toISOString();
+            const ranked = rankPeriodicEntries(leaderboardEntries(leaderboard.points));
+            const placements = resolvePeriodicPlacements(ranked);
+            const completed: TaskLeaderboardCompletedPeriod = {
+                index: periodIndex,
+                eventIds: leaderboard.period.eventIds,
+                endedAt: now,
+                topThree: placements.winners,
+                topTen: ranked.slice(0, 10).map(({ userId, points }) => ({ userId, points })),
+                tierCounts: leaderboard.tierCounts ?? {},
+            };
+            const pending = leaderboard.pendingPeriod;
+            transaction.update(ref, {
+                completedPeriod: completed,
+                period: {
+                    length: pending?.period.length ?? nextLength,
+                    eventIds: pending?.period.eventIds ?? [],
+                    startedAt: pending?.period.startedAt ?? now,
+                    index: periodIndex + 1,
+                },
+                points: pending?.points ?? {},
+                tierCounts: pending?.tierCounts ?? {},
+                pendingPeriod: null,
+                updatedAt: now,
+            });
+            return { completed, placements };
         });
     }
 

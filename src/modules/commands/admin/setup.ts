@@ -14,7 +14,7 @@ const setup: Command = {
         .setDescription('Configure the general bot channels (announcements, logs, archive).'),
 
     async execute({ interaction, services }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -25,7 +25,7 @@ const testtask: Command = {
         await interaction.deferReply({ flags: 1 << 6 });
 
         const filePath = path.join(import.meta.dirname, '../../../../data/tasks.json');
-        const taskData: Task[] = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const taskData = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Task[];
 
         if (!taskData.length) {
             await interaction.editReply({ content: "No tasks available." });
@@ -36,7 +36,7 @@ const testtask: Command = {
             await interaction.editReply({ content: 'Failed to retrieve a random task.' });
             return;
         }
-        const selectedAmount = randomTask.amounts?.length ? randomTask.amounts[Math.floor(Math.random() * randomTask?.amounts.length)] : undefined;
+        const selectedAmount = randomTask.amounts?.length ? randomTask.amounts[Math.floor(Math.random() * randomTask.amounts.length)] : undefined;
 
 
         // Fake task event data
@@ -62,7 +62,11 @@ const testtask: Command = {
             ? { ...baseEvent, selectedAmount }
             : baseEvent;
 
-        const channel = interaction.channel as TextChannel;
+        const channel = interaction.channel;
+        if (!channel?.isSendable()) {
+            await interaction.editReply({ content: 'Test task events can only be posted in a channel the bot can send to.' });
+            return;
+        }
         const { embeds, components } = buildTaskEventEmbed(event);
 
         await channel.send({ embeds, components });

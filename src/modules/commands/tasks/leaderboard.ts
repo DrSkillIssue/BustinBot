@@ -15,14 +15,11 @@ const leaderboard: Command = {
         .setDescription("View the task leaderboards."),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
         try {
-            const payload = await buildLeaderboardMessage(services, "lifetime", interaction.user.id, {
-                client: interaction.client,
-                guild: interaction.guild,
-            });
+            const payload = await buildLeaderboardMessage(services, "lifetime", interaction.user.id, interaction.client, interaction.guild);
             await interaction.editReply(payload);
         } catch (err) {
             await interaction.editReply("Leaderboard initialisation failed. Please use /reportbug if it continues.");

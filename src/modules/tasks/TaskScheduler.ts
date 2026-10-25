@@ -1,6 +1,7 @@
 import cron, { type Logger, type ScheduledTask } from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
-import { Client, TextChannel } from 'discord.js';
+import { Client } from 'discord.js';
+import { configuredChannel } from '../../utils/ChannelUtils.js';
 import { postAllTaskPolls } from './HandleTaskPoll.js';
 import { startAllTaskEvents } from './HandleTaskStart.js';
 import { generatePrizeDrawSnapshot, rollWinnerForSnapshot, announcePrizeDrawWinner } from './HandlePrizeDraw.js';
@@ -141,20 +142,9 @@ async function drawPrize(client: Client, services: ServiceContainer): Promise<vo
     }
 }
 
-export async function getDefaultChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
-    const guildId = services.guildId;
-    const guildConfig = guildId ? await services.guilds.get(guildId) : null;
-    const channelId = guildConfig?.channels?.taskChannel;
-    if (!guildId || !channelId) return null;
-
-    const guild = await client.guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
-    return channel?.isTextBased() ? (channel as TextChannel) : null;
-}
-
 export async function runTaskPollJob(client: Client, services: ServiceContainer): Promise<void> {
     console.log('[TaskScheduler] Running weekly task poll post...');
-    const channel = await getDefaultChannel(client, services);
+    const channel = await configuredChannel(client, services, "taskChannel");
     if (channel) {
         await postAllTaskPolls(client, services);
     }
@@ -162,7 +152,7 @@ export async function runTaskPollJob(client: Client, services: ServiceContainer)
 
 export async function runTaskStartJob(client: Client, services: ServiceContainer): Promise<void> {
     console.log('[TaskScheduler] Closing poll and starting task event...');
-    const channel = await getDefaultChannel(client, services);
+    const channel = await configuredChannel(client, services, "taskChannel");
     if (channel) {
         await startAllTaskEvents(client, services);
     }

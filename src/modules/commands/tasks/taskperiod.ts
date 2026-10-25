@@ -37,7 +37,7 @@ const taskperiod: Command = {
         ),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         const guildId = interaction.guildId!;
         const subcommand = interaction.options.getSubcommand();

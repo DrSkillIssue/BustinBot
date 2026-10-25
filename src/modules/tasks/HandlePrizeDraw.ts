@@ -4,8 +4,7 @@ import type { PrizeDraw } from '../../models/PrizeDraw.js';
 import type { TaskSubmission } from '../../models/TaskSubmission.js';
 import { SubmissionStatus } from '../../models/TaskSubmission.js';
 import { buildPrizeDrawEmbed } from './TaskEmbeds.js';
-import { Client, TextChannel } from 'discord.js';
-import { isTextChannel } from '../../utils/ChannelUtils.js';
+import type { Client } from 'discord.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
@@ -274,14 +273,13 @@ export async function announcePrizeDrawWinner(
             return null;
         })
         : null;
-    if (!fetched || !isTextChannel(fetched)) {
+    if (!fetched?.isTextBased()) {
         console.warn(`[PrizeDraw] Announcement channel not found.`);
         return false;
     }
-    const channel: TextChannel = fetched;
 
-    await channel.send(withSuppressedMentions({ ...embedData, ...(mention ? { content: mention } : {}) }, suppressMentions));
-    console.log(`[PrizeDraw] Winner embed sent to #${channel.name}`);
+    await fetched.send(withSuppressedMentions({ ...embedData, ...(mention ? { content: mention } : {}) }, suppressMentions));
+    console.log(`[PrizeDraw] Winner embed sent to #${fetched.name}`);
 
     // Send the winner a DM
     try {

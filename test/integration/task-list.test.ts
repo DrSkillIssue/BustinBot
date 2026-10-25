@@ -1,6 +1,8 @@
 import { ApplicationCommandOptionType, InteractionResponseType, MessageFlags } from "discord-api-types/v10";
 import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
 import {
+    apiMessage,
+    buttonInteraction,
     chatInputInteraction,
     AS,
     apiAttachment,
@@ -89,6 +91,25 @@ describe("/listtasks", () => {
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({ content: "No tasks were found for **Leagues**." }),
+        ]);
+    });
+
+    test("shows every category for a page button whose category it doesn't know", async ({
+        discord,
+        interact,
+        factories,
+    }) => {
+        await factories.task.create({ id: "PVM001", category: TaskCategory.PvM });
+        await factories.task.create({ id: "SKL001", category: TaskCategory.Skilling });
+
+        const press = await interact(
+            buttonInteraction("listtasks|Raids|start|0", apiMessage({ flags: MessageFlags.Ephemeral })),
+        );
+
+        expect(discord.originalEdits(press)).toEqual([
+            expect.objectContaining({
+                embeds: [expect.objectContaining({ title: "📋 Task List - All Categories" })],
+            }),
         ]);
     });
 });

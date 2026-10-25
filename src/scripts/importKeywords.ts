@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createFirestore } from '../core/database/firestore.js';
-import { Timestamp } from 'firebase-admin/firestore';
+import type { Keyword } from '../models/Keyword.js';
 import 'dotenv/config';
 
 const db = createFirestore();
@@ -14,15 +14,11 @@ if (!guildId) {
     process.exit(1);
 }
 
-function cleanUndefined(obj: Record<string, any>) {
-    return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
-}
-
 async function importKeywords(guildId: string, filePath: string) {
     const data = fs.readFileSync(filePath, 'utf-8');
-    const words = JSON.parse(data) as string[];
+    const words: unknown = JSON.parse(data);
 
-    if (!Array.isArray(words)) {
+    if (!Array.isArray(words) || !words.every((word: unknown): word is string => typeof word === 'string')) {
         throw new Error('Invalid keywords.json format: expected an array of strings');
     }
 
@@ -34,13 +30,13 @@ async function importKeywords(guildId: string, filePath: string) {
     for (const word of words) {
         const id = word.toLowerCase().replace(/\s+/g, "_").replace(/[^\w_]/g, "");
 
-        const keyword = cleanUndefined({
+        const keyword: Keyword = {
             id,
             word,
-            lastUsedAt: Timestamp.fromMillis(0),
+            lastUsedAt: new Date(0),
             timesUsed: 0,
             usageHistory: [],
-        });
+        };
 
         const docRef = colRef.doc(id);
         batch.set(docRef, keyword);

@@ -113,8 +113,5 @@ export async function removeMovieWithStats(movie: Movie, services: ServiceContai
     }
 
     await movieRepo.deleteMovie(movie.id);
-
-    if (!movie.watched) {
-        await userRepo.incrementStat(movie.addedBy, "moviesAdded", -1);
-    }
+    await userRepo.incrementStat(movie.addedBy, "moviesAdded", -1);
 }

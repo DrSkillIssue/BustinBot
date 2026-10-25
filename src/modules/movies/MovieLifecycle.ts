@@ -120,7 +120,7 @@ export async function finishMovieNight(
         const attendees = services.movieAttendance.finish(latestEvent.id, now);
         for (const userId of attendees) {
             try {
-                await services.repos.userRepo?.incrementStat(userId, "moviesAttended", 1);
+                await services.repos.userRepo.incrementStat(userId, "moviesAttended", 1);
             } catch (err) {
                 console.warn(`[MovieLifecycle] Failed to count attendance for ${userId}:`, err);
             }

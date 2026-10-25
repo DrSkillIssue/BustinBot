@@ -2,9 +2,10 @@ import type { Interaction } from "discord.js";
 import { handleMoviePickChooseModalSubmit, handleConfirmRandomMovie, handleRerollRandomMovie, handleMoviePollVote, handleManualPollInteraction, handlePickMovieButton, handleRandomPollCountSelect } from "./PickMovieInteractions.js";
 import { handleMovieNightDate, handleMovieNightTime } from "./MovieScheduler.js";
 import { showMovieManualPollMenu } from "./MovieManualPoll.js";
-import { MOVIE_LIST_BUTTON, buildMovieListPage, movieListButtonPage } from "./MovieList.js";
+import { MOVIE_LIST_BUTTON, buildMovieListPage } from "./MovieList.js";
 import { ADD_MOVIE_BUTTON, handleAddMovieButton } from "./MovieSelector.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { buttonPage } from "../../utils/Pagination.js";
 
 export async function handleMovieInteraction(
     interaction: Interaction,
@@ -59,7 +60,7 @@ export async function handleMovieInteraction(
 
         if (customId.startsWith(MOVIE_LIST_BUTTON)) {
             await interaction.deferUpdate();
-            await interaction.editReply(await buildMovieListPage(services, movieListButtonPage(customId)));
+            await interaction.editReply(await buildMovieListPage(services, buttonPage(customId)));
             return;
         }
 

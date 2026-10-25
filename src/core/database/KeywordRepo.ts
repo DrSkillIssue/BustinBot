@@ -53,9 +53,8 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
 
     async markKeywordUsed(keywordId: string, eventId: string): Promise<void> {
         const docRef = this.collection.doc(keywordId);
-        const doc = await docRef.get();
+        const data = (await docRef.get()).data();
 
-        const data = doc.data();
         if (!data) {
             console.warn(`[KeywordRepo] Keyword ${keywordId} not found`);
             return;

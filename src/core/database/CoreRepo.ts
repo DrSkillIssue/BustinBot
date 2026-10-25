@@ -30,16 +30,4 @@ export abstract class GuildScopedRepository<T extends DocumentData> {
         const doc = await this.collection.doc(id).get();
         return doc.data() ?? null;
     }
-
-    async create(id: string, data: T): Promise<void> {
-        await this.collection.doc(id).set(data);
-    }
-
-    async update(id: string, data: Partial<T>): Promise<void> {
-        await this.collection.doc(id).update(data);
-    }
-
-    async delete(id: string): Promise<void> {
-        await this.collection.doc(id).delete();
-    }
 }

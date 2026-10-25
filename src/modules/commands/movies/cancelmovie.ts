@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
-import { resolveMovieChannel } from "../../movies/MovieChannel.js";
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 const cancelmovie: Command = {
     name: 'cancelmovie',
@@ -36,8 +36,7 @@ const cancelmovie: Command = {
                 try {
                     const fetchedChannel = await client.channels.fetch(channelId);
                     if (!fetchedChannel?.isTextBased()) continue;
-                    const message = await fetchedChannel.messages.fetch(messageId);
-                    return { channel: fetchedChannel as TextChannel, message };
+                    return await fetchedChannel.messages.fetch(messageId);
                 } catch (err) {
                     if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownMessage) {
                         continue;
@@ -63,14 +62,14 @@ const cancelmovie: Command = {
 
                 if (activePoll.messageId) {
                     try {
-                        const pollMessageContext = await fetchMessageFromChannels(
+                        const pollMessage = await fetchMessageFromChannels(
                             activePoll.messageId,
                             activePoll.channelId,
                             guildConfig?.channels?.movieNight
                         );
 
-                        if (pollMessageContext) {
-                            await pollMessageContext.message.edit({
+                        if (pollMessage) {
+                            await pollMessage.edit({
                                 content: `❌ This movie poll was cancelled by <@${interaction.user.id}>.`,
                                 embeds: [],
                                 components: [],
@@ -96,14 +95,14 @@ const cancelmovie: Command = {
 
                 if (latestEvent.announcementMessageId) {
                     try {
-                        const announcementContext = await fetchMessageFromChannels(
+                        const announcement = await fetchMessageFromChannels(
                             latestEvent.announcementMessageId,
                             latestEvent.channelId,
                             guildConfig?.channels?.movieNight
                         );
 
-                        if (announcementContext) {
-                            await announcementContext.message.edit({
+                        if (announcement) {
+                            await announcement.edit({
                                 content: cancellationMessage,
                                 embeds: [],
                                 components: [],
@@ -136,7 +135,7 @@ const cancelmovie: Command = {
                     ...rest
                 } = currentlySelected;
 
-                await movieRepo.upsertMovie(rest as typeof currentlySelected);
+                await movieRepo.upsertMovie(rest);
                 actions.push(`Unpicked movie "${currentlySelected.title}"`);
             }
         } catch (err) {
@@ -144,16 +143,10 @@ const cancelmovie: Command = {
         }
 
         if (!announcementHandled) {
-            let targetChannel: TextChannel | undefined;
-
-            if (fallbackAnnouncementChannelId) {
-                const fetched = await interaction.client.channels.fetch(fallbackAnnouncementChannelId).catch(() => null);
-                if (fetched?.isTextBased()) {
-                    targetChannel = fetched as TextChannel;
-                }
-            }
-
-            targetChannel ??= await resolveMovieChannel(interaction.client, services) ?? undefined;
+            const fetched = fallbackAnnouncementChannelId
+                ? await interaction.client.channels.fetch(fallbackAnnouncementChannelId).catch(() => null)
+                : null;
+            const targetChannel = fetched?.isSendable() ? fetched : await configuredChannel(interaction.client, services, "movieNight");
             await targetChannel?.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
         }
 

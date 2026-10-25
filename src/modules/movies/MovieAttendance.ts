@@ -29,11 +29,12 @@ export class MovieAttendance {
             : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`);
     }
 
-    voiceStateChanged(oldState: VoiceState, newState: VoiceState, at: Date = new Date()): void {
+    voiceStateChanged(oldState: VoiceState, newState: VoiceState): void {
         const channelId = this.tracking?.channelId;
         if (!channelId) return;
-        if (newState.channelId === channelId && oldState.channelId !== channelId) this.join(newState.id, at.getTime());
-        if (oldState.channelId === channelId && newState.channelId !== channelId) this.leave(newState.id, at.getTime());
+        const at = Date.now();
+        if (newState.channelId === channelId && oldState.channelId !== channelId) this.join(newState.id, at);
+        if (oldState.channelId === channelId && newState.channelId !== channelId) this.leave(newState.id, at);
     }
 
     reconcile(memberIds: string[], at: Date): void {

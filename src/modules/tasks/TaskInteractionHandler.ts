@@ -9,7 +9,8 @@ import {
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
 import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
-import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonPage } from "./TaskList.js";
+import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonCategory } from "./TaskList.js";
+import { buttonPage } from "../../utils/Pagination.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -23,9 +24,9 @@ export async function handleTaskInteraction(
         }
 
         if (interaction.customId.startsWith(TASK_LIST_BUTTON)) {
-            const { category, page } = taskListButtonPage(interaction.customId);
+            const { customId } = interaction;
             await interaction.deferUpdate();
-            await interaction.editReply(await buildTaskListPage(services, category, page));
+            await interaction.editReply(await buildTaskListPage(services, taskListButtonCategory(customId), buttonPage(customId)));
             return;
         }
 
@@ -39,10 +40,7 @@ export async function handleTaskInteraction(
             const targetView = view === "periodic" ? "periodic" : "lifetime";
             try {
                 await interaction.deferUpdate();
-                const payload = await buildLeaderboardMessage(services, targetView, interaction.user.id, {
-                    client: interaction.client,
-                    guild: interaction.guild,
-                });
+                const payload = await buildLeaderboardMessage(services, targetView, interaction.user.id, interaction.client, interaction.guild);
                 await interaction.editReply(payload);
             } catch (err) {
                 console.error("[TaskInteractions] Failed to build the leaderboard:", err);

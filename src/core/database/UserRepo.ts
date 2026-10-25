@@ -43,21 +43,11 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         field: keyof UserStats,
         amount = 1
     ): Promise<void> {
-        const docRef = this.collection.doc(userId);
-        const doc = await docRef.get();
-
-        if (!doc.exists) {
-            const newStats = newUserStats(userId, new Date());
-            (newStats as any)[field] = amount;
-            await docRef.set(newStats);
-            return;
-        }
-
         // If exists, increment the field
-        await docRef.update({
-            [field]: FieldValue.increment(amount),
-            lastActiveAt: new Date(),
-        });
+        await this.collection.doc(userId).set(
+            { userId, [field]: FieldValue.increment(amount), lastActiveAt: new Date() },
+            { merge: true },
+        );
     }
 
     async updateTierStat(

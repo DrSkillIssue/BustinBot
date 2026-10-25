@@ -6,6 +6,7 @@ import { taskFactory, taskEventFactory } from "../factories.js";
 import { TaskCategory, type Task } from "../../src/models/Task.js";
 import { type TaskPoll } from "../../src/models/TaskPoll.js";
 import { startTaskEventForCategory } from "../../src/modules/tasks/HandleTaskStart.js";
+import { runTaskStartJob } from "../../src/modules/tasks/TaskScheduler.js";
 
 const tasksFor = (category: TaskCategory, prefix: string): Task[] =>
     [1, 2, 3].map((n) =>
@@ -84,6 +85,22 @@ describe("/taskstart", () => {
         for (const category of [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc]) {
             expect(await services.repos.taskRepo.getActiveTaskPollByCategory(category)).toBeNull();
         }
+    });
+});
+
+describe("the scheduled task start job", () => {
+    test("starts nothing when no task channel is configured", async ({ discord, services, factories }) => {
+        await storeThisWeeksPolls(factories);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await runTaskStartJob(discord.client, services);
+
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+
+        expect(await services.repos.taskRepo.getLatestTaskEvent()).toBeNull();
     });
 });
 

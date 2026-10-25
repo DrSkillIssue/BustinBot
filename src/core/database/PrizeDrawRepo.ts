@@ -48,9 +48,8 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
 
     async addEntry(drawId: string, userId: string): Promise<void> {
         const docRef = this.collection.doc(drawId);
-        const snap = await docRef.get();
+        const data = (await docRef.get()).data();
 
-        const data = snap.data();
         if (!data) {
             console.warn(`[PrizeDrawRepository] Prize draw ${drawId} not found`);
             return;

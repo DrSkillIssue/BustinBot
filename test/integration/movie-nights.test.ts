@@ -258,6 +258,32 @@ describe("the movie night sweep", () => {
         );
     });
 
+    test("holds a reminder while the movie night channel can't be reached, and sends it once it can", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
+        vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());
+        await setUpMovieNight(discord, services);
+        await services.guilds.update(IDS.guild, { channels: { movieNight: "" } });
+        await storeNight(factories, { startTime: start.toJSDate() });
+        discord.acceptMessages(IDS.channel);
+
+        await sweepMovieNight(discord.client, services);
+        await services.guilds.update(IDS.guild, { channels: { movieNight: IDS.channel } });
+        vi.setSystemTime(start.minus({ minutes: 29 }).toJSDate());
+        await sweepMovieNight(discord.client, services);
+
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The movieNight channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+        expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
+            expect.stringContaining("Movie night starts in **29 minutes**"),
+        ]);
+    });
+
     test("keeps working from what is stored after a restart", async ({ discord, services, db, factories }) => {
         const start = DateTime.fromISO("2026-03-05T20:00:00Z", { zone: "utc" });
         vi.setSystemTime(start.minus({ minutes: 30 }).toJSDate());

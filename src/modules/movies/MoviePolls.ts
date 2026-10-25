@@ -1,4 +1,4 @@
-import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Message, TextChannel, Client } from "discord.js";
+import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Client, time, TimestampStyles } from "discord.js";
 import type { RepliableInteraction } from "discord.js";
 import { randomUUID } from "node:crypto";
 import type { Movie } from "../../models/Movie.js";
@@ -40,13 +40,9 @@ async function createAndSendMoviePoll(
 
     const targetChannelId = guildChannels.movieNight || interaction.channelId;
     if (!targetChannelId) return;
-    const fetchedChannel = await guild.channels.fetch(targetChannelId).catch(() => null);
-    const channel = fetchedChannel as TextChannel | null;
-    if (!channel) {
-        await interaction.reply({
-            content:
-                "Could not find the configured movie announcement channel. Please run `/moviesetup` again.", flags: 1 << 6,
-        });
+    const channel = await guild.channels.fetch(targetChannelId).catch(() => null);
+    if (!channel?.isTextBased()) {
+        await interaction.editReply("Could not find the configured movie announcement channel. Please run `/moviesetup` again.");
         return;
     }
 
@@ -114,11 +110,11 @@ async function createAndSendMoviePoll(
             await channel.send(mention);
         }
     }
-    const message = (await channel.send({
-        content: `📊 **Vote for the next movie night pick!**\nPoll ends <t:${pollCloseUnix}:R> (<t:${pollCloseUnix}:F>).`,
+    const message = await channel.send({
+        content: `📊 **Vote for the next movie night pick!**\nPoll ends ${time(pollCloseUnix, TimestampStyles.RelativeTime)} (${time(pollCloseUnix, TimestampStyles.LongDateTime)}).`,
         embeds,
         components: [row],
-    })) as Message;
+    });
 
     poll.messageId = message.id;
     poll.channelId = message.channelId;

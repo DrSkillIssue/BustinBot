@@ -641,6 +641,29 @@ describe("approving a submission", () => {
         );
     });
 
+    test("still completes when no archive channel is configured", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await storeEvent(factories);
+        const submission = await storePendingSubmission(factories);
+        await acceptReviewEffects(discord, services);
+        await services.guilds.update(IDS.guild, { channels: { botArchive: "" } });
+
+        const confirm = await approve(discord, interact, submission, "bronze");
+
+        expect(discord.originalEdits(confirm).at(-1)).toMatchObject({
+            content: "✅ Submission approved for **Bronze tier** (1 roll). It couldn't be archived; check the logs.",
+        });
+        expect(discord.messagesSentTo(ARCHIVE)).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The botArchive channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+    });
+
     test("tells the admin when another admin already reviewed it", async ({ discord, interact, factories }) => {
         const submission = await storePendingSubmission(factories, { status: SubmissionStatus.Rejected });
 

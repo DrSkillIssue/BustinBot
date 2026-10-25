@@ -16,7 +16,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
             try {
                 return JSON.parse(trimmed) as ServiceAccount;
             } catch (err) {
-                throw new Error(`Failed to parse FIREBASE_SERVICE_KEY JSON: ${(err as Error).message}`);
+                throw new Error('Failed to parse FIREBASE_SERVICE_KEY JSON', { cause: err });
             }
         }
 
@@ -28,7 +28,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
         try {
             return JSON.parse(fileContents) as ServiceAccount;
         } catch (err) {
-            throw new Error(`Failed to parse service account JSON at ${resolvedPath}: ${(err as Error).message}`);
+            throw new Error(`Failed to parse service account JSON at ${resolvedPath}`, { cause: err });
         }
     }
 
@@ -39,7 +39,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
         try {
             return JSON.parse(fileContents) as ServiceAccount;
         } catch (err) {
-            throw new Error(`Failed to parse default service account JSON: ${(err as Error).message}`);
+            throw new Error('Failed to parse default service account JSON', { cause: err });
         }
     }
 

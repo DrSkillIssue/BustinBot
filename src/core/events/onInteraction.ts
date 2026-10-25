@@ -1,25 +1,10 @@
-import { GuildMember } from 'discord.js';
-import type { APIInteractionGuildMember, ChatInputCommandInteraction, Interaction } from 'discord.js';
+import type { Interaction } from 'discord.js';
 import type { Command } from '../../models/Command.js';
 import { CommandModule, CommandRole } from '../../models/Command.js';
 import type { ServiceContainer } from '../services/ServiceContainer.js';
 import type { GuildSetupComplete } from '../../models/Guild.js';
 import { createTimezoneModal, timezoneService } from '../services/TimezoneService.js';
-
-async function resolveMemberRoles(
-    interaction: ChatInputCommandInteraction,
-    member: GuildMember | APIInteractionGuildMember
-): Promise<{ ids: string[]; names: string[] }> {
-    if (member instanceof GuildMember) {
-        return { ids: [...member.roles.cache.keys()], names: member.roles.cache.map((role) => role.name) };
-    }
-
-    const guild = interaction.guildId ? await interaction.client.guilds.fetch(interaction.guildId) : null;
-    return {
-        ids: member.roles,
-        names: member.roles.flatMap((roleId) => guild?.roles.cache.get(roleId)?.name ?? []),
-    };
-}
+import { memberRoleIds } from '../../utils/MemberUtils.js';
 
 export async function handleInteraction(
     interaction: Interaction,
@@ -34,9 +19,7 @@ export async function handleInteraction(
         }
 
         const isSetupCommand = command.name === 'setup';
-        const rawMember = interaction.member;
-
-        if (!rawMember) {
+        if (!interaction.inGuild()) {
             await interaction.reply({
                 content: 'Unable to determine your server membership. Please try again from within the guild.',
                 flags: 1 << 6,
@@ -44,7 +27,9 @@ export async function handleInteraction(
             return;
         }
 
-        const { ids: userRoleIds, names: userRoleNames } = await resolveMemberRoles(interaction, rawMember);
+        const guild = await interaction.client.guilds.fetch(interaction.guildId);
+        const userRoleIds = memberRoleIds(interaction.member);
+        const userRoleNames = userRoleIds.flatMap((roleId) => guild.roles.cache.get(roleId)?.name ?? []);
 
         if (isSetupCommand) {
             const adminRoleName = "BustinBot Admin";

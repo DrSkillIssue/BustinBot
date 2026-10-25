@@ -1,5 +1,5 @@
 import type { ModalSubmitInteraction } from "discord.js";
-import { TaskCategory, TaskType, type Task } from "../../models/Task.js";
+import { TaskType, type Task } from "../../models/Task.js";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
@@ -83,18 +83,16 @@ async function saveAndRedraw(interaction: ModalSubmitInteraction, repo: ITaskRep
         }
     }
 
-    if (task.category) {
-        const activePoll = await repo.getActiveTaskPollByCategory(task.category as TaskCategory);
-        if (activePoll?.options?.some(option => option.id === task.id)) {
-            activePoll.options = activePoll.options.map(option =>
-                option.id === task.id ? { ...option, ...task } : option
-            );
-            await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
-            try {
-                await refreshTaskPollMessage(interaction.client, activePoll);
-            } catch (err) {
-                console.error('[HandleUpdateTaskModal] Failed to refresh active task poll embed:', err);
-            }
+    const activePoll = await repo.getActiveTaskPollByCategory(task.category);
+    if (activePoll?.options.some(option => option.id === task.id)) {
+        activePoll.options = activePoll.options.map(option =>
+            option.id === task.id ? { ...option, ...task } : option
+        );
+        await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
+        try {
+            await refreshTaskPollMessage(interaction.client, activePoll);
+        } catch (err) {
+            console.error('[HandleUpdateTaskModal] Failed to refresh active task poll embed:', err);
         }
     }
 }

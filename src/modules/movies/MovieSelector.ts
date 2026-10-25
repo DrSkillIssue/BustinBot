@@ -1,28 +1,26 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChatInputCommandInteraction, GuildMember, MessageFlags, PermissionFlagsBits } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { randomUUID } from "node:crypto";
 import { createMovieEmbed, createMoviePreviewEmbeds } from "./MovieEmbeds.js";
 import { addMovieWithStats, fetchMovieDetailsById, type TMDbSearchResponse } from "./MovieService.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { memberRoleIds } from "../../utils/MemberUtils.js";
 
 export const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
 export const ADD_MOVIE_BUTTON = "addmovie|";
 
-type Member = ChatInputCommandInteraction["member"] | ButtonInteraction["member"];
-
 export async function isMovieNightAdmin(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<boolean> {
     if (interaction.guild?.ownerId === interaction.user.id) return true;
     if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
 
-    const member: Member = interaction.member;
-    const roleIds = member instanceof GuildMember ? [...member.roles.cache.keys()] : member?.roles ?? [];
+    const roleIds = memberRoleIds(interaction.member);
     const roles = (await services.guilds.get(services.guildId))?.roles ?? {};
     return [roles.admin, roles.movieAdmin].some((roleId) => !!roleId && roleIds.includes(roleId));
 }
 
 export async function checkCanAddMovie(services: ServiceContainer, interaction: ChatInputCommandInteraction | ButtonInteraction, tmdbId?: number): Promise<string | null> {
-    const movies = await services.repos.movieRepo!.getAllMovies();
+    const movies = await services.repos.movieRepo.getAllMovies();
     const active = movies.filter((movie) => !movie.watched);
 
     const own = active.filter((movie) => movie.addedBy === interaction.user.id);

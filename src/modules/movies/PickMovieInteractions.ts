@@ -1,4 +1,4 @@
-import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, Message, ButtonBuilder, ButtonStyle, EmbedBuilder, TextChannel, StringSelectMenuInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from "discord.js";
+import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from "discord.js";
 import Fuse from 'fuse.js';
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
@@ -123,7 +123,11 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
     );
     embed.setDescription(`${existingDescription}${addedByLine}`);
 
-    const channel = interaction.channel as TextChannel;
+    const channel = interaction.channel;
+    if (!channel?.isSendable()) {
+        await interaction.editReply({ content: "The selected movie can't be posted in this channel." });
+        return;
+    }
     await interaction.editReply({
         content: `**${selectedMovie.title}** has been selected and posted!`,
     });
@@ -143,9 +147,12 @@ export async function handleRandomPollCountSelect(services: ServiceContainer, in
 export async function handleConfirmRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
     await interaction.deferReply({ flags: 1 << 6 });
 
-    const message = interaction.message as Message;
-    const embed = message.embeds[0];
-    const channel = interaction.channel as TextChannel;
+    const embed = interaction.message.embeds[0];
+    const channel = interaction.channel;
+    if (!channel?.isSendable()) {
+        await interaction.editReply({ content: "The selected movie can't be posted in this channel." });
+        return;
+    }
 
     const parts = interaction.customId.split("_");
     const movieId = parts[3];
@@ -284,7 +291,7 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
         return embed;
     });
 
-    await (interaction.message as Message).edit({ embeds: updatedEmbeds });
+    await interaction.message.edit({ embeds: updatedEmbeds });
     await interaction.editReply({ content: "Thank you for your vote!" });
 }
 

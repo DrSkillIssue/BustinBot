@@ -1,29 +1,13 @@
-import { TextChannel, ButtonBuilder, ButtonStyle, ActionRowBuilder, Client, type Message } from 'discord.js';
+import { ButtonBuilder, ButtonStyle, ActionRowBuilder, Client, type Message } from 'discord.js';
 import type { SubmissionTier, TaskSubmission } from '../../models/TaskSubmission.js';
 import { isTier, tierRank } from '../../models/TaskSubmission.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
 import { buildSubmissionEmbed, buildArchiveEmbed, getTierLabel } from './TaskEmbeds.js';
-import { isTextChannel } from '../../utils/ChannelUtils.js';
+import { configuredChannel } from '../../utils/ChannelUtils.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 
 export const MAX_SCREENSHOTS = 10;
-
-async function resolveTextChannel(client: Client, channelId?: string | null): Promise<TextChannel | null> {
-    if (!channelId) return null;
-    try {
-        const channel = await client.channels.fetch(channelId);
-        return channel && isTextChannel(channel) ? channel : null;
-    } catch (err) {
-        console.warn(`[SubmissionActions] Failed to resolve channel ${channelId}:`, err);
-        return null;
-    }
-}
-
-async function resolveVerificationChannel(client: Client, services: ServiceContainer): Promise<TextChannel | null> {
-    const guildConfig = await services.guilds.get(services.guildId);
-    return resolveTextChannel(client, guildConfig?.channels?.taskVerification);
-}
 
 export interface ReviewPost {
     message: string;
@@ -37,7 +21,7 @@ export async function postToAdminChannel(
     heldTier: SubmissionTier | null,
     services: ServiceContainer
 ): Promise<ReviewPost> {
-    const channel = await resolveVerificationChannel(client, services);
+    const channel = await configuredChannel(client, services, "taskVerification");
     if (!channel) {
         throw new Error(`The task verification channel for guild ${services.guildId} is not configured or can't be reached.`);
     }
@@ -61,7 +45,9 @@ export async function postToAdminChannel(
             .setStyle(ButtonStyle.Danger)
     );
 
+    // First message: embed with info and buttons
     const details = await channel.send({ embeds: [buildSubmissionEmbed(submission, event, heldTier)], components: [buttons] });
+    // Second message: screenshots as file uploads
     if (submission.screenshotUrls.length === 0) return { message: details.id };
 
     try {
@@ -78,7 +64,7 @@ export async function postToAdminChannel(
 }
 
 export async function removeReviewPost(client: Client, submission: Pick<TaskSubmission, 'id' | 'message' | 'screenshotMessage'>, services: ServiceContainer): Promise<void> {
-    const channel = await resolveVerificationChannel(client, services);
+    const channel = await configuredChannel(client, services, "taskVerification");
     if (!channel) return;
 
     for (const messageId of [submission.message, submission.screenshotMessage]) {
@@ -110,22 +96,12 @@ export async function notifyUser(client: Client, submission: TaskSubmission, hel
 }
 
 export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<boolean> {
-    const guildConfig = await services.guilds.get(services.guildId);
-    const archiveChannelId = guildConfig?.channels?.botArchive;
-    if (!archiveChannelId) {
-        console.warn(`[SubmissionActions] Bot archive channel not configured for guild ${services.guildId}.`);
-        return false;
-    }
-
-    const archive = await resolveTextChannel(client, archiveChannelId);
-    if (!archive) {
-        console.warn(`[SubmissionActions] Unable to resolve archive channel ${archiveChannelId}.`);
-        return false;
-    }
+    const archive = await configuredChannel(client, services, "botArchive");
+    if (!archive) return false;
 
     await archive.send({ embeds: [buildArchiveEmbed(submission)] });
 
-    const verification = await resolveVerificationChannel(client, services);
+    const verification = await configuredChannel(client, services, "taskVerification");
     const screenshots = submission.screenshotMessage
         ? await verification?.messages.fetch(submission.screenshotMessage).catch(() => null)
         : null;

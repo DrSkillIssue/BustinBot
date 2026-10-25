@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Client, TextChannel } from 'discord.js';
+import type { Client, GuildTextBasedChannel } from 'discord.js';
 import { DateTime } from 'luxon';
 import { buildTaskEventEmbed } from './TaskEmbeds.js';
 import type { TaskEvent } from '../../models/TaskEvent.js';
@@ -8,21 +8,17 @@ import { TaskCategory } from '../../models/Task.js';
 import { registerPeriodicTaskEvent } from './TaskLeaderboards.js';
 import { isMentionSuppressed, withSuppressedMentions } from '../../utils/MentionUtils.js';
 import { refreshTaskPollMessage } from './HandleTaskPoll.js';
-import { isTextChannel } from '../../utils/ChannelUtils.js';
+import { configuredChannel } from '../../utils/ChannelUtils.js';
 
 function generateTaskEventId(taskId: string): string {
-    const now = new Date();
-    const yyyy = now.getUTCFullYear();
-    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(now.getUTCDate()).padStart(2, '0');
-    return `${taskId}-${yyyy}${mm}${dd}-${randomUUID().slice(0, 8)}`;
+    return `${taskId}-${DateTime.utc().toFormat('yyyyLLdd')}-${randomUUID().slice(0, 8)}`;
 }
 
 export async function refreshTaskEventMessage(client: Client, event: TaskEvent): Promise<void> {
     if (!event.messageId || !event.channelId) return;
 
     const channel = await client.channels.fetch(event.channelId).catch(() => null);
-    if (!channel || !isTextChannel(channel)) {
+    if (!channel?.isTextBased()) {
         throw new Error(`Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`);
     }
 
@@ -34,17 +30,12 @@ export async function refreshTaskEventMessage(client: Client, event: TaskEvent):
 export async function startAllTaskEvents(client: Client, services: ServiceContainer): Promise<void> {
     const { keywords } = services;
 
-    const guildId = services.guildId;
-    if (!guildId) {
-        console.warn('[TaskStart] No guild ID available in services.');
-        return;
-    }
-    const guildConfig = await services.guilds.get(guildId);
+    const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig) {
-        console.warn(`[TaskStart] Guild configuration not found for ${guildId}.`);
+        console.warn(`[TaskStart] Guild configuration not found for ${services.guildId}.`);
         return;
     }
-    const leaguesEnabled = guildConfig?.toggles?.leaguesEnabled ?? false;
+    const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
 
     const categories: TaskCategory[] = [
         TaskCategory.PvM,
@@ -56,23 +47,13 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
 
     const sharedKeyword = await keywords.selectKeyword(`weekly-${Date.now()}`);
 
-    const channelId = guildConfig.channels?.taskChannel;
-    if (!channelId) {
-        console.warn('[TaskStart] Task channel not configured.');
-        return;
-    }
-
-    const guild = await client.guilds.fetch(guildId);
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel?.isTextBased()) {
-        console.warn('[TaskStart] Configured task channel is not text-based.');
-        return;
-    }
+    const channel = await configuredChannel(client, services, 'taskChannel');
+    if (!channel) return;
 
     const roleId = guildConfig.roles?.taskUser;
-    const role = roleId ? guild.roles.cache.get(roleId) : null;
+    const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
     const mention = role ? `<@&${role.id}>` : '';
-    const suppressMentions = await isMentionSuppressed(services.guilds, guildId);
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
     if (!role) {
         console.warn(`[TaskStart] Task user role not configured or not found.`);
@@ -85,7 +66,7 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
     }, suppressMentions));
 
     for (const category of categories) {
-        await startTaskEventForCategory(client, services, category, sharedKeyword, channel as TextChannel);
+        await startTaskEventForCategory(client, services, category, sharedKeyword, channel);
     }
 }
 
@@ -94,37 +75,12 @@ export async function startTaskEventForCategory(
     services: ServiceContainer,
     category: TaskCategory,
     sharedKeyword: string,
-    channelOverride?: TextChannel
+    channelOverride?: GuildTextBasedChannel
 ): Promise<void> {
     const { repos, taskEvents } = services;
 
-    const guildId = services.guildId;
-    if (!guildId) {
-        console.warn('[TaskStart] No guild ID available while starting category event.');
-        return;
-    }
-
-    const guildConfig = await services.guilds.get(guildId);
-    if (!guildConfig) {
-        console.warn(`[TaskStart] Guild configuration missing for ${guildId}.`);
-        return;
-    }
-
-    let channel = channelOverride as TextChannel | undefined;
-    if (!channel) {
-        const channelId = guildConfig.channels?.taskChannel;
-        if (!channelId) {
-            console.warn('[TaskStart] Task channel not configured.');
-            return;
-        }
-        const guild = await client.guilds.fetch(guildId);
-        const fetchedChannel = await guild.channels.fetch(channelId);
-        if (!fetchedChannel?.isTextBased()) {
-            console.warn('[TaskStart] Configured task channel is not text-based.');
-            return;
-        }
-        channel = fetchedChannel as TextChannel;
-    }
+    const channel = channelOverride ?? (await configuredChannel(client, services, 'taskChannel'));
+    if (!channel) return;
 
     const pollData =
         (await repos.taskRepo.getActiveTaskPollByCategory(category)) ??
@@ -188,10 +144,10 @@ export async function startTaskEventForCategory(
 
     const { embeds, components, files } = buildTaskEventEmbed(event);
 
-    const sentMessage = await (channel as TextChannel).send({ embeds, components, files });
+    const sentMessage = await channel.send({ embeds, components, files });
 
     event.messageId = sentMessage.id;
-    event.channelId = (channel as TextChannel).id;
+    event.channelId = channel.id;
 
     try {
         await taskEvents.storeTaskEvent(event);

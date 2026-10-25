@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { Command } from '../../../models/Command.js';
 import { CommandModule, CommandRole } from '../../../models/Command.js';
 
@@ -19,7 +19,7 @@ const reportbug: Command = {
             option.setName('message')
                 .setDescription('Include all relevant details about the bug here.')
                 .setRequired(true)
-        ) as SlashCommandBuilder,
+        ),
 
     async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
         if (!interaction) return;
@@ -32,13 +32,13 @@ const reportbug: Command = {
         try {
             const devGuild = await interaction.client.guilds.fetch(devServerId);
             let bugReportChannel = devGuild.channels.cache.find(
-                (channel) => channel.isTextBased() && 'name' in channel && channel.name === bugReportChannelName
+                (channel) => channel.isTextBased() && channel.name === bugReportChannelName
             );
 
             if (!bugReportChannel) {
                 const channels = await devGuild.channels.fetch();
                 bugReportChannel = channels.find(
-                    (channel) => channel?.isTextBased() && 'name' in channel && channel.name === bugReportChannelName
+                    (channel) => channel?.isTextBased() && channel.name === bugReportChannelName
                 ) ?? undefined;
             }
 
@@ -64,7 +64,7 @@ const reportbug: Command = {
                 `**Message:** ${messageText ?? ''}`
             ].join('\n');
 
-            await (bugReportChannel as TextChannel).send({ content: reportContent });
+            await bugReportChannel.send({ content: reportContent });
             await interaction.editReply({ content: 'Bug report sent. Thank you!' });
         } catch (error) {
             console.error('Error sending message:', error);

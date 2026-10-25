@@ -1,16 +1,20 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, time, TimestampStyles } from 'discord.js';
+import { truncate } from '../../utils/TextUtils.js';
 import type { Movie } from '../../models/Movie.js';
 import type { TMDbSearchResult } from "./MovieService.js";
 import { getDisplayNameFromAddedBy } from './MovieMockUtils.js';
 
-export function truncate(text: string, length = 200): string {
-    if (text.length <= length) return text;
-    return length < 3 ? text.slice(0, length) : text.slice(0, length - 3) + '...';
+function titleWithRelease(movie: Partial<Movie>): string {
+    return `${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`;
+}
+
+function addedByLine(movie: Movie): string {
+    return `\n\n*Added by ${getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay)}*`;
 }
 
 export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {
-    const embed = new EmbedBuilder()
-        .setTitle(`${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`)
+    return new EmbedBuilder()
+        .setTitle(titleWithRelease(movie))
         .setDescription(movie.overview || 'No description available.')
         .setThumbnail(movie.posterUrl || null)
         .addFields(
@@ -22,8 +26,6 @@ export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {
         )
         .setURL(movie.infoUrl || 'https://www.themoviedb.org/')
         .setFooter({ text: 'Powered by TMDb ' });
-
-    return embed;
 }
 
 export function createMoviePreviewEmbeds(results: TMDbSearchResult[]): EmbedBuilder[] {
@@ -41,26 +43,18 @@ export function createMoviePreviewEmbeds(results: TMDbSearchResult[]): EmbedBuil
 export function createMovieListEmbeds(movies: Movie[], page: number, perPage = 3): EmbedBuilder[] {
     return movies.map((movie, i) => {
         const index = page * perPage + i + 1;
-        const title = `${index}. ${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`;
-        const addedByText = getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay);
-        const addedByLine = `\n\n*Added by ${addedByText}*`;
-
         return new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(truncate(movie.overview || 'No description available.', 200) + addedByLine)
+            .setTitle(`${index}. ${titleWithRelease(movie)}`)
+            .setDescription(truncate(movie.overview || 'No description available.', 200) + addedByLine(movie))
             .setThumbnail(movie.posterUrl || null)
             .setURL(movie.infoUrl || 'https://www.themoviedb.org/');
     });
 }
 
 export function createLocalMoviePreviewEmbed(movie: Movie): EmbedBuilder {
-    const title = `${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`;
-    const addedByText = getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay);
-    const addedByLine = `\n\n*Added by ${addedByText}*`;
-
     return new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(truncate(movie.overview || 'No description available.', 130) + addedByLine)
+        .setTitle(titleWithRelease(movie))
+        .setDescription(truncate(movie.overview || 'No description available.', 130) + addedByLine(movie))
         .setThumbnail(movie.posterUrl ?? null)
         .setURL(movie.infoUrl || 'https://www.themoviedb.org/');
 }
@@ -71,47 +65,33 @@ export function createMovieNightEmbed(
     stateMessage: string,
     scheduledBy: string
 ): EmbedBuilder {
-    const trimmedStateMessage = stateMessage?.trim?.() ?? "";
-    const startTimeLines = [`<t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`];
-    if (trimmedStateMessage) {
-        startTimeLines.push(trimmedStateMessage);
-    }
-    const startTimeValue = startTimeLines.join('\n\n');
+    const startTimeValue = [
+        `${time(unixTimestamp, TimestampStyles.LongDateTime)} (${time(unixTimestamp, TimestampStyles.RelativeTime)})`,
+        stateMessage.trim(),
+    ].filter(Boolean).join('\n\n');
 
-    let embed: EmbedBuilder;
-
-    if (movie) {
-        const titleText = `Now showing: ${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`;
-
-        // Build the base description
-        let description = movie.overview || "No description available.";
-
-        // Add "Added by" line if applicable
-        if (movie.addedBy) {
-            const addedByText = getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay);
-            description += `\n\n_Added by ${addedByText}_`;
-        }
-
-        embed = createMovieEmbed(movie)
-            .setTitle(titleText)
-            .setDescription(description)
-            .setColor(0xE91E63)
-            .addFields({
-                name: '🎥 Start Time',
-                value: startTimeValue,
-                inline: false,
-            })
-            .setFooter({ text: `Scheduled by ${scheduledBy} • Powered by TMDb` });
-    } else {
+    if (!movie) {
         // No movie selected yet
-        embed = new EmbedBuilder()
+        return new EmbedBuilder()
             .setTitle('🎞️ Upcoming Movie Night!')
             .setDescription(startTimeValue)
             .setColor(0xE91E63)
             .setFooter({ text: `Scheduled by ${scheduledBy}` });
     }
 
-    return embed;
+    const overview = movie.overview || "No description available.";
+    const addedBy = movie.addedBy ? `\n\n_Added by ${getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay)}_` : "";
+
+    return createMovieEmbed(movie)
+        .setTitle(`Now showing: ${titleWithRelease(movie)}`)
+        .setDescription(overview + addedBy)
+        .setColor(0xE91E63)
+        .addFields({
+            name: '🎥 Start Time',
+            value: startTimeValue,
+            inline: false,
+        })
+        .setFooter({ text: `Scheduled by ${scheduledBy} • Powered by TMDb` });
 }
 
 export function createMoviePollClosedEmbed(

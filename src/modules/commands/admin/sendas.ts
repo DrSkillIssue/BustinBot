@@ -26,7 +26,7 @@ const sendas: Command = {
             option.setName('message')
                 .setDescription('The message to send as BustinBot')
                 .setRequired(true)
-        ) as SlashCommandBuilder,
+        ),
 
     async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services: ServiceContainer }) {
         if (message) {
@@ -35,7 +35,7 @@ const sendas: Command = {
         }
 
         // Only bot admins reach this: the router enforces the command's BotAdmin role
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 

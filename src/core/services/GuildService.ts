@@ -120,7 +120,7 @@ export class GuildService {
         const existing = this.cache.get(guildId);
         if (existing) {
             // Extract last part of key if nested (e.g. "toggles.leaguesEnabled")
-            const toggleName = key.slice(key.lastIndexOf(".") + 1);
+            const toggleName = key.split(".").pop()!;
             this.cache.set(guildId, {
                 ...existing,
                 toggles: { ...existing.toggles, [toggleName]: enabled },
@@ -177,7 +177,7 @@ export class GuildService {
     async ensureExists(guildId: string, userId: string) {
         let guild = await this.get(guildId);
         if (!guild) {
-            await this.update(guildId, { updatedBy: userId, updatedAt: new Date() as any });
+            await this.update(guildId, { updatedBy: userId, updatedAt: new Date() });
             guild = await this.get(guildId);
         }
         return guild;

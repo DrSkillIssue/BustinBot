@@ -1,10 +1,10 @@
-import { ApplicationCommandOptionType, InteractionResponseType } from "discord-api-types/v10";
+import { ApplicationCommandOptionType, InteractionResponseType, RESTJSONErrorCodes } from "discord-api-types/v10";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { describe, expect, vi, type StoringFactories, storeWeeks, test } from "../fixtures.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS } from "../firestoreEmulator.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
-import { type DiscordHarness } from "../discord/harness.js";
+import { DiscordError, type DiscordHarness } from "../discord/harness.js";
 import {
     AS,
     IDS,
@@ -203,6 +203,85 @@ describe("the weekly leaderboard update", () => {
             }),
         ]);
     });
+
+    test("awards a period once when its final post can't be made, so /taskboard final can post it", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
+        await storePeriodic(factories, {
+            points: { [winner]: 9 },
+            period: { length: 4, eventIds: events },
+        });
+        await setUpChampions(discord, services);
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel, { persist: true });
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+        expect(discord.memberRoleChanges("PUT")).toHaveLength(1);
+        expect(await services.repos.userRepo.getUserById(winner)).toMatchObject({ taskChampionFirsts: 1 });
+
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.channel } });
+        discord.acceptMessages(IDS.channel);
+        const command = await interact(
+            chatInputInteraction(
+                "taskboard",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "final" }],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({ content: "Final leaderboard posted." }),
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]).toMatchObject({
+            title: "🏆 Final Leaderboard Standings",
+        });
+    });
+});
+
+describe("/taskboard", () => {
+    test("says so when the task channel can't be reached", async ({ discord, interact, services, factories }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await storePeriodic(factories, {});
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+
+        const command = await interact(
+            chatInputInteraction(
+                "taskboard",
+                [{ type: ApplicationCommandOptionType.Subcommand, name: "update" }],
+                AS.botAdmin,
+            ),
+        );
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({
+                content:
+                    "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
+            }),
+        ]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] Discord refused the taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild}:`,
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownChannel }),
+        );
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
+    });
 });
 
 describe("the warning before a period ends", () => {
@@ -235,6 +314,30 @@ describe("the warning before a period ends", () => {
                 content: `<@&${IDS.roles.taskAdmin}> There are 3 pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`,
             }),
         ]);
+    });
+
+    test("is skipped with a warning when the verification channel is gone", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const events = await storeWeeks(factories, DateTime.now().minus({ weeks: 4, days: 1 }), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+        ]);
+        await storePeriodic(factories, { period: { length: 4, eventIds: events } });
+        await factories.taskSubmission.create({ taskEventId: "week-4", status: SubmissionStatus.Pending });
+        await services.guilds.update(IDS.guild, { channels: { taskVerification: IDS.missingChannel } });
+        discord.refuse("GET", `/channels/${IDS.missingChannel}`, DiscordError.unknownChannel);
+
+        await warnPendingLeaderboardFinalization(discord.client, services);
+
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskVerification channel ${IDS.missingChannel} of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
     });
 });
 

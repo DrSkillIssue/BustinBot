@@ -4,7 +4,7 @@ import { CommandModule, CommandRole } from '../../../models/Command.js';
 import { closeActiveMoviePoll } from '../../movies/MoviePolls.js';
 import { createMoviePollClosedEmbed } from '../../movies/MovieEmbeds.js';
 import type { ServiceContainer } from '../../../core/services/ServiceContainer.js';
-import { resolveMovieChannel } from '../../movies/MovieChannel.js';
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 const closemoviepoll: Command = {
     name: 'closemoviepoll',
@@ -28,7 +28,7 @@ const closemoviepoll: Command = {
         }
 
         if (result.winner) {
-            const channel = await resolveMovieChannel(interaction.client, services);
+            const channel = await configuredChannel(interaction.client, services, "movieNight");
             const embed = createMoviePollClosedEmbed(
                 result.winner,
                 interaction.user.username,

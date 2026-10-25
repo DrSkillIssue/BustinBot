@@ -1,10 +1,10 @@
-import { DateTime } from "luxon";
-import type { Client } from 'discord.js';
+import { DateTime, Duration } from "luxon";
+import { time, TimestampStyles, type Client } from 'discord.js';
 import type { Reminder } from "../../models/Reminder.js";
 import { UNPICKED_MOVIE_ID, type MovieEvent } from "../../models/MovieEvent.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
-import { resolveMovieChannel } from "./MovieChannel.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
 
 const MOVIE_REMINDERS = [
     { label: '2 hours before', offset: { hours: 2 } },
@@ -20,14 +20,6 @@ export function getPendingReminders(movieStart: DateTime, now: DateTime = DateTi
         .filter(({ sendAt }) => sendAt > now);
 }
 
-function formatRemaining(totalMinutes: number): string {
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    const hourText = hours > 0 ? `${hours} hour${hours > 1 ? "s" : ""}` : "";
-    const minuteText = minutes > 0 || hours === 0 ? `${minutes} minute${minutes !== 1 ? "s" : ""}` : "";
-    return [hourText, minuteText].filter(Boolean).join(" and ");
-}
-
 export async function sendDueReminders(client: Client, services: ServiceContainer, event: MovieEvent, now: Date): Promise<void> {
     const movieRepo = services.repos.movieRepo;
 
@@ -37,7 +29,7 @@ export async function sendDueReminders(client: Client, services: ServiceContaine
         .filter(({ label, sendAt }) => sendAt <= now && !(event.remindersSent ?? []).includes(label));
     if (!due.length) return;
 
-    const channel = await resolveMovieChannel(client, services);
+    const channel = await configuredChannel(client, services, "movieNight");
     if (!channel) return;
 
     const claimed = await movieRepo.claimReminders(event.id, due.map(({ label }) => label));
@@ -53,7 +45,9 @@ export async function sendDueReminders(client: Client, services: ServiceContaine
     const voiceChannelId = event.voiceChannelId ?? guildConfig?.channels?.movieVC;
     const voiceMention = voiceChannelId ? `<#${voiceChannelId}>` : "the movie voice channel";
 
+    // Retrieve current state from Firestore
     const activePoll = await movieRepo.getActivePoll();
+    // Determine movie state line
     const title = event.movie.id !== UNPICKED_MOVIE_ID ? event.movie.title : null;
     const stateLine = activePoll?.isActive
         ? `A movie poll is currently running! Go cast your vote before it closes.`
@@ -61,10 +55,16 @@ export async function sendDueReminders(client: Client, services: ServiceContaine
             ? `We will be watching **${title}**!`
             : `No movie has been selected yet — stay tuned!`;
 
-    const remaining = formatRemaining(Math.max(Math.round((event.startTime.getTime() - now.getTime()) / 60000), 0));
+    // Format remaining time
+    const minutesLeft = Math.max(Math.round((event.startTime.getTime() - now.getTime()) / 60000), 0);
+    const remaining = Duration.fromObject({ minutes: minutesLeft }, { locale: "en" })
+        .shiftTo("hours", "minutes")
+        .removeZeros()
+        .toHuman({ listStyle: "long" });
+    // Build and send message
     const content = latest.label === 'start time'
         ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
-        : `${mention} Movie night starts in **${remaining}** (at <t:${Math.floor(start.toSeconds())}:t>)! ${stateLine}`;
+        : `${mention} Movie night starts in **${remaining}** (at ${time(start.toJSDate(), TimestampStyles.ShortTime)})! ${stateLine}`;
 
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
     await channel.send(withSuppressedMentions({ content: content.trim() }, suppressMentions));

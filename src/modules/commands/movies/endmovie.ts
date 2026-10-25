@@ -3,7 +3,7 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { finishMovieNight } from "../../movies/MovieLifecycle.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { resolveMovieChannel } from "../../movies/MovieChannel.js";
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 const endmovie: Command = {
     name: 'endmovie',
@@ -27,7 +27,7 @@ const endmovie: Command = {
         }
 
         if (result.finishedMovie) {
-            const channel = await resolveMovieChannel(interaction.client, services);
+            const channel = await configuredChannel(interaction.client, services, "movieNight");
             await channel?.send({
                 content: `🎞️ Movie night has ended. Thanks for watching **${result.finishedMovie.title}**!`,
             });
