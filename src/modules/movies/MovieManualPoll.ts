@@ -25,6 +25,7 @@ export class ManualPollSelections {
 
     select(userId: string, movieIds: string[]): void {
         const selection = this.get(userId);
+        // If the user is selecting on this page, merge new selections
         for (const id of movieIds) {
             if (selection.selected.size < MAX_SELECTED) selection.selected.add(id);
         }

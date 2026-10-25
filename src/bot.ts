@@ -37,11 +37,12 @@ export async function startBot(client: Client, { db, commandsDir, fallbackGuildI
 
     const servicesByGuild = new Map<string, ServiceContainer>();
     const getServices = (guildId: string): ServiceContainer => {
-        if (!servicesByGuild.has(guildId)) {
-            const services = createServiceContainer(db, guildId, botStats);
+        let services = servicesByGuild.get(guildId);
+        if (!services) {
+            services = createServiceContainer(db, guildId, botStats);
             servicesByGuild.set(guildId, services);
         }
-        return servicesByGuild.get(guildId)!;
+        return services;
     };
 
     const primaryGuildId = guildConfigs[0]?.id ?? fallbackGuildId;

@@ -4,12 +4,12 @@ import path from 'path';
 import fs from 'fs';
 
 const args = process.argv.slice(2);
-if (args.length < 1) {
+const guildId = args[0];
+if (!guildId) {
     console.error('Usage: npx tsx src/scripts/resetGuildDocument.ts <GUILD_ID> [--keep]');
     process.exit(1);
 }
 
-const guildId = args[0];
 const keepOriginal = args.includes('--keep');
 
 // Load service account key (adjust if your key path differs)
@@ -74,7 +74,7 @@ async function cloneGuildDocument(guildId: string) {
     console.log(`✅ Guild backup completed successfully: ${backupId}`);
 }
 
-cloneGuildDocument(guildId!)
+cloneGuildDocument(guildId)
     .then(() => process.exit(0))
     .catch((err) => {
         console.error('❌ Error during guild reset:', err);

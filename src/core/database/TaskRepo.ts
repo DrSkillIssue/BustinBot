@@ -1,4 +1,5 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import Fuse, { type IFuseOptions } from "fuse.js";
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
@@ -9,7 +10,20 @@ import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
 import type { TaskCategory } from "../../models/Task.js";
 import { taskConverter, taskEventConverter, taskFeedbackConverter, taskPollConverter, taskSubmissionConverter, taskSubmissionDraftConverter } from "./converters.js";
 
+const TASK_SEARCH_OPTIONS: IFuseOptions<Task> = {
+    keys: [
+        { name: 'id', weight: 0.5 },
+        { name: 'taskName', weight: 0.35 },
+        { name: 'shortName', weight: 0.15 },
+    ],
+    threshold: 0.35,
+    ignoreLocation: true,
+};
+
 export class TaskRepository extends GuildScopedRepository<Task> implements ITaskRepository {
+    private tasks: Task[] | null = null;
+    private taskSearch: Fuse<Task> | null = null;
+
     constructor(db: Firestore, guildId: string) {
         super(db, guildId, 'tasks', taskConverter);
     }
@@ -21,11 +35,36 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
 
     // Fetch all tasks
     async getAllTasks(): Promise<Task[]> {
-        return await this.getAll();
+        this.tasks ??= await this.getAll();
+        return this.tasks;
+    }
+
+    async getTaskSearch(): Promise<Fuse<Task>> {
+        this.taskSearch ??= new Fuse(await this.getAllTasks(), TASK_SEARCH_OPTIONS);
+        return this.taskSearch;
     }
 
     async createTask(task: Task): Promise<void> {
         await this.collection.doc(task.id).set(task, { merge: true });
+        if (!this.tasks) return;
+        const index = this.tasks.findIndex((stored) => stored.id === task.id);
+        if (index === -1) this.tasks.push(task);
+        else this.tasks[index] = task;
+        this.taskSearch?.setCollection(this.tasks);
+    }
+
+    async addTask(task: Task): Promise<boolean> {
+        const taskRef = this.collection.doc(task.id);
+        const added = await this.db.runTransaction(async (transaction) => {
+            if ((await transaction.get(taskRef)).exists) return false;
+            transaction.create(taskRef, task);
+            return true;
+        });
+        if (added && this.tasks) {
+            this.tasks.push(task);
+            this.taskSearch?.setCollection(this.tasks);
+        }
+        return added;
     }
 
     // Fetch all tasks of a specific category
@@ -196,9 +235,11 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
             if (!submission) return { result: "notFound" };
             if (submission.status !== SubmissionStatus.Pending) return { result: "alreadyReviewed", submission };
 
+            // Retrieve any previous submission by the same user for this task
             const approved = await transaction.get(this.approvedSubmissions(submission.userId, submission.taskEventId));
             const heldTier = highestTier(approved.docs.map(doc => doc.data().status));
 
+            // Update submission details
             const reviewed: TaskSubmission = {
                 ...submission,
                 status: review.decision,
@@ -208,6 +249,7 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
                     ? { rejectionReason: review.rejectionReason }
                     : { prizeRolls: 1 }),
             };
+            // Persist updates
             transaction.set(submissionRef, reviewed);
 
             if (isTier(review.decision) && tierRank(review.decision) > tierRank(heldTier)) {
@@ -230,8 +272,9 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         const { taskId, userId, vote } = feedback;
         const taskRef = this.collection.doc(taskId);
         const voteRef = this.feedbackCollection.doc(`${taskId}_${userId}`);
+        const step = vote === "up" ? 1 : -1;
 
-        return this.db.runTransaction(async (transaction) => {
+        const outcome = await this.db.runTransaction(async (transaction) => {
             const task = await transaction.get(taskRef);
             if (!task.exists) return "taskNotFound";
 
@@ -241,15 +284,21 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
                 ? []
                 : (await transaction.get(this.feedbackCollection.where("taskId", "==", taskId).where("userId", "==", userId))).docs;
             const previous = stored.data()?.vote ?? legacy[0]?.data().vote;
+            // Same vote again
             if (previous === vote) return "unchanged";
 
-            const step = vote === "up" ? 1 : -1;
             transaction.set(voteRef, { ...feedback, id: voteRef.id });
             for (const old of legacy) transaction.delete(old.ref);
             // Changing a vote undoes the old one as well as adding the new one
             transaction.update(taskRef, { weight: FieldValue.increment(previous ? 2 * step : step) });
             return previous ? "changed" : "added";
         });
+
+        const kept = this.tasks?.find((stored) => stored.id === taskId);
+        if (kept && (outcome === "added" || outcome === "changed")) {
+            kept.weight = (kept.weight ?? 0) + (outcome === "changed" ? 2 * step : step);
+        }
+        return outcome;
     }
 
     async deleteAllTasks(): Promise<void> {
@@ -257,12 +306,21 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         const batch = this.db.batch();
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
+        this.tasks = [];
+        this.taskSearch?.setCollection(this.tasks);
     }
 
     async seedTasks(tasks: Task[]): Promise<void> {
         const batch = this.db.batch();
         for (const task of tasks) batch.set(this.collection.doc(task.id), task);
         await batch.commit();
+        if (!this.tasks) return;
+        for (const task of tasks) {
+            const index = this.tasks.findIndex((stored) => stored.id === task.id);
+            if (index === -1) this.tasks.push(task);
+            else this.tasks[index] = task;
+        }
+        this.taskSearch?.setCollection(this.tasks);
     }
 
     async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: TaskPoll; }> {

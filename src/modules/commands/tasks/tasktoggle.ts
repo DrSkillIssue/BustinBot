@@ -34,14 +34,14 @@ const tasktoggle: Command = {
         interaction,
         services,
     }: {
-        interaction?: ChatInputCommandInteraction;
+        interaction?: ChatInputCommandInteraction<'raw' | 'cached'>;
         services: ServiceContainer;
     }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
         const guildService = services.guilds;
 
         const sub = interaction.options.getSubcommand();

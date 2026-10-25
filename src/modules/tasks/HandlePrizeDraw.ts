@@ -28,7 +28,6 @@ function isSubmissionApprovedLike(status: SubmissionStatus): boolean {
     );
 }
 
-// Prize draws store their dates as ISO strings
 function parseDateInput(value: string | null): Date | null {
     if (typeof value === 'string') {
         const parsed = new Date(value);
@@ -189,9 +188,9 @@ export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, sna
         for (let i = 0; i < count; i++) tickets.push(userId);
     }
 
-    if (tickets.length === 0) return null;
+    const winnerId = tickets[Math.floor(Math.random() * tickets.length)];
+    if (!winnerId) return null;
 
-    const winnerId = tickets[Math.floor(Math.random() * tickets.length)]!;
     snapshot.winnerId = winnerId || '';
     snapshot.rolledAt = new Date().toISOString();
 

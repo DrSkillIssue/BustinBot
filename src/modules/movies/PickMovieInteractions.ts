@@ -1,4 +1,4 @@
-import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from "discord.js";
+import { ButtonInteraction, ModalSubmitInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, MessageFlags } from "discord.js";
 import Fuse from 'fuse.js';
 import type { Movie } from "../../models/Movie.js";
 import type { MoviePoll } from "../../models/MoviePoll.js";
@@ -57,8 +57,9 @@ function getPollSession(poll: MoviePoll): PollSession<Movie> {
     }
 
     Object.values(poll.votes).forEach(movieId => {
-        if (voteCounts.has(movieId)) {
-            voteCounts.set(movieId, voteCounts.get(movieId)! + 1);
+        const count = voteCounts.get(movieId);
+        if (count !== undefined) {
+            voteCounts.set(movieId, count + 1);
         }
     });
 
@@ -139,9 +140,14 @@ export async function handleMoviePickChooseModalSubmit(services: ServiceContaine
 }
 
 export async function handleRandomPollCountSelect(services: ServiceContainer, interaction: StringSelectMenuInteraction) {
-    const selectedCount = parseInt(interaction.values[0]!, 10);
+    const selectedValue = interaction.values[0];
+    if (!selectedValue) {
+        await interaction.reply({ content: "No movie count selected.", flags: 1 << 6 });
+        return;
+    }
+
     await interaction.deferUpdate();
-    await pollMovieRandom(services, interaction, selectedCount);
+    await pollMovieRandom(services, interaction, parseInt(selectedValue, 10));
 }
 
 export async function handleConfirmRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
@@ -282,7 +288,8 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
     const pollSession = getPollSession(updatedPoll);
     const updatedEmbeds: EmbedBuilder[] = interaction.message.embeds.map((embedData, i) => {
         const embed = EmbedBuilder.from(embedData);
-        const movie = updatedPoll.options[i]!;
+        const movie = updatedPoll.options[i];
+        if (!movie) return embed;
         const count = pollSession.optionVoteCounts.get(movie.id) ?? 0;
         const runtimeText = movie.runtime ? ` | ⏱️ ${movie.runtime} mins` : "";
         embed.setFooter({
@@ -302,15 +309,16 @@ export async function handlePickMovieButton(services: ServiceContainer, interact
                 new ModalBuilder()
                     .setCustomId('movie_pick_choose_modal')
                     .setTitle('Choose a movie')
-                    .addComponents(
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(
-                            new TextInputBuilder()
-                                .setCustomId('movie_input')
-                                .setLabel('Enter movie title or list number')
-                                .setPlaceholder('e.g., 3 or The Matrix')
-                                .setStyle(TextInputStyle.Short)
-                                .setRequired(true)
-                        )
+                    .addLabelComponents(
+                        new LabelBuilder()
+                            .setLabel('Enter movie title or list number')
+                            .setTextInputComponent(
+                                new TextInputBuilder()
+                                    .setCustomId('movie_input')
+                                    .setPlaceholder('e.g., 3 or The Matrix')
+                                    .setStyle(TextInputStyle.Short)
+                                    .setRequired(true)
+                            )
                     )
             );
             return;

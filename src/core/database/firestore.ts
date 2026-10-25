@@ -46,7 +46,6 @@ function loadServiceAccount(): ServiceAccount | undefined {
     return undefined;
 }
 
-// Connects to Firestore using FIREBASE_SERVICE_KEY. The caller is responsible for loading the environment first.
 export function createFirestore(): Firestore {
     if (!getApps().length) {
         const serviceAccount = loadServiceAccount();

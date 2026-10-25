@@ -4,11 +4,7 @@ import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.j
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
 import { refreshTaskEventMessage } from "./HandleTaskStart.js";
-
-function parseAmount(input: string): number | null {
-    const digits = input.replace(/[,\s_]/g, '');
-    return /^\d+$/.test(digits) ? Number(digits) : null;
-}
+import { AMOUNTS_ERROR, parseAmounts } from "./TaskForm.js";
 
 function parseTaskType(input: string): TaskType | null {
     return Object.values(TaskType).find((type) => type.toLowerCase() === input.trim().toLowerCase()) ?? null;
@@ -32,25 +28,22 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
         return;
     }
 
-    const amounts = {
-        bronze: parseAmount(interaction.fields.getTextInputValue('bronze')),
-        silver: parseAmount(interaction.fields.getTextInputValue('silver')),
-        gold: parseAmount(interaction.fields.getTextInputValue('gold')),
-    };
-    const invalid = Object.entries(amounts).filter(([, amount]) => amount === null).map(([tier]) => tier);
-    if (invalid.length) {
-        await interaction.editReply({ content: `The ${invalid.join(', ')} amount must be a whole number. Nothing was changed.` });
+    const amounts = parseAmounts(interaction.fields.getTextInputValue('amounts'));
+    if (!amounts) {
+        await interaction.editReply({ content: `${AMOUNTS_ERROR} Nothing was changed.` });
         return;
     }
 
-    task.taskName = interaction.fields.getTextInputValue('taskName');
-    task.type = type;
-    task.amtBronze = amounts.bronze!;
-    task.amtSilver = amounts.silver!;
-    task.amtGold = amounts.gold!;
+    const updated: Task = {
+        ...task,
+        ...amounts,
+        taskName: interaction.fields.getTextInputValue('taskName').trim(),
+        shortName: interaction.fields.getTextInputValue('shortName').trim(),
+        type,
+    };
 
     try {
-        await saveAndRedraw(interaction, repo, task);
+        await saveAndRedraw(interaction, repo, updated);
     } catch (err) {
         console.error(`[HandleUpdateTaskModal] Failed to save task ${taskId}:`, err);
         await interaction.editReply({ content: `Couldn't save task **${taskId}**. Please try again.` });

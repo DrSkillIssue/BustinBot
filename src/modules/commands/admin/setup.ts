@@ -18,8 +18,8 @@ const setup: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guild = interaction.guild!;
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
+        const guild = await interaction.client.guilds.fetch(guildId);
         const guildConfig = await services.guilds.ensureExists(guildId, interaction.user.id);
         const current = guildConfig?.channels ?? {};
 

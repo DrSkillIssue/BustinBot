@@ -1,3 +1,4 @@
+import type Fuse from "fuse.js";
 import type { Task } from "../../../models/Task.js";
 import type { TaskPoll } from "../../../models/TaskPoll.js";
 import type { SubmissionReview, SubmissionReviewOutcome, SubmissionTier, TaskSubmission, TaskSubmissionDraft } from "../../../models/TaskSubmission.js";
@@ -7,8 +8,10 @@ import type { TaskCategory } from "../../../models/Task.js";
 
 export interface ITaskRepository {
     getAllTasks(): Promise<Task[]>;
+    getTaskSearch(): Promise<Fuse<Task>>;
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
+    addTask(task: Task): Promise<boolean>;
     getTasksByCategory(category: string): Promise<Task[]>;
 
     // Task polls

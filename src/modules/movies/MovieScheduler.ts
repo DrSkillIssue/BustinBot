@@ -1,4 +1,4 @@
-import { StringSelectMenuInteraction, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client, time, TimestampStyles } from "discord.js";
+import { StringSelectMenuInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ModalSubmitInteraction, Client, time, TimestampStyles } from "discord.js";
 import cron, { type ScheduledTask } from 'node-cron';
 import { DateTime } from 'luxon';
 import { createMovieNightEmbed, createMoviePollClosedEmbed } from "./MovieEmbeds.js";
@@ -58,8 +58,10 @@ async function closeDuePoll(client: Client, services: ServiceContainer, now: Dat
     const poll = await services.repos.movieRepo.getActivePoll();
     if (!poll?.isActive || poll.endsAt > now) return;
 
+    // Close the poll in Firestore
     const result = await closeActiveMoviePoll(services, client, 'Scheduler');
     console.log(`[MovieScheduler] Poll closed: ${result.message}`);
+    // Send winner announcement if poll was successful
     if (!result.success || !result.winner) return;
 
     const channel = await configuredChannel(client, services, "movieNight");
@@ -104,13 +106,11 @@ export async function handleMovieNightDate(interaction: StringSelectMenuInteract
 
     const timeInput = new TextInputBuilder()
         .setCustomId('start-time')
-        .setLabel(`Start time ${shortTZ}`)
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setPlaceholder("e.g. 20:30");
 
-    const row = new ActionRowBuilder<TextInputBuilder>().addComponents(timeInput);
-    modal.addComponents(row);
+    modal.addLabelComponents(new LabelBuilder().setLabel(`Start time ${shortTZ}`).setTextInputComponent(timeInput));
 
     await interaction.showModal(modal);
 }
@@ -122,7 +122,7 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const { repos } = services;
     const movieRepo = repos.movieRepo;
 
-    const guildConfig = await services.guilds.get(interaction.guildId!);
+    const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig) {
         await interaction.editReply({ content: "Guild configuration not found. Please run `/setup` first." });
         return;

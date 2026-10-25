@@ -15,11 +15,11 @@ const moviehelp: Command = {
         .setName("moviehelp")
         .setDescription("Learn how movie nights work and what commands can be used."),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guildConfig = await services.guilds.get(interaction.guildId!);
+        const guildConfig = await services.guilds.get(interaction.guildId);
         if (!guildConfig) {
             await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
             return;

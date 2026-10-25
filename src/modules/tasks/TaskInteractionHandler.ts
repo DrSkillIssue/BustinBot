@@ -11,6 +11,7 @@ import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
 import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
 import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonCategory } from "./TaskList.js";
 import { buttonPage } from "../../utils/Pagination.js";
+import { NEW_TASK_MODAL, handleNewTaskModal } from "./HandleNewTaskModal.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -72,7 +73,7 @@ export async function handleTaskInteraction(
             const selections = services.setup.getSelections("task", userId);
             const missing = services.setup.getMissingFields("task", selections);
 
-            if (missing.length) {
+            if (!selections || missing.length) {
                 await interaction.reply({
                     content: `Please select: ${missing.join(", ")} before confirming.`,
                     flags: 1 << 6,
@@ -80,7 +81,7 @@ export async function handleTaskInteraction(
                 return;
             }
 
-            await services.setup.persist("task", services.guilds, interaction.guildId!, selections!);
+            await services.setup.persist("task", services.guilds, services.guildId, selections);
             services.setup.clearSelections("task", userId);
 
             await interaction.update({
@@ -118,6 +119,9 @@ export async function handleTaskInteraction(
         }
         if (interaction.customId.startsWith("update_task_modal_")) {
             await handleUpdateTaskModal(interaction, services);
+        }
+        if (interaction.customId.startsWith(NEW_TASK_MODAL)) {
+            await handleNewTaskModal(interaction, services);
         }
     }
 

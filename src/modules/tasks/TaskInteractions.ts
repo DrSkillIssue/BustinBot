@@ -1,4 +1,4 @@
-import { ButtonInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import { ButtonInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { SubmissionStatus, TIERS, type SubmissionTier, type TaskSubmission } from '../../models/TaskSubmission.js';
 import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { getTaskDisplayName, getTierLabel } from './TaskEmbeds.js';
@@ -135,14 +135,15 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             const modal = new ModalBuilder()
                 .setCustomId(`reject_reason_${submissionId}`)
                 .setTitle('Reject Submission')
-                .addComponents(
-                    new ActionRowBuilder<TextInputBuilder>().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('reason')
-                            .setLabel('Rejection Reason')
-                            .setStyle(TextInputStyle.Paragraph)
-                            .setRequired(false)
-                    )
+                .addLabelComponents(
+                    new LabelBuilder()
+                        .setLabel('Rejection Reason')
+                        .setTextInputComponent(
+                            new TextInputBuilder()
+                                .setCustomId('reason')
+                                .setStyle(TextInputStyle.Paragraph)
+                                .setRequired(false)
+                        )
                 );
             await interaction.showModal(modal);
             return;
@@ -310,6 +311,7 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
     }
 
     const { submission, archived } = outcome;
+    // Update the ephemeral reply
     await interaction.editReply({
         content: `❌ Submission rejected${archivedEnding(archived)}`
     });

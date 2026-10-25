@@ -7,8 +7,11 @@ import {
     taskPollFactory,
     taskSubmissionFactory,
     submissionDraftFactory,
+    taskFactory,
+    taskFeedbackFactory,
 } from "../factories.js";
 import { IDS } from "../discord/payloads.js";
+import { TaskRepository } from "../../src/core/database/TaskRepo.js";
 
 describe("MovieRepository dates", () => {
     const watched = movieFactory.build({
@@ -57,5 +60,49 @@ describe("TaskRepository dates", () => {
         expect(await services.repos.taskRepo.getTaskEventById(event.id)).toEqual(event);
         expect(await services.repos.taskRepo.getTaskPollById(poll.id)).toEqual(poll);
         expect(await services.repos.taskRepo.getSubmissionById(submission.id)).toEqual(submission);
+    });
+});
+
+describe("TaskRepository kept tasks", () => {
+    test("are read once, so a change written straight to Firestore isn't picked up", async ({ services, db }) => {
+        const tasks = services.repos.taskRepo;
+        await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Zulrah" }));
+        await tasks.getTaskSearch();
+
+        await db.doc(`guilds/${IDS.guild}/tasks/PVM001`).update({ taskName: "Kill {amount} Vorkath" });
+
+        expect(await tasks.getAllTasks()).toEqual([expect.objectContaining({ taskName: "Kill {amount} Zulrah" })]);
+        expect((await tasks.getTaskSearch()).search("vorkath")).toEqual([]);
+    });
+
+    test("follow the bot's own writes, matching a fresh read of what is stored", async ({ services, db }) => {
+        const tasks = services.repos.taskRepo;
+        const stored = () => new TaskRepository(db, IDS.guild).getAllTasks();
+        await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Zulrah", weight: 50 }));
+        await tasks.getTaskSearch();
+
+        await tasks.createTask(taskFactory.build({ id: "PVM001", taskName: "Kill {amount} Vorkath", weight: 50 }));
+        await tasks.createTask(taskFactory.build({ id: "PVM002", taskName: "Kill {amount} Zuk" }));
+        await tasks.seedTasks([taskFactory.build({ id: "PVM003", taskName: "Kill {amount} Nex" })]);
+        // Two imports at once both add the tasks neither has seen stored yet
+        await tasks.seedTasks([taskFactory.build({ id: "PVM003", taskName: "Kill {amount} Nex" })]);
+        await tasks.addTask(taskFactory.build({ id: "PVM004", taskName: "Kill {amount} Araxxor" }));
+        expect(await tasks.addTask(taskFactory.build({ id: "PVM002", taskName: "Kill {amount} Hespori" }))).toBe(false);
+        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM001", vote: "up" }));
+        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM001", vote: "down" }));
+        await tasks.recordFeedback(taskFeedbackFactory.build({ taskId: "PVM002", userId: "someone-else", vote: "up" }));
+
+        expect(await tasks.getAllTasks()).toEqual(await stored());
+        expect(await tasks.getAllTasks()).toContainEqual(expect.objectContaining({ id: "PVM001", weight: 49 }));
+        const search = await tasks.getTaskSearch();
+        expect(search.search("vorkath").map((result) => result.item.id)).toEqual(["PVM001"]);
+        expect(search.search("zulrah")).toEqual([]);
+        expect(search.search("nex").map((result) => result.item.id)).toEqual(["PVM003"]);
+        expect(search.search("araxxor").map((result) => result.item.id)).toEqual(["PVM004"]);
+        expect(search.search("hespori")).toEqual([]);
+
+        await tasks.deleteAllTasks();
+        expect(await tasks.getAllTasks()).toEqual(await stored());
+        expect((await tasks.getTaskSearch()).search("vorkath")).toEqual([]);
     });
 });

@@ -83,12 +83,14 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
         return;
     }
 
+    // Fetch full metadata from TMDb
     const metadata = await fetchMovieDetailsById(tmdbId);
     if (!metadata?.title) {
         await interaction.followUp({ content: `Could not fetch details for that movie.`, flags: MessageFlags.Ephemeral });
         return;
     }
 
+    // Build movie object
     const movie: Movie = {
         id: randomUUID(),
         tmdbId: metadata.tmdbId,
@@ -106,8 +108,10 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
         addedBy: interaction.user.id,
         addedAt: new Date(),
     };
+    // Save to Firestore
     await addMovieWithStats(movie, services);
 
+    // Confirm addition
     const embed = createMovieEmbed(movie)
         .setTitle(`Added: ${movie.title}`)
         .setFooter({ text: `Added by ${interaction.user.username}` });

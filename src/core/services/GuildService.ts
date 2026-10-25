@@ -25,9 +25,8 @@ export class GuildService {
     constructor(private readonly repo: IGuildRepository) { }
 
     async get(guildId: string): Promise<Guild | null> {
-        if (this.cache.has(guildId)) {
-            return this.cache.get(guildId)!;
-        }
+        const cached = this.cache.get(guildId);
+        if (cached) return cached;
 
         const guild = await this.repo.getGuild(guildId);
         if (guild) this.cache.set(guildId, guild);
@@ -120,7 +119,7 @@ export class GuildService {
         const existing = this.cache.get(guildId);
         if (existing) {
             // Extract last part of key if nested (e.g. "toggles.leaguesEnabled")
-            const toggleName = key.split(".").pop()!;
+            const toggleName = key.slice(key.lastIndexOf(".") + 1);
             this.cache.set(guildId, {
                 ...existing,
                 toggles: { ...existing.toggles, [toggleName]: enabled },

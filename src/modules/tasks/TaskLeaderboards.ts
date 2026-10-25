@@ -40,7 +40,6 @@ export function getStatusPoints(status?: SubmissionStatus): number {
 
 const DEFAULT_PERIOD_EVENTS = 4;
 
-// Events that start on the same day belong to the same period
 function resolvePeriodKey(event: TaskEvent): string {
     return `start:${event.startTime.toISOString().slice(0, 10)}`;
 }
@@ -387,6 +386,7 @@ export function periodicLabel(length?: number): string {
 }
 
 export async function leaderboardName(client: Client, guild: Guild | null, userId: string): Promise<string> {
+    // Ignore and fall back
     const name =
         (await guild?.members.fetch(userId).then((member) => member.displayName, () => null)) ??
         (await client.users.fetch(userId).then((user) => user.username, () => null)) ??

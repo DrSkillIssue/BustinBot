@@ -18,8 +18,8 @@ const tasksetup: Command = {
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guild = interaction.guild!;
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
+        const guild = await interaction.client.guilds.fetch(guildId);
         const guildConfig = await services.guilds.get(guildId);
         const currentRoles = guildConfig?.roles ?? {};
         const currentChannels = guildConfig?.channels ?? {};

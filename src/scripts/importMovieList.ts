@@ -12,7 +12,7 @@ interface LegacyMovie {
     userId: string;
 }
 
-const guildId = process.env.DISCORD_GUILD_ID!;
+const guildId = process.env.DISCORD_GUILD_ID;
 const inputPath = path.resolve(process.cwd(), "data/legacy-movies.json");
 
 if (!guildId) {

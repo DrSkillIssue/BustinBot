@@ -47,13 +47,13 @@ const removemovie: Command = {
                 threshold: 0.4,
             });
 
-            const results = fuse.search(query);
-            if (results.length === 0) {
+            const [bestMatch] = fuse.search(query);
+            if (!bestMatch) {
                 await interaction.editReply(`No matching movie found for \`${query}\`.`);
                 return;
             }
 
-            const matched = results[0]!.item;
+            const matched = bestMatch.item;
 
             // Permission check
             if (matched.addedBy !== userId && !isAdmin) {

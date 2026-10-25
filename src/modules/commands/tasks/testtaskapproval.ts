@@ -67,6 +67,7 @@ const testtaskapproval: Command = {
 
         const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
+        // Start a draft and submit it, as a member's Submit click and DM do
         const draft = await services.tasks.startSubmission(userId, taskEvent.id);
         const outcome = await services.tasks.submit(interaction.client, draft, [], `[Test] Tier hint: ${tier}`, services);
         if (outcome.result !== 'submitted') {

@@ -11,6 +11,15 @@ export async function handleInteraction(
     commands: Map<string, Command>,
     services: ServiceContainer
 ) {
+    if (interaction.isAutocomplete()) {
+        if (!interaction.inGuild()) {
+            await interaction.respond([]);
+            return;
+        }
+        await commands.get(interaction.commandName)?.autocomplete?.({ interaction, services });
+        return;
+    }
+
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command) {
@@ -57,7 +66,7 @@ export async function handleInteraction(
             const guildConfig = await services.guilds.requireConfig(interaction);
             if (!guildConfig) return;
 
-            const guildRoles = guildConfig!.roles ?? {};
+            const guildRoles = guildConfig.roles ?? {};
 
             const hasRole = (configured?: string, fallbackEnv?: string) => {
                 const value = configured ?? fallbackEnv;
@@ -88,7 +97,7 @@ export async function handleInteraction(
         }
 
         // Module setup validation
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
         const guildConfig = await services.guilds.get(guildId);
         const setupMap: GuildSetupComplete = guildConfig?.setupComplete ?? {};
 
@@ -144,12 +153,12 @@ export async function handleInteraction(
         if (customId === 'setup_confirm') {
             const selections = services.setup.getSelections('core', userId);
             const missing = services.setup.getMissingFields('core', selections);
-            if (missing.length) {
+            if (!selections || missing.length) {
                 await interaction.reply({ content: `Please select: ${missing.join(', ')}`, flags: 1 << 6 });
                 return;
             }
 
-            await services.setup.persist('core', services.guilds, interaction.guildId!, selections!);
+            await services.setup.persist('core', services.guilds, services.guildId, selections);
             services.setup.clearSelections('core', userId);
 
             await interaction.update({ content: 'Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.', components: [] });
@@ -207,7 +216,7 @@ export async function handleInteraction(
             return;
         }
 
-        const guildId = interaction.guildId!;
+        const guildId = services.guildId;
         await services.guilds.update(guildId, { timezone: matchedZone });
 
         const currentTime = timezoneService.getCurrentTimeInZone(matchedZone);

@@ -4,7 +4,7 @@ import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
 import { listPage, pageButtons } from '../../utils/Pagination.js';
 import { TaskCategory, type Task } from '../../models/Task.js';
 
-const TASKS_PER_PAGE = 8;
+const TASKS_PER_PAGE = 25;
 export const CATEGORY_ALL = 'all';
 
 export type CategoryFilter = TaskCategory | typeof CATEGORY_ALL;

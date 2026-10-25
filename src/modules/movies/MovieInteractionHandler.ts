@@ -68,7 +68,7 @@ export async function handleMovieInteraction(
             const selections = services.setup.getSelections("movie", userId);
             const missing = services.setup.getMissingFields("movie", selections);
 
-            if (missing.length) {
+            if (!selections || missing.length) {
                 await interaction.reply({
                     content: `Please select: ${missing.join(", ")} before confirming.`,
                     flags: 1 << 6,
@@ -76,7 +76,7 @@ export async function handleMovieInteraction(
                 return;
             }
 
-            await services.setup.persist("movie", services.guilds, interaction.guildId!, selections!);
+            await services.setup.persist("movie", services.guilds, services.guildId, selections);
             services.setup.clearSelections("movie", userId);
 
             await interaction.update({

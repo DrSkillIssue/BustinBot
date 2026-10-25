@@ -7,6 +7,7 @@ import { injectMockUsers } from "./MovieMockUtils.js";
 import { createLocalMoviePreviewEmbed } from "./MovieEmbeds.js";
 import { saveCurrentMovie } from "./PickMovieInteractions.js";
 import { DateTime } from "luxon";
+import { shuffle, uniqBy } from "es-toolkit";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
@@ -28,13 +29,13 @@ async function createAndSendMoviePoll(
         return;
     }
 
-    const guildConfig = await services.guilds.get(interaction.guildId!);
+    const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig) {
         await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
         return;
     }
 
-    const guild = await client.guilds.fetch(interaction.guildId!);
+    const guild = await client.guilds.fetch(services.guildId);
     const guildRoles = guildConfig.roles ?? {};
     const guildChannels = guildConfig.channels ?? {};
 
@@ -134,18 +135,7 @@ export async function pollMovieRandom(services: ServiceContainer, interaction: R
         return;
     }
 
-    const userMovieMap = new Map<string, Movie[]>();
-    for (const movie of movies) {
-        const contributorKey = movie.addedByDevId ?? movie.addedBy;
-        if (!userMovieMap.has(contributorKey)) userMovieMap.set(contributorKey, []);
-        userMovieMap.get(contributorKey)!.push(movie);
-    }
-
-    const uniqueMovies: Movie[] = [];
-    for (const [, userMovies] of userMovieMap.entries()) {
-        const randomIndex = Math.floor(Math.random() * userMovies.length);
-        uniqueMovies.push(userMovies[randomIndex]!);
-    }
+    const uniqueMovies = uniqBy(shuffle(movies), (movie) => movie.addedByDevId ?? movie.addedBy);
 
     const maxChoices = Math.min(5, uniqueMovies.length, count ?? 5);
     if (maxChoices < 2) {
@@ -193,6 +183,7 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
     const movieRepo = services.repos.movieRepo;
 
     const openPoll = await movieRepo.getActivePoll();
+    // Mark poll inactive and persist
     const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;
     if (!activePoll) {
         return { success: false, message: "No active poll found." };
@@ -233,7 +224,7 @@ export async function closeActiveMoviePoll(services: ServiceContainer, client: C
     if (tiedEntries.length > 1) {
         tieBreak = true;
         const randomIndex = Math.floor(Math.random() * tiedEntries.length);
-        winningId = tiedEntries[randomIndex]![0];
+        winningId = (tiedEntries[randomIndex] ?? topEntry)[0];
         console.log(`[MoviePoll] Tie detected among ${tiedEntries.length} movies (${topVotes} votes each). Randomly selected one.`);
     }
 

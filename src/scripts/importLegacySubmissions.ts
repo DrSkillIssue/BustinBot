@@ -11,7 +11,7 @@ interface LegacyStat {
     submissions: number;
 }
 
-const guildId = process.env.DISCORD_GUILD_ID!;
+const guildId = process.env.DISCORD_GUILD_ID;
 const inputPath = path.resolve(process.cwd(), "data/legacy-taskstats.json");
 
 if (!guildId) {

@@ -34,7 +34,6 @@ const sendas: Command = {
             return;
         }
 
-        // Only bot admins reach this: the router enforces the command's BotAdmin role
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });

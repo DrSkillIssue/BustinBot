@@ -167,8 +167,7 @@ export async function calculateTaskStreakSummary(
     let longest = 0;
     let run = 0;
 
-    for (let i = 0; i < periods.length; i += 1) {
-        const period = periods[i]!;
+    for (const [i, period] of periods.entries()) {
         const previous = i > 0 ? periods[i - 1] : null;
 
         if (previous) {

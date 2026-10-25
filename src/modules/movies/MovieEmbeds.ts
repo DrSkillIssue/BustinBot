@@ -79,7 +79,9 @@ export function createMovieNightEmbed(
             .setFooter({ text: `Scheduled by ${scheduledBy}` });
     }
 
+    // Build the base description
     const overview = movie.overview || "No description available.";
+    // Add "Added by" line if applicable
     const addedBy = movie.addedBy ? `\n\n_Added by ${getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay)}_` : "";
 
     return createMovieEmbed(movie)

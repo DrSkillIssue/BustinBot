@@ -8,6 +8,7 @@ const MOVIES_PER_PAGE = 3;
 export const MOVIE_LIST_BUTTON = "listmovies|";
 
 export async function buildMovieListPage(services: ServiceContainer, requestedPage: number): Promise<InteractionEditReplyOptions> {
+    // Load movies from file
     const movies = (await services.repos.movieRepo.getAllMovies())
         .filter((movie) => !movie.watched)
         .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());

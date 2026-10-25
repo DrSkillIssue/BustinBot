@@ -44,13 +44,13 @@ const viewmovie: Command = {
                 threshold: 0.4,
             });
 
-            const results = fuse.search(titleQuery);
-            if (results.length === 0) {
+            const [bestMatch] = fuse.search(titleQuery);
+            if (!bestMatch) {
                 await interaction.editReply(`No matching movie found for **${titleQuery}**.`);
                 return;
             }
 
-            const matchedMovie = results[0]!.item;
+            const matchedMovie = bestMatch.item;
 
             let description = matchedMovie.overview ?? "No description available.";
             description += `\n\n*Added by <@${matchedMovie.addedBy ?? "unknown"}>*`;

@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from 'discord.js';
+import { AutocompleteInteraction, ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from 'discord.js';
 import type { ServiceContainer } from '../core/services/ServiceContainer.js';
 
 export enum CommandRole {
@@ -43,8 +43,14 @@ export interface Command {
     // Support both message-based (prefix) and slash commands
     execute: (context: {
         message?: Message;
-        interaction?: ChatInputCommandInteraction;
+        interaction?: ChatInputCommandInteraction<'raw' | 'cached'>;
         args?: string[];
+        services: ServiceContainer;
+    }) => Promise<void>;
+
+    // Suggestions for an option set with setAutocomplete
+    autocomplete?: (context: {
+        interaction: AutocompleteInteraction;
         services: ServiceContainer;
     }) => Promise<void>;
 

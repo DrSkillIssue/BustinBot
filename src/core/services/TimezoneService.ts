@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
+import { LabelBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
 import { DateTime, IANAZone } from "luxon";
 import Fuse from "fuse.js";
 
@@ -9,13 +9,12 @@ export function createTimezoneModal() {
 
     const tzInput = new TextInputBuilder()
         .setCustomId('timezone_input')
-        .setLabel('Enter timezone (e.g. "Australia/Melbourne")')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Type a city or IANA name...')
         .setRequired(true);
 
-    modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(tzInput)
+    modal.addLabelComponents(
+        new LabelBuilder().setLabel('Enter timezone (e.g. "Australia/Melbourne")').setTextInputComponent(tzInput)
     );
 
     return modal;

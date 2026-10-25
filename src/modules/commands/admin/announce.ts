@@ -69,7 +69,7 @@ const announce: Command = {
         .setName("announce")
         .setDescription("Post the latest BustinBot version announcement."),
 
-    async execute({ interaction, services, }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer; }) {
+    async execute({ interaction, services, }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>, services: ServiceContainer; }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: 1 << 6 });
 
@@ -93,7 +93,7 @@ const announce: Command = {
         }
 
         // Get announcement channel
-        const guildConfig = await services.guilds.get(interaction.guildId!);
+        const guildConfig = await services.guilds.get(interaction.guildId);
         const channelId = guildConfig?.channels?.announcements;
         if (!channelId) {
             await interaction.editReply({

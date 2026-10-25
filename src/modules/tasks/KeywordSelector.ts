@@ -8,10 +8,6 @@ export class KeywordSelector {
 
     async selectKeyword(currentEventId: string): Promise<string> {
         const allKeywords: Keyword[] = await this.repo.getAllKeywords();
-        if (allKeywords.length === 0) {
-            console.warn("[KeywordSelector] No keywords found in Firestore.");
-            return "keyword";
-        }
 
         // Sort by lastUsedAt descending to exclude recent keywords
         const sorted = [...allKeywords].sort((a, b) => {
@@ -23,7 +19,11 @@ export class KeywordSelector {
         const excludeCount = Math.min(HISTORY_LIMIT, sorted.length - 1);
         const recent = sorted.slice(0, excludeCount).map(k => k.id);
         const pool = allKeywords.filter(k => !recent.includes(k.id));
-        const chosen = pool[Math.floor(Math.random() * pool.length)]!;
+        const chosen = pool[Math.floor(Math.random() * pool.length)];
+        if (!chosen) {
+            console.warn("[KeywordSelector] No keywords found in Firestore.");
+            return "keyword";
+        }
 
         // Mark as used
         await this.repo.markKeywordUsed(chosen.id, currentEventId);

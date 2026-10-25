@@ -77,6 +77,7 @@ export class TaskService {
             createdAt: now,
             submittedAt: now,
         };
+        // Check if this user already has an approved submission for this task
         const heldTier = await this.repo.getHeldTier(draft.userId, draft.taskEventId);
 
         let posted: ReviewPost;
@@ -114,6 +115,7 @@ export class TaskService {
         const tier = raisedTier(outcome);
         const streakLine = tier ? await this.recordTierRaise(client, submission, tier, heldTier, services) : undefined;
 
+        // Notify the member and archive the submission
         try {
             await notifyUser(client, submission, heldTier, streakLine);
         } catch (err) {
@@ -127,6 +129,7 @@ export class TaskService {
             console.warn(`[TaskService] Failed to archive submission ${submission.id}:`, err);
         }
 
+        // Delete original messages from admin channel
         await removeReviewPost(client, submission, services);
 
         return { ...outcome, archived };

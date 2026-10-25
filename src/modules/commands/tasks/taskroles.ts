@@ -157,12 +157,12 @@ const taskroles: Command = {
                 .setDescription("Sync task roles with server roles and grant them to eligible users.")
         ),
 
-    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction<'raw' | 'cached'>; services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: 1 << 6 });
 
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
         const guildConfig = await services.guilds.get(guildId);
         if (!guildConfig) {
             await interaction.editReply({ content: "Guild configuration not found." });
@@ -270,10 +270,11 @@ const taskroles: Command = {
                 const placeholderIndex = current.findIndex(
                     (item) => !item.roleId && item.label.toLowerCase() === role.name.toLowerCase()
                 );
+                const placeholder = current[placeholderIndex];
 
-                if (placeholderIndex !== -1) {
+                if (placeholder) {
                     current[placeholderIndex] = {
-                        ...current[placeholderIndex]!,
+                        ...placeholder,
                         id: role.id,
                         label: role.name,
                         roleId: role.id,
@@ -326,19 +327,20 @@ const taskroles: Command = {
                     item.roleId === role.id ||
                     (!item.roleId && item.label.toLowerCase() === role.name.toLowerCase())
             );
+            const milestone = current[milestoneIndex];
             const championPlacement = resolveChampionPlacement(role.id, guildConfig.roles);
 
-            if (milestoneIndex !== -1 && championPlacement) {
+            if (milestone && championPlacement) {
                 await interaction.editReply({ content: "That role is configured as both milestone and champion. Please resolve manually." });
                 return;
             }
 
-            if (milestoneIndex === -1 && !championPlacement) {
+            if (!milestone && !championPlacement) {
                 await interaction.editReply({ content: "That role is not configured as a task role." });
                 return;
             }
 
-            if (milestoneIndex !== -1) {
+            if (milestone) {
                 if (value <= 0) {
                     await interaction.editReply({ content: "Milestone thresholds must be greater than 0." });
                     return;
@@ -369,7 +371,7 @@ const taskroles: Command = {
                 }
 
                 current[milestoneIndex] = {
-                    ...current[milestoneIndex]!,
+                    ...milestone,
                     id: targetRole.id,
                     label: targetRole.name,
                     roleId: targetRole.id,

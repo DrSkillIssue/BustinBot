@@ -35,7 +35,6 @@ const taskdraw: Command = {
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
-        // Acknowledge before any database work, which may take longer than Discord waits
         await interaction.deferReply({ flags: 1 << 6 });
 
         const prizeRepo = services.repos.prizeRepo;

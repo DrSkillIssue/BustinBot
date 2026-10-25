@@ -16,6 +16,7 @@ import {
     apiVoiceChannel,
     apiVoiceState,
     modalSubmitInteraction,
+    stringSelectInteraction,
     chatInputInteraction,
     apiOtherGuild,
 } from "../discord/payloads.js";
@@ -95,6 +96,14 @@ describe("scheduling a movie night", () => {
                 ],
             },
         ]);
+    });
+
+    test("asks for a start time in the guild's timezone once a date is picked", async ({ discord, interact }) => {
+        const pick = await interact(stringSelectInteraction("movienight-select-date", ["2026-03-05"]));
+
+        const form = discord.modal(pick);
+        expect(form).toMatchObject({ custom_id: "movienight-time-2026-03-05", title: "Enter movie night time" });
+        expect(form?.components).toMatchObject([{ label: "Start time (UTC+0)", component: { custom_id: "start-time" } }]);
     });
 
     test("announces it, stores it in place of the previous night, and ends the open poll an hour before", async ({
