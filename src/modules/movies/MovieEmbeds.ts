@@ -2,8 +2,8 @@ import { EmbedBuilder } from 'discord.js';
 import type { Movie } from '../../models/Movie.js';
 import { getDisplayNameFromAddedBy } from './MovieMockUtils.js';
 
-export function truncate(text: string, length = 200): string {
-    return text.length > length ? text.slice(0, length - 3) + '...' : text;
+function addedByLine(movie: Movie): string {
+    return `\n\n*Added by ${getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay)}*`;
 }
 
 export function createMovieEmbed(movie: Partial<Movie>): EmbedBuilder {
