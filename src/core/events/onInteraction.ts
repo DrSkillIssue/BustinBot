@@ -16,6 +16,15 @@ export async function handleInteraction(
     commands: Map<string, Command>,
     services: ServiceContainer
 ) {
+    if (interaction.isAutocomplete()) {
+        if (!interaction.inGuild()) {
+            await interaction.respond([]);
+            return;
+        }
+        await commands.get(interaction.commandName)?.autocomplete?.({ interaction, services });
+        return;
+    }
+
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command) {

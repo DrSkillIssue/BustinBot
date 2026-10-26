@@ -18,23 +18,26 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
         return;
     }
 
-    task.taskName = interaction.fields.getTextInputValue('taskName');
-    task.type = interaction.fields.getTextInputValue('type') as TaskType;
-    task.amtBronze = parseInt(interaction.fields.getTextInputValue('bronze')) || 0;
-    task.amtSilver = parseInt(interaction.fields.getTextInputValue('silver')) || 0;
-    task.amtGold = parseInt(interaction.fields.getTextInputValue('gold')) || 0;
+    const [rawType] = interaction.fields.getStringSelectValues("type");
+    const type = Object.values(TaskType).find((value) => value === rawType);
+    if (!type) {
+        await interaction.editReply({ content: "Could not read the type. Please run /updatetask again." });
+        return;
+    }
 
-    await repo.createTask(task);
+    const amounts = parseAmounts(interaction.fields.getTextInputValue("amounts"));
+    if (!amounts) {
+        await interaction.editReply({ content: `${AMOUNTS_ERROR} Nothing was changed.` });
+        return;
+    }
 
-    const activeEvent = await repo.getLatestTaskEvent();
-    if (activeEvent && activeEvent.task.id === task.id && activeEvent.messageId && activeEvent.channelId) {
-        activeEvent.task = task;
-        activeEvent.amounts = {
-            bronze: task.amtBronze,
-            silver: task.amtSilver,
-            gold: task.amtGold,
-        }
-        const event = normaliseFirestoreDates(activeEvent);
+    const updated: Task = {
+        ...task,
+        ...amounts,
+        taskName: interaction.fields.getTextInputValue("taskName").trim(),
+        shortName: interaction.fields.getTextInputValue("shortName").trim(),
+        type,
+    };
 
     try {
         await saveAndRedraw(interaction, services, updated);

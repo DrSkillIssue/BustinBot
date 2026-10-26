@@ -48,6 +48,9 @@ export interface Command {
         services: ServiceContainer;
     }) => Promise<void>;
 
+    // Suggestions for an option set with setAutocomplete
+    autocomplete?: (context: { interaction: AutocompleteInteraction; services: ServiceContainer }) => Promise<void>;
+
     // Optional method to return a SlashCommandBuilder for registering slash commands
     slashData?: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder
 }
