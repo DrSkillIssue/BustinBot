@@ -63,15 +63,9 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
         });
     }
 
-    async setWinners(
-        drawId: string,
-        winners: Record<TaskCategory, string[]>,
-        overallWinnerId?: string
-    ): Promise<void> {
-        const docRef = this.collection.doc(drawId);
-        await docRef.update({
-            winners,
-            winnerId: overallWinnerId ?? null,
+    async setWinner(drawId: string, winnerId: string): Promise<void> {
+        await this.collection.doc(drawId).update({
+            winnerId,
             rolledAt: new Date().toISOString(),
         });
     }
