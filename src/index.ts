@@ -59,13 +59,19 @@ async function main(): Promise<void> {
         commandSync: resolveCommandSync(),
     });
 
-    // Login to Discord with the appropriate bot token
-    const loginToken = isDevMode
-        ? process.env.DISCORD_TOKEN_DEV ?? null
-        : process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV ?? null;
-
-    if (!loginToken) {
-        throw new Error('No Discord bot token available. Check DISCORD_TOKEN_LIVE / DISCORD_TOKEN_DEV.');
+    for (const signal of ["SIGINT", "SIGTERM"] as const) {
+        process.once(signal, () => {
+            console.log(`[Shutdown] ${signal} received; stopping BustinBot.`);
+            shutdown()
+                .then(() => db.terminate())
+                .then(
+                    () => process.exit(0),
+                    (err) => {
+                        console.error("[Shutdown] BustinBot did not stop cleanly:", err);
+                        process.exit(1);
+                    }
+                );
+        });
     }
 
     await client.login(botToken);
