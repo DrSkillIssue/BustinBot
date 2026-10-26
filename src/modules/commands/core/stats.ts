@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -47,8 +47,8 @@ const stats: Command = {
             return;
         }
 
-        const joinedDate = stats.joinedAt ? new Date(stats.joinedAt).toLocaleDateString() : "Unknown";
-        const lastActive = stats.lastActiveAt ? new Date(stats.lastActiveAt).toLocaleDateString() : "Unknown";
+        const joinedDate = time(stats.joinedAt, TimestampStyles.LongDate);
+        const lastActive = time(stats.lastActiveAt, TimestampStyles.LongDate);
 
         const embed = new EmbedBuilder()
             .setColor(0x00ae86)
