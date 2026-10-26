@@ -51,7 +51,10 @@ export interface TaskSubmission {
 
     // Optional storage of screenshot message ID in admin verification channel
     screenshotMessage?: string;
+}
 
-    // Flag if submission is a duplicate of one already approved
-    alreadyApproved?: boolean;
+export interface TaskSubmissionDraft {
+    userId: string;
+    taskEventId: string;
+    createdAt: Date;
 }

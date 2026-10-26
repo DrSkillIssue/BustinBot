@@ -2,7 +2,7 @@ import { FieldValue, Timestamp, type Firestore } from "firebase-admin/firestore"
 import { GuildScopedRepository } from "./CoreRepo.js";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
-import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
+import { SubmissionStatus, type TaskSubmission, type TaskSubmissionDraft } from "../../models/TaskSubmission.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { TaskFeedback } from "../../models/TaskFeedback.js";
 import type { ITaskRepository } from "./interfaces/ITaskRepo.js";
@@ -139,8 +139,33 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return this.guildCollection("taskSubmissions", taskSubmissionConverter);
     }
 
-    private get submissionsCollection() {
-        return db.collection(`guilds/${this.guildId}/taskSubmissions`);
+    private get draftsCollection() {
+        return this.guildCollection("taskSubmissionDrafts", taskSubmissionDraftConverter);
+    }
+
+    async saveSubmissionDraft(draft: TaskSubmissionDraft): Promise<void> {
+        await this.draftsCollection.doc(draft.userId).set(draft);
+    }
+
+    async getSubmissionDraft(userId: string): Promise<TaskSubmissionDraft | null> {
+        const doc = await this.draftsCollection.doc(userId).get();
+        return doc.data() ?? null;
+    }
+
+    async deleteSubmissionDraft(userId: string): Promise<void> {
+        await this.draftsCollection.doc(userId).delete();
+    }
+
+    async submitDraft(submission: TaskSubmission): Promise<boolean> {
+        const draftRef = this.draftsCollection.doc(submission.userId);
+        return this.db.runTransaction(async (transaction) => {
+            const draft = (await transaction.get(draftRef)).data();
+            if (draft?.taskEventId !== submission.taskEventId) return false;
+
+            transaction.create(this.submissionsCollection.doc(submission.id), submission);
+            transaction.delete(draftRef);
+            return true;
+        });
     }
 
     async createSubmission(submission: TaskSubmission): Promise<void> {

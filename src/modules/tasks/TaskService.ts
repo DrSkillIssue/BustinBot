@@ -62,48 +62,44 @@ export class TaskService {
     async completeSubmission(client: Client, userId: string, taskEventId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<SubmitOutcome> {
         const taskEvent = await this.repo.getTaskEventById(taskEventId);
         if (!taskEvent) {
-            throw new Error(`Task event ${taskEventId} not found`);
+            await this.repo.deleteSubmissionDraft(userId);
+            return { result: "taskNotFound" };
         }
-        const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
 
+        const now = new Date();
         const submission: TaskSubmission = {
-            id: Date.now().toString(),
+            id: randomUUID(),
             userId,
             taskEventId,
-            screenshotUrls: [],
+            taskName: getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount),
+            screenshotUrls: screenshotUrls.slice(0, MAX_SCREENSHOTS),
+            ...(notes !== undefined ? { notes } : {}),
             status: SubmissionStatus.Pending,
-            createdAt: new Date(),
-            alreadyApproved: hasApproved,
-            taskName,
+            createdAt: now,
+            submittedAt: now,
         };
 
-        await this.repo.createSubmission(submission);
-        return submission;
-    }
-
-    async completeSubmission(client: Client, submissionId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<TaskSubmission | null> {
-        const submission = await this.repo.getSubmissionById(submissionId);
-        if (!submission) return null;
-
-        submission.screenshotUrls = screenshotUrls.slice(0, MAX_SCREENSHOTS);
-        submission.submittedAt = new Date();
-
-        if (notes !== undefined) {
-            submission.notes = notes;
-        } else {
-            delete submission.notes;
+        let posted: boolean;
+        try {
+            posted = await postToAdminChannel(client, submission, services);
+        } catch (err) {
+            console.warn(`[TaskService] Couldn't post submission ${submission.id} for review:`, err);
+            return { result: "adminsUnreachable" };
         }
+        if (!posted) return { result: "adminsUnreachable" };
 
-        if (!submission.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(submission.taskEventId);
-            if (taskEvent) {
-                submission.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-            }
+        let submitted: boolean;
+        try {
+            submitted = await this.repo.submitDraft(submission);
+        } catch (err) {
+            await this.removeReviewMessages(client, submission, services);
+            throw err;
         }
-
-        await postToAdminChannel(client, submission, services);
-        await this.repo.createSubmission(submission);
-        return submission;
+        if (!submitted) {
+            await this.removeReviewMessages(client, submission, services);
+            return { result: "alreadySubmitted" };
+        }
+        return { result: "submitted", submission };
     }
 
     async updateSubmissionStatus(
@@ -271,21 +267,21 @@ export class TaskService {
     }
 
 
-    setPendingTask(userId: string, taskEventId: string) {
-        this.pendingTaskMap.set(userId, taskEventId);
+    async setPendingTask(userId: string, taskEventId: string): Promise<void> {
+        await this.repo.saveSubmissionDraft({ userId, taskEventId, createdAt: new Date() });
     }
 
-    hasPendingTask(userId: string): boolean {
-        return this.pendingTaskMap.has(userId);
+    async hasPendingTask(userId: string): Promise<boolean> {
+        return (await this.repo.getSubmissionDraft(userId)) !== null;
     }
 
-    peekPendingTask(userId: string): string | undefined {
-        return this.pendingTaskMap.get(userId);
+    async peekPendingTask(userId: string): Promise<string | undefined> {
+        return (await this.repo.getSubmissionDraft(userId))?.taskEventId;
     }
 
-    consumePendingTask(userId: string): string | undefined {
-        const taskId = this.pendingTaskMap.get(userId);
-        this.pendingTaskMap.delete(userId);
+    async consumePendingTask(userId: string): Promise<string | undefined> {
+        const taskId = await this.peekPendingTask(userId);
+        await this.repo.deleteSubmissionDraft(userId);
         return taskId;
     }
 

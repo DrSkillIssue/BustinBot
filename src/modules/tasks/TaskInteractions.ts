@@ -44,7 +44,7 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     const taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
     const userId = interaction.user.id;
 
-    services.tasks.setPendingTask(userId, taskEventId);
+    await services.tasks.setPendingTask(userId, taskEventId);
 
     try {
         await interaction.user.send(
@@ -54,47 +54,9 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
             content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
         });
     } catch {
-        services.tasks.consumePendingTask(userId);
+        await services.tasks.consumePendingTask(userId);
         await interaction.editReply({
             content: "I couldn't send you a DM. Please enable direct messages from server members and try again."
-        });
-    }
-}
-
-// STEP 2: User confirms task from select menu
-export async function handleTaskSelect(interaction: StringSelectMenuInteraction, services: ServiceContainer) {
-    const [, , userId] = interaction.customId.split('-');
-
-    if (!userId) {
-        await interaction.reply({
-            content: "User ID missing from selection.",
-            flags: 1 << 6
-        });
-        return;
-    }
-
-    const selectedTaskEventId = interaction.values[0];
-    if (!selectedTaskEventId) {
-        await interaction.reply({
-            content: "No task selected.",
-            flags: 1 << 6
-        });
-        return;
-    }
-
-    services.tasks.setPendingTask(userId, selectedTaskEventId);
-    try {
-        const submission = await services.tasks.createSubmission(userId, selectedTaskEventId);
-
-        await interaction.reply({
-            content: `Thank you for confirming. Now upload your screenshot for **${submission.taskName ?? 'your task'}** and include any notes/comments in the same message.`,
-            flags: 64
-        });
-    } catch (error) {
-        console.error('[TaskSelect] Failed to create submission:', error);
-        await interaction.reply({
-            content: "There was a problem creating your submission. Please try again or contact a Task Admin.",
-            flags: 64
         });
     }
 }
@@ -103,22 +65,8 @@ export async function handleTaskSelect(interaction: StringSelectMenuInteraction,
 export async function handleDirectMessage(message: Message, client: Client, services: ServiceContainer) {
     if (message.author.bot || message.channel.type !== 1) return;
 
-    const taskEventId = services.tasks.consumePendingTask(message.author.id);
-    const pending = taskEventId ? await services.tasks.getPendingSubmission(message.author.id, taskEventId) : undefined;
-    if (!pending && !taskEventId) return;
-
-    let submission = pending;
-    if (!submission) {
-        try {
-            submission = await services.tasks.createSubmission(message.author.id, taskEventId!);
-        } catch (error) {
-            console.error('[TaskDM] Failed to create submission from DM:', error);
-            await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
-            return;
-        }
-    }
-
-    if (!submission) return;
+    const taskEventId = await services.tasks.peekPendingTask(message.author.id);
+    if (!taskEventId) return;
 
     const attachments = message.attachments;
 
@@ -134,11 +82,28 @@ export async function handleDirectMessage(message: Message, client: Client, serv
         return;
     }
 
-    const notes = message.content.trim() || undefined;
-
-    const limitedImages = imageUrls.slice(0, MAX_SCREENSHOTS);
-    await services.tasks.completeSubmission(client, submission.id, limitedImages, services, notes);
-    await message.reply(`✅ Submission for **${submission.taskName ?? 'your task'}** received with ${limitedImages.length} screenshot${limitedImages.length === 1 ? '' : 's'} and sent for review!`);
+    try {
+        const outcome = await services.tasks.completeSubmission(client, message.author.id, taskEventId, imageUrls, services, message.content.trim() || undefined);
+        switch (outcome.result) {
+            case "submitted": {
+                const { taskName, screenshotUrls } = outcome.submission;
+                await message.reply(`✅ Submission for **${taskName ?? "your task"}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? "" : "s"} and sent for review!`);
+                break;
+            }
+            case "taskNotFound":
+                await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
+                break;
+            case "adminsUnreachable":
+                await message.reply("I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.");
+                break;
+            case "alreadySubmitted":
+                await message.reply("I've already received your submission for this task. To send another, click Submit on the task again.");
+                break;
+        }
+    } catch (err) {
+        console.error("[TaskDM] Failed to store submission:", err);
+        await message.reply("Something went wrong saving your submission. Please send it again.");
+    }
 }
 
 // STEP 4: Admin clicks Approve/Reject

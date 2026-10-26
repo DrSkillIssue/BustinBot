@@ -48,12 +48,18 @@ export async function postToAdminChannel(client: Client, submission: TaskSubmiss
     // Second message: screenshots as file uploads
     if (submission.screenshotUrls?.length > 0) {
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-        const sentScreens = await channel.send({
-            ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
-            files: filesToSend
-        });
-        submission.screenshotMessage = sentScreens.id;
+        try {
+            const sentScreens = await channel.send({
+                ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
+                files: submission.screenshotUrls
+            });
+            submission.screenshotMessage = sentScreens.id;
+        } catch (err) {
+            await sentMessage.delete().catch((deleteErr: unknown) => console.warn(`[Admin Embed Cleanup Error]:`, deleteErr));
+            throw err;
+        }
     }
+    return true;
 }
 
 export async function notifyUser(client: Client, submission: TaskSubmission, streakLine?: string, keptStatus?: SubmissionStatus) {
