@@ -135,13 +135,8 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         );
     }
 
-    async removeCompletedUser(taskEventId: string, userId: string): Promise<void> {
-        await this.eventsCollection.doc(taskEventId).set(
-            {
-                completedUserIds: FieldValue.arrayRemove(userId),
-            },
-            { merge: true }
-        );
+    private get submissionsCollection() {
+        return this.guildCollection("taskSubmissions", taskSubmissionConverter);
     }
 
     private get submissionsCollection() {
@@ -163,36 +158,26 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     async getSubmissionsByUser(userId: string): Promise<TaskSubmission[]> {
-        const snapshot = await this.submissionsCollection.where('userId', '==', userId).get();
-        return snapshot.docs.map(doc => doc.data() as TaskSubmission);
-    }
-
-    async getSubmissionByUserAndTask(userId: string, taskEventId: string): Promise<TaskSubmission | null> {
-        const snapshot = await this.submissionsCollection
-            .where('userId', '==', userId)
-            .where('taskEventId', '==', taskEventId)
-            .where('status', 'in', [SubmissionStatus.Bronze, SubmissionStatus.Silver, SubmissionStatus.Gold])
-            .orderBy('reviewedAt', 'desc')
-            .limit(1)
-            .get();
-
-        if (snapshot.empty) return null;
-
-        const doc = snapshot.docs[0];
-        if (!doc || !doc.exists) return null;
-        return doc.data() as TaskSubmission;
+        const snapshot = await this.submissionsCollection.where("userId", "==", userId).get();
+        return snapshot.docs.map(doc => doc.data());
     }
 
     async updateSubmissionStatus(
         submissionId: string,
         status: "pending" | "approved" | "rejected" | "bronze" | "silver" | "gold",
         reviewedBy: string
-    ): Promise<void> {
+    ): Promise<boolean> {
         const docRef = this.submissionsCollection.doc(submissionId);
-        await docRef.update({
-            status,
-            reviewedBy,
-            reviewedAt: Timestamp.now(),
+        return this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(docRef);
+            if (snap.data()?.status !== SubmissionStatus.Pending) return false;
+
+            tx.update(docRef, {
+                status,
+                reviewedBy,
+                reviewedAt: Timestamp.now(),
+            });
+            return true;
         });
     }
 

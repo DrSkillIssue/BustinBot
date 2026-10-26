@@ -1,27 +1,42 @@
-import type { Client } from 'discord.js';
-import { TextChannel } from 'discord.js';
-import type { TaskSubmission } from '../../models/TaskSubmission.js';
-import { SubmissionStatus } from '../../models/TaskSubmission.js';
-import { postToAdminChannel, notifyUser, archiveSubmission, updateTaskCounter } from './SubmissionActions.js';
-import { isTextChannel } from '../../utils/ChannelUtils.js';
-import type { ITaskRepository } from '../../core/database/interfaces/ITaskRepo.js';
-import { getTaskDisplayName } from './TaskEmbeds.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-import { calculateTaskStreakSummary } from './TaskStreaks.js';
-import { getStatusPoints } from './TaskLeaderboards.js';
+import { randomUUID } from "node:crypto";
+import type { Client } from "discord.js";
+import { maxBy } from "es-toolkit";
+import Fuse, { type IFuseOptions } from "fuse.js";
+import type { Task } from "../../models/Task.js";
+import type { TaskSubmission } from "../../models/TaskSubmission.js";
+import { SubmissionStatus } from "../../models/TaskSubmission.js";
+import { postToAdminChannel, notifyUser, archiveSubmission, updateTaskCounter } from "./SubmissionActions.js";
+import { configuredChannel } from "../../utils/ChannelUtils.js";
+import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
+import { getTaskDisplayName } from "./TaskEmbeds.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { calculateTaskStreakSummary } from "./TaskStreaks.js";
+import { ensureTaskLeaderboardsInitialized, getStatusPoints } from "./TaskLeaderboards.js";
+import type { UserStats } from "../../models/UserStats.js";
 
 const MAX_SCREENSHOTS = 10;
 
-async function resolveTextChannel(client: Client, channelId?: string | null): Promise<TextChannel | null> {
-    if (!channelId) return null;
-    try {
-        const channel = await client.channels.fetch(channelId);
-        return channel && channel.isTextBased() ? (channel as TextChannel) : null;
-    } catch (err) {
-        console.warn(`[TaskService] Failed to resolve channel ${channelId}:`, err);
-        return null;
-    }
-}
+export const TIER_STAT_MAP: Record<string, keyof UserStats> = {
+    bronze: "tasksCompletedBronze",
+    silver: "tasksCompletedSilver",
+    gold: "tasksCompletedGold",
+};
+
+const TASK_SEARCH_OPTIONS: IFuseOptions<Task> = {
+    keys: [
+        { name: "id", weight: 0.5 },
+        { name: "taskName", weight: 0.35 },
+        { name: "shortName", weight: 0.15 },
+    ],
+    threshold: 0.35,
+    ignoreLocation: true,
+};
+
+export type SubmitOutcome =
+    | { result: "submitted"; submission: TaskSubmission }
+    | { result: "taskNotFound" }
+    | { result: "adminsUnreachable" }
+    | { result: "alreadySubmitted" };
 
 export class TaskService {
     private pendingTaskMap = new Map<string, string>();
@@ -98,7 +113,7 @@ export class TaskService {
         reviewedBy: string,
         services: ServiceContainer,
         rejectionReason?: string
-    ): Promise<TaskSubmission | null> {
+    ): Promise<(TaskSubmission & { archived: boolean }) | null> {
         const submission = await this.repo.getSubmissionById(submissionId);
         if (!submission) return null;
 
@@ -116,10 +131,12 @@ export class TaskService {
             }
         }
 
-        await this.repo.updateSubmissionStatus(submissionId, newStatus, reviewedBy);
+        if (!(await this.repo.updateSubmissionStatus(submissionId, newStatus, reviewedBy))) return null;
         await this.repo.createSubmission(submission);
 
-        await this.syncCompletedUsers(submission.taskEventId, submission.userId, newStatus !== SubmissionStatus.Rejected);
+        if (newStatus !== SubmissionStatus.Rejected) {
+            await this.addCompletedUser(submission.taskEventId, submission.userId);
+        }
 
         try {
             await notifyUser(client, submission);
@@ -127,46 +144,25 @@ export class TaskService {
             console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
         }
 
+        let archived = false;
         try {
-            await archiveSubmission(client, submission, services);
+            archived = await archiveSubmission(client, submission, services);
         } catch (err) {
             console.warn(`[TaskService] Failed to archive submission ${submission.id}:`, err);
         }
 
+        await this.removeReviewMessages(client, submission, services);
 
-        // Delete original messages from admin channel
-        const guildConfig = await services.guilds.get(services.guildId);
-        const verificationChannelId = guildConfig?.channels?.taskVerification;
-        const adminChannel = await resolveTextChannel(client, verificationChannelId);
-        if (adminChannel) {
-            if (submission.message) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.message);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Admin Embed Cleanup Error]:`, err);
-                }
-            }
-            if (submission.screenshotMessage) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.screenshotMessage);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Screenshot Message Cleanup Error]:`, err);
-                }
-            }
-        }
-
-        return submission;
+        return { ...submission, archived };
     }
 
     async updateSubmissionTier(
         client: Client,
         submissionId: string,
-        tier: 'bronze' | 'silver' | 'gold',
+        tier: "bronze" | "silver" | "gold",
         reviewedBy: string,
         services: ServiceContainer
-    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints: number; previousStatus?: SubmissionStatus }) | null> {
+    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints: number; previousStatus?: SubmissionStatus; archived: boolean }) | null> {
         const TIER_MAP = {
             bronze: { status: SubmissionStatus.Bronze },
             silver: { status: SubmissionStatus.Silver },
@@ -180,15 +176,10 @@ export class TaskService {
         if (!submission) return null;
 
         // Retrieve any previous submission by the same user for this task
-        const existing = await this.repo.getSubmissionByUserAndTask(submission.userId, submission.taskEventId);
-
-        const previousStatus = existing?.status;
+        const previousStatus = await this.getHeldStatus(submission.userId, submission.taskEventId);
         const previousTierPoints = getStatusPoints(previousStatus);
         const nextTierPoints = getStatusPoints(tierInfo.status);
-        if (previousTierPoints >= nextTierPoints) {
-            // Already equal or higher tier
-            return null;
-        }
+        const raised = nextTierPoints > previousTierPoints;
 
         // Update submission details
         submission.status = tierInfo.status;
@@ -204,99 +195,79 @@ export class TaskService {
         }
 
         // Persist updates
-        await this.repo.updateSubmissionStatus(submissionId, submission.status, reviewedBy);
+        if (!(await this.repo.updateSubmissionStatus(submissionId, submission.status, reviewedBy))) return null;
         await this.repo.createSubmission(submission);
 
-        await this.syncCompletedUsers(submission.taskEventId, submission.userId, true);
-
         let streakLine: string | undefined;
-        try {
-            const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
-            streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
+        if (raised) {
+            await ensureTaskLeaderboardsInitialized(services);
 
-            if (services.repos.userRepo) {
-                await services.repos.userRepo.updateUser(submission.userId, {
+            const userRepo = services.repos.userRepo;
+            const prevStat = previousStatus ? TIER_STAT_MAP[previousStatus] : undefined;
+            const newStat = TIER_STAT_MAP[tier];
+
+            try {
+                if (prevStat && newStat) {
+                    await userRepo.updateTierStat(submission.userId, prevStat, newStat);
+                } else if (newStat) {
+                    await userRepo.incrementStat(submission.userId, newStat, 1);
+                }
+            } catch (err) {
+                console.warn(`[Stats] Failed to update tier stats for ${submission.userId}:`, err);
+            }
+
+            await this.addCompletedUser(submission.taskEventId, submission.userId);
+
+            try {
+                const streakSummary = await calculateTaskStreakSummary(submission.userId, this.repo);
+                streakLine = `\n🔥 Task streak: **${streakSummary.currentStreak}** (Longest: **${streakSummary.longestStreak}**).`;
+
+                await userRepo.updateUser(submission.userId, {
                     taskStreak: streakSummary.currentStreak,
                     longestTaskStreak: streakSummary.longestStreak,
                 });
-            } else {
-                console.warn(`[TaskService] UserRepo unavailable; skipping streak stat update for ${submission.userId}.`);
+            } catch (err) {
+                console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
             }
-        } catch (err) {
-            console.warn(`[TaskService] Failed to compute streak summary for ${submission.userId}:`, err);
         }
 
         // Notify, archive, and update counters
         try {
-            await notifyUser(client, submission, streakLine);
+            await notifyUser(client, submission, streakLine, raised ? undefined : previousStatus);
         } catch (err) {
             console.warn(`[TaskService] Failed to DM user ${submission.userId} about ${submission.id}:`, err);
         }
 
+        let archived = false;
         try {
-            await archiveSubmission(client, submission, services);
+            archived = await archiveSubmission(client, submission, services);
         } catch (err) {
             console.warn(`[TaskService] Failed to archive submission ${submission.id}:`, err);
         }
 
-        try {
-            await updateTaskCounter(client, submission.taskEventId, submission.userId, this.repo, submission.status);
-        } catch (err) {
-            console.warn(`[TaskService] Failed to update counter for event ${submission.taskEventId}:`, err);
+        if (raised) {
+            try {
+                await updateTaskCounter(client, submission.taskEventId, submission.userId, this.repo, submission.status, previousStatus);
+            } catch (err) {
+                console.warn(`[TaskService] Failed to update counter for event ${submission.taskEventId}:`, err);
+            }
         }
 
-        // --- Cleanup original admin messages ---
-        const guildConfig = await services.guilds.get(services.guildId);
-        const verificationChannelId = guildConfig?.channels?.taskVerification;
-        const adminChannel = await resolveTextChannel(client, verificationChannelId);
-        if (adminChannel) {
-            if (submission.message) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.message);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Admin Embed Cleanup Error]:`, err);
-                }
-            }
-            if (submission.screenshotMessage) {
-                try {
-                    const msg = await adminChannel.messages.fetch(submission.screenshotMessage);
-                    if (msg) await msg.delete();
-                } catch (err) {
-                    console.warn(`[Screenshot Message Cleanup Error]:`, err);
-                }
-            }
-        }
+        await this.removeReviewMessages(client, submission, services);
 
         const result = {
             ...submission,
             previousTierPoints,
+            archived,
             ...(streakLine && { streakLine }),
             ...(previousStatus && { previousStatus }),
         };
         return result;
     }
 
-    async getPendingSubmission(
-        userId: string,
-        taskEventId?: string
-    ): Promise<TaskSubmission | undefined> {
-        const submissions = await this.repo.getSubmissionsByUser(userId);
-        const pending = submissions.find(
-            (s) =>
-                s.userId === userId &&
-                s.status === SubmissionStatus.Pending &&
-                (!s.screenshotUrls || s.screenshotUrls.length === 0) &&
-                (taskEventId ? s.taskEventId === taskEventId : true)
-        );
-        if (pending && !pending.taskName) {
-            const taskEvent = await this.repo.getTaskEventById(pending.taskEventId);
-            if (taskEvent) {
-                pending.taskName = getTaskDisplayName(taskEvent.task, taskEvent.selectedAmount);
-                await this.repo.createSubmission(pending);
-            }
-        }
-        return pending;
+    async getHeldStatus(userId: string, taskEventId: string): Promise<SubmissionStatus | undefined> {
+        const approved = (await this.repo.getSubmissionsForTask(taskEventId)).filter((s) => s.userId === userId && getStatusPoints(s.status) > 0);
+        return maxBy(approved, (s) => getStatusPoints(s.status))?.status;
     }
 
 
@@ -318,13 +289,28 @@ export class TaskService {
         return taskId;
     }
 
-    private async syncCompletedUsers(taskEventId: string, userId: string, include: boolean): Promise<void> {
-        try {
-            if (include) {
-                await this.repo.addCompletedUser(taskEventId, userId);
-            } else {
-                await this.repo.removeCompletedUser(taskEventId, userId);
+    private async removeReviewMessages(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<void> {
+        const adminChannel = await configuredChannel(client, services, "taskVerification");
+        if (!adminChannel) return;
+        if (submission.message) {
+            try {
+                await adminChannel.messages.delete(submission.message);
+            } catch (err) {
+                console.warn(`[Admin Embed Cleanup Error]:`, err);
             }
+        }
+        if (submission.screenshotMessage) {
+            try {
+                await adminChannel.messages.delete(submission.screenshotMessage);
+            } catch (err) {
+                console.warn(`[Screenshot Message Cleanup Error]:`, err);
+            }
+        }
+    }
+
+    private async addCompletedUser(taskEventId: string, userId: string): Promise<void> {
+        try {
+            await this.repo.addCompletedUser(taskEventId, userId);
         } catch (err) {
             console.warn(`[TaskService] Failed to update completedUserIds for ${taskEventId}:`, err);
         }

@@ -3,6 +3,7 @@ import path from 'path';
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
+import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import { TaskInstructions } from "./TaskInstructions.js";
 
 const assetIconDir = path.join(import.meta.dirname, "../../../assets/icons");
@@ -170,8 +171,14 @@ export function buildTaskInfoEmbed(task: Task) {
     };
 }
 
+export const TIER_DISPLAY: Partial<Record<SubmissionStatus, { emoji: string; name: string }>> = {
+    [SubmissionStatus.Bronze]: { emoji: "🥉", name: "Bronze" },
+    [SubmissionStatus.Silver]: { emoji: "🥈", name: "Silver" },
+    [SubmissionStatus.Gold]: { emoji: "🥇", name: "Gold" },
+};
+
 // Embed shown in task verification channel when a submission is received
-export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent) {
+export function buildSubmissionEmbed(submission: any, taskName: string, event: TaskEvent, heldStatus?: SubmissionStatus) {
     const submissionTime = new Date();
     const eventEndTime = toDate(event.endTime);
 
@@ -185,10 +192,11 @@ export function buildSubmissionEmbed(submission: any, taskName: string, event: T
         )
         .setTimestamp();
 
-    if (submission.alreadyApproved) {
+    const held = heldStatus && TIER_DISPLAY[heldStatus];
+    if (held) {
         embed.addFields({
-            name: '⚠️ WARNING',
-            value: 'This user already has an **approved submission** for this task.'
+            name: "⚠️ WARNING",
+            value: `This user already holds **${held.emoji} ${held.name}** for this task.`
         });
     }
 

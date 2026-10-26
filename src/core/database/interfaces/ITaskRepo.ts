@@ -27,14 +27,12 @@ export interface ITaskRepository {
     getTaskEventsBetween(start: Date, end: Date): Promise<TaskEvent[]>;
     updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void>;
     addCompletedUser(taskEventId: string, userId: string): Promise<void>;
-    removeCompletedUser(taskEventId: string, userId: string): Promise<void>;
 
     // Submissions
     createSubmission(submission: TaskSubmission): Promise<void>;
     getSubmissionById(submissionId: string): Promise<TaskSubmission | null>;
     getSubmissionsForTask(taskId: string): Promise<TaskSubmission[]>;
     getSubmissionsByUser(userId: string): Promise<TaskSubmission[]>;
-    getSubmissionByUserAndTask(userId: string, taskEventId: string): Promise<TaskSubmission | null>;
     updateSubmissionStatus(
         submissionId: string,
         status: "pending" | "approved" | "rejected" | "bronze" | "silver" | "gold",
