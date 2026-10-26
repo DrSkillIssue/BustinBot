@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { packageVersion } from "../../../utils/version.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 interface Announcement {
     title: string;
@@ -90,21 +91,16 @@ const announce: Command = {
         }
 
         // Get announcement channel
-        const guildConfig = await services?.guilds.requireConfig(interaction);
-        const channelId = guildConfig?.channels?.announcements;
-        if (!channelId) {
+        const channel = await configuredChannel(interaction.client, services, "announcements");
+        if (!channel) {
+            const channelId = (await services.guilds.get(services.guildId))?.channels?.announcements;
             await interaction.editReply({
-                content: "Announcement channel not configured. Please run `/setup` first.",
+                content: channelId
+                    ? `I can't reach the announcement channel <#${channelId}>. Check it still exists and that I can see it, or pick another with \`/setup\`.`
+                    : "Announcement channel not configured. Please run `/setup` first.",
             });
             return;
         }
-
-        const fetchedChannel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
-        if (!fetchedChannel || !fetchedChannel.isTextBased()) {
-            await interaction.editReply({ content: "Announcement channel not configured. Please run `/setup` first."});
-            return;
-        }
-        const channel = fetchedChannel;
 
         // Build sections
         const botUser = interaction.client.user;
@@ -132,7 +128,7 @@ const announce: Command = {
         }, suppressMentions));
 
         await interaction.editReply({
-            content: `Announcement for **v${currentVersion}** posted in <#${channelId}>.`,
+            content: `Announcement for **v${currentVersion}** posted in <#${channel.id}>.`,
         });
     },
 };
