@@ -1,22 +1,20 @@
-import type { ModalSubmitInteraction, TextChannel } from "discord.js";
-import { buildTaskEventEmbed } from "./TaskEmbeds.js";
-import { isTextChannel } from "../../utils/ChannelUtils.js";
-import { TaskCategory, TaskType } from "../../models/Task.js";
-import { normaliseFirestoreDates } from "../../utils/DateUtils.js";
+import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import { DateTime } from "luxon";
+import { TaskType, type Task } from "../../models/Task.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { refreshTaskPollMessage, syncActivePollSelection } from "./HandleTaskPoll.js";
+import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
+import { refreshTaskEventMessage } from "./HandleTaskStart.js";
+import { AMOUNTS_ERROR, parseAmounts } from "./TaskForm.js";
 
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
-    const repo = services.repos?.taskRepo;
-    if (!repo) {
-        await interaction.reply({ content: 'Task repository unavailable.', flags: 1 << 6 });
-        return;
-    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const taskId = interaction.customId.replace('update_task_modal_', '');
+    const repo = services.repos.taskRepo;
+
+    const taskId = interaction.customId.replace("update_task_modal_", "");
     const task = await repo.getTaskById(taskId);
     if (!task) {
-        await interaction.reply({ content: `Could not find task with ID **${taskId}**.`, flags: 1 << 6 });
+        await interaction.editReply({ content: `Could not find task with ID **${taskId}**.` });
         return;
     }
 
@@ -38,46 +36,47 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
         }
         const event = normaliseFirestoreDates(activeEvent);
 
-        const { embeds, components, files } = buildTaskEventEmbed(event);
-
-        let channel = interaction.client.channels.cache.get(activeEvent.channelId) as TextChannel | undefined;
-        if (!channel) {
-            const fetched = await interaction.client.channels.fetch(activeEvent.channelId).catch(() => null);
-            channel = fetched && fetched.isTextBased() ? (fetched as TextChannel) : undefined;
-        }
-
-        if (!channel || !isTextChannel(channel)) {
-            console.warn(`[HandleUpdateTaskModal] Could not resolve text channel ${activeEvent.channelId} for live embed update.`);
-        } else {
-            try {
-                const message = await channel.messages.fetch(activeEvent.messageId);
-                if (message) await message.edit({ embeds, components, files });
-            } catch (err) {
-                console.error('[HandleUpdateTaskModal] Failed to update active task event embed:', err);
-            }
-        }
-
-        await repo.createTaskEvent(activeEvent);
+    try {
+        await saveAndRedraw(interaction, services, updated);
+    } catch (err) {
+        console.error(`[HandleUpdateTaskModal] Failed to save task ${taskId}:`, err);
+        await interaction.editReply({ content: `Couldn't save task **${taskId}**. Please try again.` });
+        return;
     }
 
-    if (task.category) {
-        const activePoll = await repo.getActiveTaskPollByCategory(task.category as TaskCategory);
-        if (activePoll?.options?.some(option => option.id === task.id)) {
-            activePoll.options = activePoll.options.map(option =>
-                option.id === task.id ? { ...option, ...task } : option
-            );
-            await repo.createTaskPoll(activePoll);
-            syncActivePollSelection(activePoll.messageId, task);
-            try {
-                await refreshTaskPollMessage(interaction.client, activePoll);
-            } catch (err) {
-                console.error('[HandleUpdateTaskModal] Failed to refresh active task poll embed:', err);
-            }
+    await interaction.editReply({ content: `Task **${taskId}** updated successfully.` });
+}
+
+async function saveAndRedraw(interaction: ModalSubmitInteraction, services: ServiceContainer, task: Task): Promise<void> {
+    const repo = services.repos.taskRepo;
+    await services.tasks.createTask(task);
+
+    const now = new Date();
+    const activeEvents = (
+        await repo.getTaskEventsBetween(now, DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate())
+    ).filter((event) => event.task.id === task.id && event.startTime <= now);
+
+    const amounts = { bronze: task.amtBronze, silver: task.amtSilver, gold: task.amtGold };
+    for (const activeEvent of activeEvents) {
+        await repo.updateTaskEventTask(activeEvent.id, task, amounts);
+
+        try {
+            await refreshTaskEventMessage(interaction.client, { ...activeEvent, task, amounts });
+        } catch (err) {
+            console.error("[HandleUpdateTaskModal] Failed to update active task event embed:", err);
         }
     }
 
-    await interaction.reply({
-        content: `Task **${taskId}** updated successfully.`,
-        flags: 1 << 6
-    });
+    const activePoll = await repo.getActiveTaskPollByCategory(task.category);
+    if (activePoll?.options.some(option => option.id === task.id)) {
+        activePoll.options = activePoll.options.map(option =>
+            option.id === task.id ? { ...option, ...task } : option
+        );
+        await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
+        try {
+            await refreshTaskPollMessage(interaction.client, activePoll);
+        } catch (err) {
+            console.error("[HandleUpdateTaskModal] Failed to refresh active task poll embed:", err);
+        }
+    }
 }

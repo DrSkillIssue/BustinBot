@@ -74,10 +74,8 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return snapshot.docs[0]?.data() ?? null;
     }
 
-        return {
-            ...data,
-            id: doc.id,
-        };
+    async updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void> {
+        await this.pollsCollection.doc(pollId).update({ options });
     }
 
     async closeTaskPoll(pollId: string): Promise<void> {
@@ -123,7 +121,10 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
             .where("endTime", "<=", end)
             .get();
 
-        return snapshot.docs.map((doc) => doc.data() as TaskEvent);
+        return snapshot.docs.map((doc) => doc.data());
+    }
+    async updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void> {
+        await this.eventsCollection.doc(taskEventId).update({ task, amounts });
     }
     async addCompletedUser(taskEventId: string, userId: string): Promise<void> {
         await this.eventsCollection.doc(taskEventId).set(

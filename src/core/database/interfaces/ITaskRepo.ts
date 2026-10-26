@@ -16,6 +16,7 @@ export interface ITaskRepository {
     getTaskPollById(pollId: string): Promise<TaskPoll | null>;
     getActiveTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
     getLatestTaskPollByCategory(category: TaskCategory): Promise<TaskPoll | null>;
+    updateTaskPollOptions(pollId: string, options: TaskPoll["options"]): Promise<void>;
     closeTaskPoll(pollId: string): Promise<void>;
     clearTaskPolls(): Promise<void>;
 
@@ -24,6 +25,7 @@ export interface ITaskRepository {
     getLatestTaskEvent(): Promise<TaskEvent | null>;
     getTaskEventById(id: string): Promise<TaskEvent | null>;
     getTaskEventsBetween(start: Date, end: Date): Promise<TaskEvent[]>;
+    updateTaskEventTask(taskEventId: string, task: TaskEvent["task"], amounts: TaskEvent["amounts"]): Promise<void>;
     addCompletedUser(taskEventId: string, userId: string): Promise<void>;
     removeCompletedUser(taskEventId: string, userId: string): Promise<void>;
 
