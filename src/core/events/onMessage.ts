@@ -55,6 +55,10 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
         await command.execute({ message, args, services });
     } catch (err) {
         console.error(`[Command Error]: ${commandName}`, err);
-        message.reply('There was an error executing that command.');
+        try {
+            await message.reply("There was an error executing that command.");
+        } catch (replyError) {
+            console.error(`[Command Error]: ${commandName}: could not send the error reply`, replyError);
+        }
     }
 }
