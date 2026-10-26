@@ -38,6 +38,13 @@ export class TaskService {
             s => s.userId === userId && s.taskEventId === taskEventId && s.status === SubmissionStatus.Approved
         );
 
+    async incrementWeight(id: string, amount = 1): Promise<void> {
+        await this.repo.incrementWeight(id, amount);
+        const kept = this.tasks?.get(id);
+        if (kept) kept.weight = (kept.weight ?? 0) + amount;
+    }
+
+    async completeSubmission(client: Client, userId: string, taskEventId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<SubmitOutcome> {
         const taskEvent = await this.repo.getTaskEventById(taskEventId);
         if (!taskEvent) {
             throw new Error(`Task event ${taskEventId} not found`);

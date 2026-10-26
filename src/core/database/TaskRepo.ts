@@ -41,35 +41,6 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return snapshot.docs.map(doc => doc.data());
     }
 
-    // Get random tasks (optional category filter)
-    async getRandomTasks(limit = 3, category?: string): Promise<Task[]> {
-        const queryRef = category
-            ? this.collection.where("category", "==", category)
-            : this.collection;
-
-        const snapshot = await queryRef.get();
-        const tasks = snapshot.docs
-            .map((doc) => doc.data() as Task)
-            .filter((t): t is Task => !!t);
-
-        for (let i = tasks.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            const ti = tasks[i];
-            const tj = tasks[j];
-            if (ti && tj) [tasks[i], tasks[j]] = [tj, ti];
-        }
-
-        return tasks.slice(0, limit);
-    }
-
-    // Increment weighting field
-    async incrementWeight(id: string, amount = 1): Promise<void> {
-        const docRef = this.collection.doc(id);
-        const snap = await docRef.get();
-        const current = (snap.data() as Task | undefined)?.weight ?? 0;
-        await docRef.update({ weight: current + amount });
-    }
-
     private get pollsCollection() {
         return this.guildCollection("taskPolls", taskPollConverter);
     }
@@ -228,15 +199,25 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         return this.guildCollection("taskFeedback", taskFeedbackConverter);
     }
 
-    async addFeedback(feedback: TaskFeedback): Promise<void> {
-        await this.feedbackCollection.doc(feedback.id).set(feedback);
+    async voteOnTaskOnce(feedback: Omit<TaskFeedback, "id">): Promise<TaskFeedback["vote"] | undefined> {
+        const { taskId, userId } = feedback;
+        const voteRef = this.feedbackCollection.doc(`${taskId}_${userId}`);
+
+        return this.db.runTransaction(async (transaction) => {
+            const stored = await transaction.get(voteRef);
+            const older = stored.exists
+                ? []
+                : (await transaction.get(this.feedbackCollection.where("taskId", "==", taskId).where("userId", "==", userId))).docs;
+            const previous = stored.data()?.vote ?? older[0]?.data().vote;
+
+            transaction.set(voteRef, { ...feedback, id: voteRef.id });
+            for (const old of older) transaction.delete(old.ref);
+            return previous;
+        });
     }
 
-    async getFeedbackForTask(taskId: string, eventId?: string): Promise<TaskFeedback[]> {
-    let query = this.feedbackCollection.where('taskId', '==', taskId);
-    if (eventId) query = query.where('eventId', '==', eventId);
-    const snapshot = await query.get();
-    return snapshot.docs.map((d) => d.data() as TaskFeedback);
+    async incrementWeight(id: string, amount = 1): Promise<void> {
+        await this.collection.doc(id).update({ weight: FieldValue.increment(amount) });
     }
 
     async deleteAllTasks(): Promise<void> {

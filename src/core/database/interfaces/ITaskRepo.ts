@@ -10,8 +10,6 @@ export interface ITaskRepository {
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
     getTasksByCategory(category: string): Promise<Task[]>;
-    getRandomTasks(limit?: number, category?: string): Promise<Task[]>;
-    incrementWeight(id: string, amount?: number): Promise<void>;
 
     // Task polls
     createTaskPoll(poll: TaskPoll): Promise<void>;
@@ -42,8 +40,8 @@ export interface ITaskRepository {
     ): Promise<void>;
 
     // Feedback
-    addFeedback(feedback: TaskFeedback): Promise<void>;
-    getFeedbackForTask(taskId: string, eventId?: string): Promise<TaskFeedback[]>;
+    voteOnTaskOnce(feedback: Omit<TaskFeedback, "id">): Promise<TaskFeedback["vote"] | undefined>;
+    incrementWeight(id: string, amount?: number): Promise<void>;
 
     // Utilities
     deleteAllTasks(): Promise<void>;
