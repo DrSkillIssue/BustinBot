@@ -60,8 +60,8 @@ const moviesetup: Command = {
             .setLabel("Cancel")
             .setStyle(ButtonStyle.Danger);
 
-        await interaction.reply({
-            content: 'Select the channels and roles below, then confirm **Confirm** to save.',
+        await interaction.editReply({
+            content: "Select the channels and roles below, then click **Confirm** to save.",
             components: [
                 new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(adminRoleSelect),
                 new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(notifyRoleSelect),

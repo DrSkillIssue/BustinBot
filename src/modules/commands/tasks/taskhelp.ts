@@ -25,7 +25,7 @@ const taskhelp: Command = {
                 {
                     name: "🗳️ Task Polls",
                     value:
-                        "Every **Sunday at 00:00 UTC**, a poll is posted for each task category (PvM, Skiling, and Minigame/Misc). Each poll runs for **24 hours** and you can vote for only one task per poll using the buttons underneath, though you can change your vote at any time.\nThe winners of each poll become the tasks for the following event."
+                        "Every **Sunday at 00:00 UTC**, a poll is posted for each task category (PvM, Skilling, and Minigame/Misc). Each poll runs for **24 hours** and you can vote for only one task per poll using the buttons underneath, though you can change your vote at any time.\nThe winners of each poll become the tasks for the following event."
                 },
                 {
                     name: "📊 Task Events",
