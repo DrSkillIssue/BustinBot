@@ -43,10 +43,10 @@ function shortenAmount(amount: number): string {
     return String(amount);
 }
 
-function getTaskPollVoteSummary(tasks: Task[], voteMap: Map<string, number>): string {
+function getTaskPollVoteSummary(tasks: Task[], voteCounts: Record<string, number>): string {
     return tasks.map((task, i) => {
         const taskId = task.id.toString();
-        const votes = voteMap.get(taskId) || 0;
+        const votes = voteCounts[taskId] ?? 0;
         const name = getTaskDisplayName(task);
         const tierDisplay =
             `🥉 **${shortenAmount(task.amtBronze)}** ` +
@@ -65,15 +65,15 @@ export function getTaskPollIconFile(category: TaskCategory): Array<{ attachment:
 export function buildTaskPollEmbed(
     category: TaskCategory,
     tasks: Task[],
-    voteMap: Map<string, number>,
+    voteCounts: Record<string, number>,
     options?: { endsAt?: Date | null; isClosed?: boolean }
 ) {
     const endsAt = options?.endsAt ?? null;
     const isClosed = options?.isClosed ?? false;
     const timeString = endsAt ? `<t:${Math.floor(endsAt.getTime() / 1000)}:R>` : '';
     const description =
-        `${getTaskPollVoteSummary(tasks, voteMap)}` +
-        (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : '');
+        `${getTaskPollVoteSummary(tasks, voteCounts)}` +
+        (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : "");
 
     return new EmbedBuilder()
         .setTitle(`🗳️ ${category} Task Poll`)

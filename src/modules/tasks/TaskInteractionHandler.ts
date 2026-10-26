@@ -18,11 +18,6 @@ export async function handleTaskInteraction(
 ) {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
-            // Live polls use in-memory collectors. Persisted fallback handles post-restart votes.
-            if (hasActiveTaskPollCollector(interaction.message.id)) {
-                return;
-            }
-
             await handleTaskPollVoteInteraction(interaction, services);
             return;
         }
