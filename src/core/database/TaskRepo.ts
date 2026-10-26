@@ -35,6 +35,10 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
         await this.collection.doc(task.id).set(task, { merge: true });
     }
 
+    async addTask(task: Task): Promise<boolean> {
+        return this.createIfAbsent(task.id, task);
+    }
+
     // Fetch all tasks of a specific category
     async getTasksByCategory(category: string): Promise<Task[]> {
         const snapshot = await this.collection.where("category", "==", category).get();

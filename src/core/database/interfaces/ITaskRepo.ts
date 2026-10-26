@@ -9,6 +9,7 @@ export interface ITaskRepository {
     getAllTasks(): Promise<Task[]>;
     getTaskById(id: string): Promise<Task | null>;
     createTask(task: Task): Promise<void>;
+    addTask(task: Task): Promise<boolean>;
     getTasksByCategory(category: string): Promise<Task[]>;
 
     // Task polls
