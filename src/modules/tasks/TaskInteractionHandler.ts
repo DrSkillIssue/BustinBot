@@ -1,4 +1,4 @@
-import type { Interaction, Client } from "discord.js";
+import { MessageFlags, type Interaction } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { handleTaskFeedback } from "./HandleTaskFeedback.js";
 import {
@@ -16,7 +16,6 @@ import { MONIS_CHOICE_MODAL, handleMonisChoiceModal } from "./HandleMonisChoiceM
 
 export async function handleTaskInteraction(
     interaction: Interaction,
-    _client: Client,
     services: ServiceContainer
 ) {
     if (interaction.isButton()) {

@@ -1,17 +1,17 @@
-import { ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from 'discord.js';
-import type { ServiceContainer } from '../core/services/ServiceContainer.js';
+import { AutocompleteInteraction, ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from "discord.js";
+import type { ServiceContainer } from "../core/services/ServiceContainer.js";
 
 export enum CommandRole {
-    Everyone = 'Everyone',
-    TaskAdmin = 'TaskAdmin',
-    MovieAdmin = 'MovieAdmin',
-    BotAdmin = 'BotAdmin'
+    Everyone = "Everyone",
+    TaskAdmin = "TaskAdmin",
+    MovieAdmin = "MovieAdmin",
+    BotAdmin = "BotAdmin"
 }
 
 export enum CommandModule {
-    Core = 'core',
-    Movie = 'movie',
-    Task = 'task',
+    Core = "core",
+    Movie = "movie",
+    Task = "task",
 }
 
 export interface Command {
@@ -43,7 +43,7 @@ export interface Command {
     // Support both message-based (prefix) and slash commands
     execute: (context: {
         message?: Message;
-        interaction?: ChatInputCommandInteraction;
+        interaction?: ChatInputCommandInteraction<"raw" | "cached">;
         args?: string[];
         services: ServiceContainer;
     }) => Promise<void>;

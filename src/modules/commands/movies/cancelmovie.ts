@@ -26,24 +26,19 @@ const cancelmovie: Command = {
         }
 
         const movieRepo = services.repos.movieRepo;
-        if (!movieRepo) {
-            await interaction.editReply("Movie repository not available.");
-            return;
-        }
 
         const guildConfig = await services.guilds.get(guild.id);
         const client = interaction.client;
 
         async function fetchMessageFromChannels(messageId: string, ...channelIds: (string | null | undefined)[]) {
-            for (const channelId of channelIds) {
+            for (const channelId of new Set(channelIds)) {
                 if (!channelId) continue;
                 try {
                     const fetchedChannel = await client.channels.fetch(channelId);
                     if (!fetchedChannel?.isTextBased()) continue;
-                    const message = await fetchedChannel.messages.fetch(messageId);
-                    return { channel: fetchedChannel as TextChannel, message };
+                    return await fetchedChannel.messages.fetch(messageId);
                 } catch (err) {
-                    if ((err as any)?.code === 10008) {
+                    if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownMessage) {
                         continue;
                     }
                     throw err;
@@ -67,14 +62,14 @@ const cancelmovie: Command = {
 
                 if (activePoll.messageId) {
                     try {
-                        const pollMessageContext = await fetchMessageFromChannels(
+                        const pollMessage = await fetchMessageFromChannels(
                             activePoll.messageId,
                             activePoll.channelId,
                             guildConfig?.channels?.movieNight
                         );
 
-                        if (pollMessageContext) {
-                            await pollMessageContext.message.edit({
+                        if (pollMessage) {
+                            await pollMessage.edit({
                                 content: `❌ This movie poll was cancelled by <@${interaction.user.id}>.`,
                                 embeds: [],
                                 components: [],
@@ -100,14 +95,14 @@ const cancelmovie: Command = {
 
                 if (latestEvent.announcementMessageId) {
                     try {
-                        const announcementContext = await fetchMessageFromChannels(
+                        const announcement = await fetchMessageFromChannels(
                             latestEvent.announcementMessageId,
                             latestEvent.channelId,
                             guildConfig?.channels?.movieNight
                         );
 
-                        if (announcementContext) {
-                            await announcementContext.message.edit({
+                        if (announcement) {
+                            await announcement.edit({
                                 content: cancellationMessage,
                                 embeds: [],
                                 components: [],
@@ -127,12 +122,7 @@ const cancelmovie: Command = {
             // Unpick currently selected movie (if any)
             const movies = await movieRepo.getAllMovies();
             const withSelection = movies
-                .filter((m) => !m.watched && m.selectedAt)
-                .map((movie) => {
-                    const selectedAt = movie.selectedAt instanceof Date ? movie.selectedAt : null;
-                    return selectedAt ? { movie, selectedAt } : null;
-                })
-                .filter((entry): entry is { movie: typeof movies[number]; selectedAt: Date } => entry !== null)
+                .flatMap((movie) => !movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : [])
                 .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
             const currentlySelected = withSelection[0]?.movie;
@@ -145,7 +135,7 @@ const cancelmovie: Command = {
                     ...rest
                 } = currentlySelected;
 
-                await movieRepo.upsertMovie(rest as typeof currentlySelected);
+                await movieRepo.upsertMovie(rest);
                 actions.push(`Unpicked movie "${currentlySelected.title}"`);
             }
         } catch (err) {

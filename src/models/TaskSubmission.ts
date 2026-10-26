@@ -1,10 +1,10 @@
 export enum SubmissionStatus {
-    Pending = 'pending',
-    Approved = 'approved',
-    Rejected = 'rejected',
-    Bronze = 'bronze',
-    Silver = 'silver',
-    Gold = 'gold',
+    Pending = "pending",
+    Approved = "approved",
+    Rejected = "rejected",
+    Bronze = "bronze",
+    Silver = "silver",
+    Gold = "gold",
 }
 
 export interface TaskSubmission {

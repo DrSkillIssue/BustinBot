@@ -75,10 +75,7 @@ export async function startTaskEventForCategory(
     }
 
     // Tally votes per option ID
-    const voteCounts: Record<string, number> = {};
-    for (const votedTaskId of Object.values(pollData.votes)) {
-        voteCounts[votedTaskId] = (voteCounts[votedTaskId] ?? 0) + 1;
-    }
+    const voteCounts = countBy(Object.values(pollData.votes), (taskId) => taskId);
 
     const maxVotes = Math.max(...pollData.options.map(opt => voteCounts[opt.id] ?? 0));
     const topTasks = pollData.options.filter(opt => (voteCounts[opt.id] ?? 0) === maxVotes);

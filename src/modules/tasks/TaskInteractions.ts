@@ -28,10 +28,6 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     }
 
     const taskRepo = services.repos.taskRepo;
-    if (!taskRepo) {
-        await interaction.editReply({ content: "Task repository unavailable." });
-        return;
-    }
 
     const taskEvent = await taskRepo.getTaskEventById(taskEventId);
     if (!taskEvent) {
@@ -341,25 +337,19 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
     });
 
     // Post a visible message in the admin channel
-    const guildConfig = await services.guilds.get(services.guildId);
-    const verificationChannelId = guildConfig?.channels?.taskVerification;
-    if (verificationChannelId) {
+    const adminChannel = await configuredChannel(interaction.client, services, "taskVerification");
+    if (adminChannel) {
         try {
-            const adminChannel = await interaction.client.channels.fetch(verificationChannelId);
-            if (adminChannel && adminChannel.isTextBased()) {
-                const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-                const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${updated?.taskName ?? `Task ${updated?.taskEventId}`}** by <@${updated?.userId}>. Reason: ${reason || "No reason provided"}. Submission moved to archive channel.`;
-                if (suppressMentions) {
-                    await (adminChannel as TextChannel).send(withSuppressedMentions({ content: rejectionMessage }, true));
-                } else {
-                    await (adminChannel as TextChannel).send(rejectionMessage);
-                }
+            const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
+            const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${submissionLabel(updated)}** by <@${updated.userId}>. Reason: ${reason || "No reason provided"}.${updated.archived ? " Submission moved to archive channel." : ""}`;
+            if (suppressMentions) {
+                await adminChannel.send(withSuppressedMentions({ content: rejectionMessage }, true));
+            } else {
+                await adminChannel.send(rejectionMessage);
             }
         } catch (err) {
-            console.warn(`[TaskInteractions] Failed to notify task admins in channel ${verificationChannelId}:`, err);
+            console.warn(`[TaskInteractions] Failed to notify task admins in channel ${adminChannel.id}:`, err);
         }
-    } else {
-        console.warn(`[TaskInteractions] Task verification channel not configured for guild ${services.guildId}.`);
     }
 
 }

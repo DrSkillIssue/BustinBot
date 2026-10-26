@@ -21,7 +21,7 @@ function tmdbUrl(path: string, params: Record<string, string> = {}): URL {
 }
 
 // TMDb Response Types
-interface TMDbSearchResult {
+export interface TMDbSearchResult {
     id: number;
     title: string;
     release_date?: string;
@@ -57,12 +57,9 @@ export async function fetchMovieDetails(movieName: string): Promise<Partial<Movi
 }
 
 export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> | null> {
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}&language=en-US`;
-    const creditsUrl = `${TMDB_BASE_URL}/movie/${id}/credits?api_key=${TMDB_API_KEY}&language=en-US`;
-
     const [detailsRes, creditsRes] = await Promise.all([
-        fetch(detailsUrl),
-        fetch(creditsUrl),
+        fetch(tmdbUrl(`/movie/${id}`, { language: "en-US" })),
+        fetch(tmdbUrl(`/movie/${id}/credits`, { language: "en-US" })),
     ]);
 
     if (!detailsRes.ok) throw new Error("Failed to fetch TMDb details");
@@ -137,10 +134,6 @@ export async function addMovieWithStats(movie: Movie, services: ServiceContainer
     const movieRepo = services.repos.movieRepo;
     const userRepo = services.repos.userRepo;
 
-    if (!movieRepo || !userRepo) {
-        throw new Error("[MovieService] Missing repositories.");
-    }
-
     await movieRepo.upsertMovie(movie);
     await userRepo.incrementStat(movie.addedBy, "moviesAdded", 1);
 }
@@ -148,10 +141,6 @@ export async function addMovieWithStats(movie: Movie, services: ServiceContainer
 export async function removeMovieWithStats(movie: Movie, services: ServiceContainer) {
     const movieRepo = services.repos.movieRepo;
     const userRepo = services.repos.userRepo;
-
-    if (!movieRepo) {
-        throw new Error("[MovieService] Missing movie repository.");
-    }
 
     if (movie.watched) {
         await movieRepo.upsertMovie({
@@ -165,10 +154,5 @@ export async function removeMovieWithStats(movie: Movie, services: ServiceContai
     }
 
     await movieRepo.deleteMovie(movie.id);
-
-    if (!movie.watched && userRepo) {
-        await userRepo.incrementStat(movie.addedBy, "moviesAdded", -1);
-    } else if (!userRepo) {
-        console.warn("[MovieService] User repository unavailable; skipping moviesAdded decrement.");
-    }
+    await userRepo.incrementStat(movie.addedBy, "moviesAdded", -1);
 }

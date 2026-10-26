@@ -23,15 +23,10 @@ const stats: Command = {
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const targetUser = interaction.options.getUser("user") ?? interaction.user;
         const userRepo = services.repos.userRepo;
-
-        if (!userRepo) {
-            await interaction.editReply("User repository not available.");
-            return;
-        }
 
         let stats: UserStats | null = null;
         try {

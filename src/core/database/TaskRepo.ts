@@ -243,11 +243,8 @@ export class TaskRepository extends GuildScopedRepository<Task> implements ITask
     }
 
     async seedTasks(tasks: Task[]): Promise<void> {
-        const batch = db.batch();
-        tasks.forEach(task => {
-            const ref = this.collection.doc(task.id);
-            batch.set(ref, task);
-        });
+        const batch = this.db.batch();
+        for (const task of tasks) batch.set(this.collection.doc(task.id), task);
         await batch.commit();
     }
 

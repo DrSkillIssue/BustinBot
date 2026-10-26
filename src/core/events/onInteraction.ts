@@ -101,9 +101,9 @@ export async function handleInteraction(
         }
 
         // Module setup validation
-        const guildId = interaction.guildId!;
+        const guildId = interaction.guildId;
         const guildConfig = await services.guilds.get(guildId);
-        const setupMap = guildConfig?.setupComplete ?? {} as any;
+        const setupMap: GuildSetupComplete = guildConfig?.setupComplete ?? {};
 
         const requiredModule = command.module;
         const moduleReady = setupMap[requiredModule];
@@ -130,16 +130,12 @@ export async function handleInteraction(
         }
 
         try {
-            const userRepo = services.repos.userRepo;
-            if (userRepo) {
-                try {
-                    await userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
-                } catch (err) {
-                    console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
-                }
-            } else {
-                console.warn("[Stats] UserRepo unavailable; skipping commandsRun increment.");
-            }
+            await services.repos.userRepo.incrementStat(interaction.user.id, "commandsRun", 1);
+        } catch (err) {
+            console.warn(`[Stats] Failed to increment commandsRun for ${interaction.user.username}:`, err);
+        }
+
+        try {
             await command.execute({ interaction, services });
         } catch (error) {
             console.error(`[Slash Command Error]: ${command.name}`, error);
@@ -225,7 +221,7 @@ export async function handleInteraction(
             return;
         }
 
-        const guildId = interaction.guildId!;
+        const guildId = services.guildId;
         await services.guilds.update(guildId, { timezone: matchedZone });
 
         const currentTime = timezoneService.getCurrentTimeInZone(matchedZone);

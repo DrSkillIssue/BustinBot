@@ -117,19 +117,10 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     const ROLLS_PER_SUBMISSION = 1;
 
     // Deduplicate submissions so a user only gets the highest tier per task
-    const userBestSubmissions = new Map<string, typeof filtered[number]>();
-    for (const submission of filtered) {
-        const key = `${submission.userId}-${submission.taskEventId}`;
-        const existing = userBestSubmissions.get(key);
-        const currentRank = STATUS_RANK[submission.status] ?? 0;
-        const existingRank = existing ? STATUS_RANK[existing.status] ?? 0 : 0;
-
-        if (!existing || currentRank >= existingRank) {
-            userBestSubmissions.set(key, submission);
-        }
-    }
-
-    const deduplicatedSubmissions = Array.from(userBestSubmissions.values());
+    const deduplicatedSubmissions = [...Map.groupBy(filtered, (submission) => `${submission.userId}-${submission.taskEventId}`).values()]
+        .map((submissions) => submissions.reduce((best, submission) =>
+            (STATUS_RANK[submission.status] ?? 0) >= (STATUS_RANK[best.status] ?? 0) ? submission : best
+        ));
     const deduplicatedEventIds = Array.from(
         new Set(
             deduplicatedSubmissions
@@ -197,10 +188,10 @@ export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, sna
         for (let i = 0; i < count; i++) tickets.push(userId);
     }
 
-    if (tickets.length === 0) return null;
+    if (!tickets.length) return null;
+    const winnerId = sample(tickets);
 
-    const winnerId = tickets[Math.floor(Math.random() * tickets.length)]!;
-    snapshot.winnerId = winnerId || '';
+    snapshot.winnerId = winnerId || "";
     snapshot.rolledAt = new Date().toISOString();
 
     await prizeRepo.setWinner(snapshot.id, winnerId);

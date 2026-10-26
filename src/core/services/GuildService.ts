@@ -1,6 +1,6 @@
 import type { Guild } from "../../models/Guild.js";
 import type { IGuildRepository } from "../database/interfaces/IGuildRepo.js";
-import { ChatInputCommandInteraction, Message, type RepliableInteraction } from "discord.js";
+import { ChatInputCommandInteraction, Message, type RepliableInteraction, MessageFlags } from "discord.js";
 
 const DEFAULT_TASK_MILESTONE_ROLES = [
     { id: "task-participant", label: "Task Participant", roleId: "", requiredSubmissions: 5, enabled: true },
@@ -25,9 +25,8 @@ export class GuildService {
     constructor(private readonly repo: IGuildRepository) { }
 
     async get(guildId: string): Promise<Guild | null> {
-        if (this.cache.has(guildId)) {
-            return this.cache.get(guildId)!;
-        }
+        const cached = this.cache.get(guildId);
+        if (cached) return cached;
 
         const guild = await this.repo.getGuild(guildId);
         if (guild) this.cache.set(guildId, guild);
@@ -148,9 +147,9 @@ export class GuildService {
         const guildId = source.guildId;
         if (!guildId) {
             if (source instanceof Message) {
-                await source.reply('This command can only be used inside a server.');
+                await source.reply("This command can only be used inside a server.");
             } else {
-                await source.reply({ content: 'This command can only be used inside a server.', flags: 1 << 6 });
+                await source.reply({ content: "This command can only be used inside a server.", flags: MessageFlags.Ephemeral });
             }
             return null;
         }
@@ -158,12 +157,12 @@ export class GuildService {
         const guildConfig = await this.get(guildId);
 
         if (!guildConfig) {
-            const replyContent = 'Guild configuration not found. Please run `/setup` first.';
+            const replyContent = "Guild configuration not found. Please run `/setup` first.";
 
             if (source instanceof Message) {
                 await source.reply(replyContent);
             } else {
-                await source.reply({ content: replyContent, flags: 1 << 6 });
+                await source.reply({ content: replyContent, flags: MessageFlags.Ephemeral });
             }
 
             return null;
@@ -175,7 +174,7 @@ export class GuildService {
     async ensureExists(guildId: string, userId: string) {
         let guild = await this.get(guildId);
         if (!guild) {
-            await this.update(guildId, { updatedBy: userId, updatedAt: new Date() as any });
+            await this.update(guildId, { updatedBy: userId, updatedAt: new Date() });
             guild = await this.get(guildId);
         }
         return guild;

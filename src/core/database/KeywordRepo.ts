@@ -36,21 +36,6 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
         await this.collection.doc(id).delete();
     }
 
-    async getRandomKeyword(excludeRecentCount = 20): Promise<Keyword | null> {
-        const allKeywords = await this.getAllKeywords();
-
-        const sorted = allKeywords.sort(
-            (a, b) => b.lastUsedAt.toMillis() - a.lastUsedAt.toMillis()
-        );
-
-        const eligible = sorted.slice(excludeRecentCount);
-
-        if (eligible.length === 0) return null;
-
-        const random = eligible[Math.floor(Math.random() * eligible.length)];
-        return random ?? null;
-    }
-
     async markKeywordUsed(keywordId: string, eventId: string): Promise<void> {
         const docRef = this.collection.doc(keywordId);
         const data = (await docRef.get()).data();

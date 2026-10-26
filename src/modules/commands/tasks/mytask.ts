@@ -1,57 +1,53 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
+import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { SubmissionStatus } from "../../../models/TaskSubmission.js";
-import type { ServiceContainer } from "core/services/ServiceContainer.js";
+import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import type { TaskEvent } from "../../../models/TaskEvent.js";
 import { TaskCategory } from "../../../models/Task.js";
 
 const mytask: Command = {
-    name: 'mytask',
-    description: 'Check the status of your task submissions',
+    name: "mytask",
+    description: "Check the status of your task submissions",
     module: CommandModule.Task,
     allowedRoles: [CommandRole.Everyone],
-    usage: '/mytask [task_event]',
+    usage: "/mytask [task_event]",
     examples: [
-        '/mytask',
-        '/mytask task_event:PVM054-20260126'
+        "/mytask",
+        "/mytask task_event:PVM054-20260126"
     ],
 
     slashData: new SlashCommandBuilder()
-        .setName('mytask')
-        .setDescription('Check the status of your task submissions')
+        .setName("mytask")
+        .setDescription("Check the status of your task submissions")
         .addStringOption(option =>
-            option.setName('task_event')
-                .setDescription('Select a specific task event (optional)')
+            option.setName("task_event")
+                .setDescription("Select a specific task event (optional)")
                 .setRequired(false)
                 .addChoices(
-                    { name: 'Current PvM Task', value: 'current_pvm' },
-                    { name: 'Current Skilling Task', value: 'current_skilling' },
-                    { name: 'Current Minigame/Misc Task', value: 'current_minigame' },
-                    { name: 'Current Leagues Task', value: 'current_leagues' }
+                    { name: "Current PvM Task", value: "current_pvm" },
+                    { name: "Current Skilling Task", value: "current_skilling" },
+                    { name: "Current Minigame/Misc Task", value: "current_minigame" },
+                    { name: "Current Leagues Task", value: "current_leagues" }
                 )
-        ) as SlashCommandBuilder,
+        ),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const userId = interaction.user.id;
-        const taskEventChoice = interaction.options.getString('task_event');
+        const taskEventChoice = interaction.options.getString("task_event");
         const taskRepo = services.repos.taskRepo;
-
-        if (!taskRepo) {
-            await interaction.editReply({ content: 'Task repository not available.', flags: 1 << 6 });
-            return;
-        }
 
         try {
             const now = new Date();
 
             // Get active task events
             const activeEvents = await taskRepo.getTaskEventsBetween(
-                new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-                new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+                DateTime.fromJSDate(now).minus({ days: 30 }).toJSDate(),
+                DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate()
             );
 
             const currentlyActive = activeEvents
@@ -61,8 +57,7 @@ const mytask: Command = {
 
             if (currentlyActive.length === 0) {
                 await interaction.editReply({
-                    content: 'There are no active task events at the moment.',
-                    flags: 1 << 6
+                    content: "There are no active task events at the moment.",
                 });
                 return;
             }
@@ -73,10 +68,10 @@ const mytask: Command = {
             if (taskEventChoice) {
                 // Map choice to category
                 const categoryMap: Record<string, TaskCategory> = {
-                    'current_pvm': TaskCategory.PvM,
-                    'current_skilling': TaskCategory.Skilling,
-                    'current_minigame': TaskCategory.MinigameMisc,
-                    'current_leagues': TaskCategory.Leagues
+                    "current_pvm": TaskCategory.PvM,
+                    "current_skilling": TaskCategory.Skilling,
+                    "current_minigame": TaskCategory.MinigameMisc,
+                    "current_leagues": TaskCategory.Leagues
                 };
 
                 const targetCategory = categoryMap[taskEventChoice];
@@ -85,7 +80,6 @@ const mytask: Command = {
                 if (!selectedEvent) {
                     await interaction.editReply({
                         content: `There is no active ${targetCategory} task event at the moment.`,
-                        flags: 1 << 6
                     });
                     return;
                 }
@@ -97,7 +91,6 @@ const mytask: Command = {
                 if (submissions.length === 0) {
                     await interaction.editReply({
                         content: `You have no submissions for the current ${targetCategory} task event.`,
-                        flags: 1 << 6
                     });
                     return;
                 }
@@ -111,8 +104,7 @@ const mytask: Command = {
 
                 if (submissions.length === 0) {
                     await interaction.editReply({
-                        content: 'You have no submissions for currently active task events.',
-                        flags: 1 << 6
+                        content: "You have no submissions for currently active task events.",
                     });
                     return;
                 }
@@ -122,30 +114,30 @@ const mytask: Command = {
             }
 
             const statusLines = submissions.map(sub => {
-                const taskName = sub.taskName || 'Unknown Task';
-                let statusText = '';
+                const taskName = sub.taskName || "Unknown Task";
+                let statusText = "";
 
                 switch (sub.status) {
                     case SubmissionStatus.Bronze:
-                        statusText = '**Approved for Bronze** 🥉';
+                        statusText = "**Approved for Bronze** 🥉";
                         break;
                     case SubmissionStatus.Silver:
-                        statusText = '**Approved for Silver** 🥈';
+                        statusText = "**Approved for Silver** 🥈";
                         break;
                     case SubmissionStatus.Gold:
-                        statusText = '**Approved for Gold** 🥇';
+                        statusText = "**Approved for Gold** 🥇";
                         break;
                     case SubmissionStatus.Approved:
-                        statusText = '**Approved** ✅';
+                        statusText = "**Approved** ✅";
                         break;
                     case SubmissionStatus.Pending:
-                        statusText = '**Pending** ⏳';
+                        statusText = "**Pending** ⏳";
                         break;
                     case SubmissionStatus.Rejected:
-                        statusText = '**Rejected** ❌';
+                        statusText = "**Rejected** ❌";
                         break;
                     default:
-                        statusText = '**Unknown**';
+                        statusText = "**Unknown**";
                 }
 
                 return `• ${taskName}: ${statusText}`;
@@ -153,13 +145,13 @@ const mytask: Command = {
 
 
             const replyText = taskEventChoice
-                ? `**Task Submission Status:**\n\n${statusLines.join('\n')}`
-                : `**Your Active Task Submissions:**\n\n${statusLines.join('\n')}`;
+                ? `**Task Submission Status:**\n\n${statusLines.join("\n")}`
+                : `**Your Active Task Submissions:**\n\n${statusLines.join("\n")}`;
 
-            await interaction.editReply({ content: replyText, flags: 1 << 6 });
+            await interaction.editReply({ content: replyText });
         } catch (error) {
-            console.error('[MyTask] Error fetching submissions:', error);
-            await interaction.editReply({ content: 'Failed to fetch your task submissions.', flags: 1 << 6 });
+            console.error("[MyTask] Error fetching submissions:", error);
+            await interaction.editReply({ content: "Failed to fetch your task submissions." });
         }
     }
 };

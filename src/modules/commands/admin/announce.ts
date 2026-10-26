@@ -5,6 +5,7 @@ import {
     type APIMessageTopLevelComponent,
     type APISectionComponent,
     type APITextDisplayComponent,
+    type MessageCreateOptions,
 } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -122,8 +123,8 @@ const announce: Command = {
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
         // Send announcement
-        await channel.send(withSuppressedMentions({
-            flags: MessageFlags.IsComponentsV2 as MessageFlags.IsComponentsV2,
+        await channel.send(withSuppressedMentions<MessageCreateOptions>({
+            flags: MessageFlags.IsComponentsV2,
             components,
         }, suppressMentions));
 

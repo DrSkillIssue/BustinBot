@@ -1,7 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { calculateTaskStreakSummary, formatDuration } from "../../tasks/TaskStreaks.js";
+import { calculateTaskStreakSummary } from "../../tasks/TaskStreaks.js";
 import { packageVersion } from "../../../utils/version.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 
@@ -17,13 +17,9 @@ const taskstreak: Command = {
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const taskRepo = services.repos.taskRepo;
-        if (!taskRepo) {
-            await interaction.editReply("Task repository not available.");
-            return;
-        }
 
         const now = new Date();
         let summary: Awaited<ReturnType<typeof calculateTaskStreakSummary>>;
@@ -51,12 +47,12 @@ const taskstreak: Command = {
 
         let deadlineLine = "No active task period right now.";
         if (summary.currentPeriod) {
-            const remainingMs = Math.max(summary.currentPeriod.end.getTime() - now.getTime(), 0);
-            const absoluteEnd = `<t:${Math.floor(summary.currentPeriod.end.getTime() / 1000)}:F>`;
+            const absoluteEnd = time(summary.currentPeriod.end, TimestampStyles.LongDateTime);
+            const relativeEnd = time(summary.currentPeriod.end, TimestampStyles.RelativeTime);
             if (summary.hasCompletedCurrentPeriod) {
-                deadlineLine = `✅ Streak kept active for this period. Period ends ${absoluteEnd} (${formatDuration(remainingMs)} remaining).`;
+                deadlineLine = `✅ Streak kept active for this period. Period ends ${absoluteEnd} (${relativeEnd}).`;
             } else {
-                deadlineLine = `⏳ Submit before ${absoluteEnd} (${formatDuration(remainingMs)} remaining) to preserve your streak.`;
+                deadlineLine = `⏳ Submit before ${absoluteEnd} (${relativeEnd}) to preserve your streak.`;
             }
         }
 

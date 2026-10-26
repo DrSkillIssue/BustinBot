@@ -29,12 +29,12 @@ const suppress: Command = {
         const guildId = interaction.guildId;
 
         const minutes = interaction.options.getInteger("minutes", true);
-        const untilMs = Date.now() + minutes * 60_000;
+        const until = DateTime.now().plus({ minutes }).toJSDate();
 
         await services.guilds.update(guildId, {
-            mentionSuppressedUntilMs: untilMs,
+            mentionSuppressedUntilMs: until.getTime(),
             updatedBy: interaction.user.id,
-            updatedAt: new Date() as any,
+            updatedAt: new Date(),
         });
 
         await interaction.editReply({
