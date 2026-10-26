@@ -65,18 +65,14 @@ export function createLocalMoviePreviewEmbed(movie: Movie): EmbedBuilder {
 
 export function createMovieNightEmbed(
     movie: Partial<Movie> | null,
-    unixTimestamp: number,
+    startTime: Date,
     stateMessage: string,
     scheduledBy: string
 ): EmbedBuilder {
-    const trimmedStateMessage = stateMessage?.trim?.() ?? "";
-    const startTimeLines = [`<t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`];
-    if (trimmedStateMessage) {
-        startTimeLines.push(trimmedStateMessage);
-    }
-    const startTimeValue = startTimeLines.join('\n\n');
-
-    let embed: EmbedBuilder;
+    const startTimeValue = [
+        `${time(startTime, TimestampStyles.LongDateTime)} (${time(startTime, TimestampStyles.RelativeTime)})`,
+        stateMessage.trim()
+    ].filter(Boolean).join("\n\n");
 
     if (movie) {
         const titleText = `Now showing: ${movie.title}${movie.releaseDate ? ` (${movie.releaseDate})` : ''}`;

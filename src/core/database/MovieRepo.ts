@@ -47,9 +47,14 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         return polls[0] ?? null;
     }
 
-    async closePoll(pollId: string): Promise<void> {
+    async closePoll(pollId: string): Promise<MoviePoll | null> {
         const docRef = this.pollsCollection.doc(pollId);
-        await docRef.update({ isActive: false, closedAt: new Date() });
+        return this.db.runTransaction(async (transaction) => {
+            const poll = (await transaction.get(docRef)).data();
+            if (!poll?.isActive) return null;
+            transaction.update(docRef, { isActive: false, closedAt: new Date() });
+            return poll;
+        });
     }
 
     async clearPolls(): Promise<void> {
@@ -69,6 +74,28 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
             createdAt: event.createdAt ?? new Date(),
         };
         await this.eventsCollection.doc(payload.id).set(payload);
+    }
+
+    async completeEvent(eventId: string, completedAt: Date, movie?: Movie): Promise<boolean> {
+        const docRef = this.eventsCollection.doc(eventId);
+        return this.db.runTransaction(async (transaction) => {
+            const event = (await transaction.get(docRef)).data();
+            if (!event || event.completed) return false;
+            transaction.update(docRef, { completed: true, completedAt, movie });
+            return true;
+        });
+    }
+
+    async claimReminders(eventId: string, labels: string[]): Promise<string[]> {
+        const docRef = this.eventsCollection.doc(eventId);
+        return this.db.runTransaction(async (transaction) => {
+            const event = (await transaction.get(docRef)).data();
+            if (!event || event.completed) return [];
+            const sent = event.remindersSent ?? [];
+            const unsent = labels.filter((label) => !sent.includes(label));
+            if (unsent.length) transaction.update(docRef, { remindersSent: [...sent, ...unsent] });
+            return unsent;
+        });
     }
 
     async getActiveEvent(): Promise<MovieEvent | null> {

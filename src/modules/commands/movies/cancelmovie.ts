@@ -2,23 +2,21 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "d
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
-import { clearScheduledMovieAutoEnd } from "../../movies/MovieLifecycle.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
 const cancelmovie: Command = {
-    name: 'cancelmovie',
-    description: 'Cancel the currently scheduled movie night and selected movie.',
+    name: "cancelmovie",
+    description: "Cancel the currently scheduled movie night and selected movie.",
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.MovieAdmin],
 
     slashData: new SlashCommandBuilder()
-        .setName('cancelmovie')
-        .setDescription('Cancel the currently scheduled movie night and selected movie.'),
+        .setName("cancelmovie")
+        .setDescription("Cancel the currently scheduled movie night and selected movie."),
 
     async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guild = interaction.guild;
         if (!guild) {
@@ -59,14 +57,11 @@ const cancelmovie: Command = {
         const cancellationMessage = `❌ Movie night has been cancelled by <@${interaction.user.id}>.`;
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
-        clearScheduledMovieAutoEnd(services.guildId);
-        actions.push("Cleared movie auto-end timer");
-
         try {
             // Cancel active poll
-            const activePoll = await movieRepo.getActivePoll();
-            if (activePoll?.isActive) {
-                await movieRepo.closePoll(activePoll.id);
+            const openPoll = await movieRepo.getActivePoll();
+            const activePoll = openPoll?.isActive ? await movieRepo.closePoll(openPoll.id) : null;
+            if (activePoll) {
                 actions.push("Active movie poll set inactive");
 
                 if (activePoll.messageId) {
@@ -96,14 +91,10 @@ const cancelmovie: Command = {
 
             // Mark latest movie event as cancelled
             const latestEvent = await movieRepo.getActiveEvent();
-            if (latestEvent && !latestEvent.completed) {
+            if (latestEvent) {
                 fallbackAnnouncementChannelId = latestEvent.channelId;
-                const completedEvent = {
-                    ...latestEvent,
-                    completed: true,
-                    completedAt: new Date(),
-                };
-                await movieRepo.createMovieEvent(completedEvent);
+                await movieRepo.completeEvent(latestEvent.id, new Date());
+                services.movieAttendance.stop();
                 actions.push("Movie night event marked as cancelled");
 
                 if (latestEvent.announcementMessageId) {
