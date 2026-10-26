@@ -39,19 +39,46 @@ export type SubmitOutcome =
     | { result: "alreadySubmitted" };
 
 export class TaskService {
-    private pendingTaskMap = new Map<string, string>();
+    private tasks: Map<string, Task> | null = null;
+    private search: Fuse<Task> | null = null;
+
     constructor(private repo: ITaskRepository) { }
 
     get repository() {
         return this.repo;
     }
 
-    async createSubmission(userId: string, taskEventId: string): Promise<TaskSubmission> {
-        // Check if this user already has an approved submission for this task
-        const existing = await this.repo.getSubmissionsByUser(userId);
-        const hasApproved = existing.some(
-            s => s.userId === userId && s.taskEventId === taskEventId && s.status === SubmissionStatus.Approved
-        );
+    async getAllTasks(): Promise<Task[]> {
+        this.tasks ??= new Map((await this.repo.getAllTasks()).map((task) => [task.id, task]));
+        return [...this.tasks.values()];
+    }
+
+    async searchTasks(query: string, limit: number): Promise<Task[]> {
+        this.search ??= new Fuse(await this.getAllTasks(), TASK_SEARCH_OPTIONS);
+        return this.search.search(query, { limit }).map((result) => result.item);
+    }
+
+    async createTask(task: Task): Promise<void> {
+        await this.repo.createTask(task);
+        this.keep([task]);
+    }
+
+    async addTask(task: Task): Promise<boolean> {
+        const added = await this.repo.addTask(task);
+        if (added) this.keep([task]);
+        return added;
+    }
+
+    async seedTasks(tasks: Task[]): Promise<void> {
+        await this.repo.seedTasks(tasks);
+        this.keep(tasks);
+    }
+
+    private keep(tasks: Task[]): void {
+        if (!this.tasks) return;
+        for (const task of tasks) this.tasks.set(task.id, task);
+        this.search = null;
+    }
 
     async incrementWeight(id: string, amount = 1): Promise<void> {
         await this.repo.incrementWeight(id, amount);
