@@ -1,4 +1,11 @@
-import { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    LabelBuilder,
+    MessageFlags,
+} from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { Skill, TaskCategory, TaskType } from "../../../models/Task.js";
@@ -52,7 +59,13 @@ const newtask: Command = {
         const category = Object.values(TaskCategory).find(
             (value) => value === interaction.options.getString("category", true),
         );
-        if (!category) return;
+        if (!category) {
+            await interaction.reply({
+                content: "Could not read the category. Please run /newtask again.",
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
         const type = interaction.options.getString("type", true);
         const skill = interaction.options.getString("skill") ?? "";
         const nextId = nextTaskId(await services.tasks.getAllTasks(), category);

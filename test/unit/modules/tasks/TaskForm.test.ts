@@ -39,6 +39,30 @@ describe("nextTaskId", () => {
         expect(nextTaskId(tasks, TaskCategory.Skilling)).toBe("SKL242");
     });
 
+    test("orders IDs by their number, not as text, and lets the number outgrow its width", () => {
+        expect(
+            nextTaskId(
+                [
+                    taskFactory.build({ id: "LEA10", category: TaskCategory.Leagues }),
+                    taskFactory.build({ id: "LEA9", category: TaskCategory.Leagues }),
+                ],
+                TaskCategory.Leagues,
+            ),
+        ).toBe("LEA11");
+        expect(nextTaskId([taskFactory.build({ id: "PVM999", category: TaskCategory.PvM })], TaskCategory.PvM)).toBe(
+            "PVM1000",
+        );
+    });
+
+    test("follows the prefix that sorts last when a category's IDs use more than one", () => {
+        const tasks = [
+            taskFactory.build({ id: "PVM063", category: TaskCategory.PvM }),
+            taskFactory.build({ id: "BOSS100", category: TaskCategory.PvM }),
+        ];
+
+        expect(nextTaskId(tasks, TaskCategory.PvM)).toBe("PVM064");
+    });
+
     test("has nothing to follow for a category without numbered IDs", () => {
         expect(
             nextTaskId([taskFactory.build({ id: "PVM001", category: TaskCategory.PvM })], TaskCategory.Leagues),

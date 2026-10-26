@@ -38,19 +38,16 @@ function resolveRoleByInput(
     return { role: matches.first() ?? null, isIdLookup: false };
 }
 
-type ChampionKey = "taskChampionFirst" | "taskChampionSecond" | "taskChampionThird";
-
-function resolveChampionField(value: number): { key: ChampionKey; label: string } | null {
+function resolveChampionField(
+    value: number,
+): { key: "taskChampionFirst" | "taskChampionSecond" | "taskChampionThird"; label: string } | null {
     if (value === 1) return { key: "taskChampionFirst", label: "1st" };
     if (value === 2) return { key: "taskChampionSecond", label: "2nd" };
     if (value === 3) return { key: "taskChampionThird", label: "3rd" };
     return null;
 }
 
-function resolveChampionPlacement(
-    roleId: string | undefined,
-    roles: GuildConfig["roles"] | undefined,
-): { key: ChampionKey; label: string; value: number } | null {
+function resolveChampionPlacement(roleId: string | undefined, roles: GuildConfig["roles"] | undefined) {
     if (!roleId || !roles) return null;
     if (roles.taskChampionFirst === roleId) return { key: "taskChampionFirst", label: "1st", value: 1 };
     if (roles.taskChampionSecond === roleId) return { key: "taskChampionSecond", label: "2nd", value: 2 };
@@ -277,9 +274,7 @@ const taskroles: Command = {
                 return;
             }
 
-            const roles: GuildRoles = {};
-            roles[championField.key] = role.id;
-            await services.guilds.update(guildId, { roles });
+            await services.guilds.update(guildId, { roles: { [championField.key]: role.id } });
 
             await interaction.editReply({
                 content: `Set ${championField.label} place champion role to **${role.name}**.`,
@@ -395,13 +390,13 @@ const taskroles: Command = {
                 }
             }
 
-            const roles: GuildRoles = {};
-            if (championPlacement && championPlacement.key !== championField.key) {
-                roles[championPlacement.key] = "";
-            }
-            roles[championField.key] = targetRole.id;
-
-            await services.guilds.update(guildId, { roles });
+            await services.guilds.update(guildId, {
+                roles: {
+                    ...(championPlacement &&
+                        championPlacement.key !== championField.key && { [championPlacement.key]: "" }),
+                    [championField.key]: targetRole.id,
+                },
+            });
             await interaction.editReply({
                 content: `Updated champion role **${targetRole.name}** to ${championField.label} place.`,
             });
@@ -435,48 +430,35 @@ const taskroles: Command = {
                 return;
             }
 
-            if (milestoneIndex === -1 && !championPlacement) {
+            let described: string;
+            let reason: string;
+            if (milestoneIndex !== -1) {
+                const label = current.splice(milestoneIndex, 1)[0]?.label ?? role.name;
+                await services.guilds.update(guildId, { taskSettings: { milestoneRoles: current } });
+                described = `milestone role **${label}**`;
+                reason = `Removed task milestone role ${label}`;
+            } else if (championPlacement) {
+                await services.guilds.update(guildId, { roles: { [championPlacement.key]: "" } });
+                described = `champion role **${role.name}** (${championPlacement.label})`;
+                reason = `Removed task champion role ${role.name}`;
+            } else {
                 await interaction.editReply({ content: "That role is not configured as a task role." });
                 return;
             }
 
-            const deleteFromDiscord = async (reason: string): Promise<boolean> => {
-                try {
-                    await role.delete(reason);
-                    return true;
-                } catch (err) {
-                    console.warn("[TaskRoles] Failed to delete task role:", err);
-                    return false;
-                }
-            };
-            const keptNote =
-                " It is no longer a task role, but I couldn't delete it from the server. Check my permissions, or delete it yourself.";
-
-            if (milestoneIndex !== -1) {
-                const removed = current.splice(milestoneIndex, 1)[0];
-                const label = removed?.label ?? role.name;
-                await services.guilds.update(guildId, { taskSettings: { milestoneRoles: current } });
-                const deleted = await deleteFromDiscord(`Removed task milestone role ${label}`);
-                await interaction.editReply({
-                    content: deleted
-                        ? `Deleted milestone role **${label}**.`
-                        : `Removed milestone role **${label}**.${keptNote}`,
-                });
-                return;
+            let deleted = true;
+            try {
+                await role.delete(reason);
+            } catch (err) {
+                console.warn("[TaskRoles] Failed to delete task role:", err);
+                deleted = false;
             }
-
-            if (championPlacement) {
-                const roles: GuildRoles = {};
-                roles[championPlacement.key] = "";
-                await services.guilds.update(guildId, { roles });
-                const deleted = await deleteFromDiscord(`Removed task champion role ${role.name}`);
-                await interaction.editReply({
-                    content: deleted
-                        ? `Deleted champion role **${role.name}** (${championPlacement.label}).`
-                        : `Removed champion role **${role.name}** (${championPlacement.label}).${keptNote}`,
-                });
-                return;
-            }
+            await interaction.editReply({
+                content: deleted
+                    ? `Deleted ${described}.`
+                    : `Removed ${described}. It is no longer a task role, but I couldn't delete it from the server. Check my permissions, or delete it yourself.`,
+            });
+            return;
         }
 
         if (sub === "toggle") {

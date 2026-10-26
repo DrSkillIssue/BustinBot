@@ -18,12 +18,6 @@ const leagues: Command = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const guildId = interaction.guildId;
-        if (!guildId) {
-            await interaction.editReply({
-                content: "This command must be used inside a server.",
-            });
-            return;
-        }
 
         const userId = interaction.user.id;
 

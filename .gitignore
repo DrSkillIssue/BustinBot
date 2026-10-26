@@ -7,10 +7,8 @@ logs
 coverage
 dist
 
-# Firebase service account credentials
 service-account.json
 src/config/
 
-# Seed data stays on the host; only announcements are tracked
 data/*.json
 !data/announcements.json

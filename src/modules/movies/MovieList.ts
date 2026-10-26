@@ -11,7 +11,7 @@ export async function buildMovieListPage(
     services: ServiceContainer,
     requestedPage: number,
 ): Promise<InteractionEditReplyOptions> {
-    // Load movies from file
+    // Load movies from Firestore
     const movies = (await services.repos.movieRepo.getAllMovies())
         .filter((movie) => !movie.watched)
         .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());

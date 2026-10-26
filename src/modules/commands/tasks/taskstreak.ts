@@ -57,6 +57,7 @@ const taskstreak: Command = {
         } catch (err) {
             console.warn(`[TaskStreak] Failed to load user streak stats for ${interaction.user.id}:`, err);
         }
+
         let deadlineLine = "No active task period right now.";
         if (summary.currentPeriod) {
             const absoluteEnd = time(summary.currentPeriod.end, TimestampStyles.LongDateTime);

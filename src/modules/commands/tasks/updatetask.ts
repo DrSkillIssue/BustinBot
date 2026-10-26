@@ -1,21 +1,9 @@
-import {
-    SlashCommandBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
-    LabelBuilder,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ModalBuilder, StringSelectMenuBuilder, LabelBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import type { Task } from "../../../models/Task.js";
+import { TaskType } from "../../../models/Task.js";
 import { truncate } from "../../../utils/TextUtils.js";
 import { taskFormFields } from "../../tasks/TaskForm.js";
-
-const taskChoice = (task: Task) => ({
-    name: truncate(`${task.id} · ${task.taskName}`, 100),
-    value: task.id,
-});
 
 const updatetask: Command = {
     name: "updatetask",
@@ -40,7 +28,7 @@ const updatetask: Command = {
             (query
                 ? await services.tasks.searchTasks(query, 25)
                 : (await services.tasks.getAllTasks()).slice(0, 25)
-            ).map(taskChoice),
+            ).map((task) => ({ name: truncate(`${task.id} · ${task.taskName}`, 100), value: task.id })),
         );
     },
 
@@ -62,9 +50,13 @@ const updatetask: Command = {
             .setTitle(`Update task: ${task.shortName ?? task.id}`);
 
         const type = new LabelBuilder()
-            .setLabel("Verification Type (XP, KC, Drop, etc.)")
-            .setTextInputComponent(
-                new TextInputBuilder().setCustomId("type").setStyle(TextInputStyle.Short).setValue(task.type),
+            .setLabel("Verification Type")
+            .setStringSelectMenuComponent(
+                new StringSelectMenuBuilder()
+                    .setCustomId("type")
+                    .addOptions(
+                        Object.values(TaskType).map((value) => ({ label: value, value, default: value === task.type })),
+                    ),
             );
         modal.addLabelComponents(...taskFormFields(task), type);
 

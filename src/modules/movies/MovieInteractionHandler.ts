@@ -7,6 +7,7 @@ import {
     handleManualPollInteraction,
     handlePickMovieButton,
     handleRandomPollCountSelect,
+    PICK_MOVIE_BUTTONS,
 } from "./PickMovieInteractions.js";
 import { handleMovieNightDate, handleMovieNightTime } from "./MovieScheduler.js";
 import { showMovieManualPollMenu } from "./MovieManualPoll.js";
@@ -53,7 +54,7 @@ export async function handleMovieInteraction(interaction: Interaction, services:
             return;
         }
 
-        if (["movie_pick_choose", "movie_pick_random", "movie_poll_random", "movie_poll_manual"].includes(customId)) {
+        if (Object.values(PICK_MOVIE_BUTTONS).some((id) => id === customId)) {
             await handlePickMovieButton(services, interaction);
             return;
         }

@@ -1,14 +1,7 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
+import { PICK_MOVIE_BUTTONS } from "../../movies/PickMovieInteractions.js";
 
 const pickmovie: Command = {
     name: "pickmovie",
@@ -20,28 +13,28 @@ const pickmovie: Command = {
         .setName("pickmovie")
         .setDescription("Pick the movie for the next movie night (via poll, random roll, or specific movie)."),
 
-    async execute({ interaction }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
+    async execute({ interaction }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
-                .setCustomId("movie_pick_choose")
+                .setCustomId(PICK_MOVIE_BUTTONS.choose)
                 .setLabel("🎯 Choose a movie")
                 .setStyle(ButtonStyle.Primary),
 
             new ButtonBuilder()
-                .setCustomId("movie_pick_random")
+                .setCustomId(PICK_MOVIE_BUTTONS.random)
                 .setLabel("🎲 Random movie")
                 .setStyle(ButtonStyle.Danger),
 
             new ButtonBuilder()
-                .setCustomId("movie_poll_random")
+                .setCustomId(PICK_MOVIE_BUTTONS.pollRandom)
                 .setLabel("📊 Poll random movies")
                 .setStyle(ButtonStyle.Success),
 
             new ButtonBuilder()
-                .setCustomId("movie_poll_manual")
+                .setCustomId(PICK_MOVIE_BUTTONS.pollManual)
                 .setLabel("🗳️ Poll specific movies")
                 .setStyle(ButtonStyle.Secondary),
         );

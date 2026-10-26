@@ -24,9 +24,8 @@ import { configuredChannel } from "../../utils/ChannelUtils.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
-export async function resolveGuildTimezone(services: ServiceContainer, guildId: string | null): Promise<string> {
-    if (!guildId) return "UTC";
-    const config = await services.guilds.get(guildId);
+export async function resolveGuildTimezone(services: ServiceContainer): Promise<string> {
+    const config = await services.guilds.get(services.guildId);
     return config?.timezone || "UTC";
 }
 
@@ -118,7 +117,7 @@ async function endMovieNight(client: Client, services: ServiceContainer, event: 
 
 export async function handleMovieNightDate(interaction: StringSelectMenuInteraction, services: ServiceContainer) {
     const selectedDate = interaction.values[0];
-    const timezone = await resolveGuildTimezone(services, interaction.guildId);
+    const timezone = await resolveGuildTimezone(services);
 
     // Derive short label
     const now = DateTime.now().setZone(timezone);
@@ -146,15 +145,11 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const movieRepo = repos.movieRepo;
 
     const guildConfig = await services.guilds.get(services.guildId);
-    if (!guildConfig) {
-        await interaction.editReply({ content: "Guild configuration not found. Please run `/setup` first." });
-        return;
-    }
 
     const parts = interaction.customId.split("-");
     const selectedDate = `${parts[2]}-${parts[3]}-${parts[4]}`;
     const enteredTime = interaction.fields.getTextInputValue("start-time");
-    const timezone = await resolveGuildTimezone(services, interaction.guildId);
+    const timezone = await resolveGuildTimezone(services);
 
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(enteredTime)) {
@@ -199,7 +194,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
 
     // Build embed
     const readableDate = localDateTime.toFormat("cccc, dd LLLL yyyy");
-    const utcUnix = Math.floor(utcDateTime.toSeconds());
     const pendingReminders = getPendingReminders(utcDateTime);
     const visibleReminders = pendingReminders.filter((r) => r.label !== "start time");
     const reminderLine = visibleReminders.length
@@ -218,12 +212,12 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
     const showStateMessage = !movie;
     const combinedMessage = [showStateMessage ? stateMessage : "", reminderLine].filter(Boolean).join("\n\n");
 
-    const embed = createMovieNightEmbed(movie, utcUnix, combinedMessage, interaction.user.username);
+    const embed = createMovieNightEmbed(movie, utcDateTime.toJSDate(), combinedMessage, interaction.user.username);
 
     const movieChannel = await configuredChannel(interaction.client, services, "movieNight");
 
-    const movieRoleId = guildConfig.roles?.movieUser;
-    const voiceChannelId = guildConfig.channels?.movieVC;
+    const movieRoleId = guildConfig?.roles?.movieUser;
+    const voiceChannelId = guildConfig?.channels?.movieVC;
     const mention = movieRoleId ? `<@&${movieRoleId}>` : "";
     const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
@@ -271,8 +265,6 @@ export async function handleMovieNightTime(interaction: ModalSubmitInteraction, 
         announcementMessageId = sent.id;
         announcementChannelId = sent.channelId;
     }
-
-    // The scheduler's sweep sends its reminders, counts attendance and ends it from what is stored here
 
     // Avoid spreading an undefined voiceChannelId (MovieEvent expects a string); exclude it and re-add only if defined.
     const { voiceChannelId: _voiceChannelId, ...eventWithoutVoice } = baseEvent;

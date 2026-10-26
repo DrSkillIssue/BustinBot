@@ -61,12 +61,12 @@ export function createLocalMoviePreviewEmbed(movie: Movie): EmbedBuilder {
 
 export function createMovieNightEmbed(
     movie: Partial<Movie> | null,
-    unixTimestamp: number,
+    startTime: Date,
     stateMessage: string,
     scheduledBy: string,
 ): EmbedBuilder {
     const startTimeValue = [
-        `${time(unixTimestamp, TimestampStyles.LongDateTime)} (${time(unixTimestamp, TimestampStyles.RelativeTime)})`,
+        `${time(startTime, TimestampStyles.LongDateTime)} (${time(startTime, TimestampStyles.RelativeTime)})`,
         stateMessage.trim(),
     ]
         .filter(Boolean)
@@ -107,9 +107,7 @@ export function createMoviePollClosedEmbed(
     tieBreak = false,
 ): EmbedBuilder {
     const titleText = `🏆 Movie poll closed!`;
-    const release = movie.releaseDate ? ` (${movie.releaseDate})` : "";
-
-    let description = `The poll has concluded, and the winner is:\n\n**${movie.title}${release}**\n\n`;
+    let description = `The poll has concluded, and the winner is:\n\n**${titleWithRelease(movie)}**\n\n`;
 
     if (movie.addedBy) {
         const addedByText = getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay);

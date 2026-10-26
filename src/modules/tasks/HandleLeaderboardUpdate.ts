@@ -19,14 +19,16 @@ import {
     shouldFinalizePeriodicLeaderboard,
     type RankedEntry,
 } from "./TaskLeaderboards.js";
-import type { TaskLeaderboard, TaskLeaderboardEntry, TaskTierCounts } from "../../models/TaskLeaderboard.js";
+import type {
+    TaskLeaderboard,
+    TaskLeaderboardEntry,
+    TaskLeaderboardPeriod,
+    TaskTierCounts,
+} from "../../models/TaskLeaderboard.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveTaskUserMention(services: ServiceContainer): Promise<string | null> {
-    const guildId = services.guildId;
-    if (!guildId) return null;
-
-    const guildConfig = await services.guilds.get(guildId);
+    const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig?.roles?.taskUser) return null;
 
     return `<@&${guildConfig.roles.taskUser}>`;
@@ -55,12 +57,9 @@ async function notifyChampionWinners(
     services: ServiceContainer,
     placements: ReturnType<typeof resolvePeriodicPlacements>,
 ): Promise<void> {
-    const guildId = services.guildId;
-    if (!guildId) return;
-
-    const guild = await client.guilds.fetch(guildId);
+    const guild = await client.guilds.fetch(services.guildId);
     const guildName = guild.name;
-    const guildConfig = await services.guilds.get(guildId);
+    const guildConfig = await services.guilds.get(services.guildId);
     const championSettings = {
         first: true,
         second: true,
@@ -166,6 +165,45 @@ async function buildFinalLeaderboardEmbed(
     return embed;
 }
 
+async function postCurrentStandings(
+    client: Client,
+    services: ServiceContainer,
+    leaderboard: TaskLeaderboard,
+    period: TaskLeaderboardPeriod,
+): Promise<boolean> {
+    const channel = await configuredChannel(client, services, "taskChannel");
+    if (!channel) return false;
+
+    const topTen = buildRankedPeriodicEntries(leaderboard.points).slice(0, 10);
+    const lines = await buildTopTenTableLines(
+        topTen,
+        { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) },
+        leaderboard.tierCounts,
+    );
+    const progress = await resolvePeriodicProgress(services, period);
+
+    const embed = new EmbedBuilder()
+        .setTitle("🏆 Current Leaderboard Standings")
+        .setDescription("Leaderboard points are tallied from approved task submissions for the current period.")
+        .setColor(0xa60000)
+        .addFields(
+            {
+                name: "Top 10",
+                value: lines.length ? lines.join("\n") : "No points recorded yet.",
+            },
+            {
+                name: "Period Progress",
+                value: `Week ${progress.elapsed + 1} of ${period.length}`,
+            },
+        )
+        .setFooter({
+            text: `Task events elapsed: ${progress.elapsed}/${period.length}`,
+        });
+
+    await channel.send({ embeds: [embed] });
+    return true;
+}
+
 export async function postWeeklyLeaderboardSnapshot(client: Client, services: ServiceContainer): Promise<boolean> {
     let leaderboard: TaskLeaderboard | null;
     try {
@@ -177,32 +215,7 @@ export async function postWeeklyLeaderboardSnapshot(client: Client, services: Se
 
     if (!leaderboard?.period) return false;
 
-    const ranked = buildRankedPeriodicEntries(leaderboard.points);
-    const topTen = ranked.slice(0, 10);
-    const lines = await buildTopTenTableLines(
-        topTen,
-        { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) },
-        leaderboard.tierCounts,
-    );
-    const progress = await resolvePeriodicProgress(services, leaderboard.period);
-
-    const embed = new EmbedBuilder()
-        .setTitle("🏆 Current Leaderboard Standings")
-        .setDescription("Leaderboard points are tallied from approved task submissions for the current period.")
-        .setColor(0xa60000)
-        .addFields({
-            name: "Current Top 10",
-            value: lines.length ? lines.join("\n") : "No points recorded yet.",
-        })
-        .setFooter({
-            text: `Task events elapsed: ${progress.elapsed}/${leaderboard.period.length}`,
-        });
-
-    const channel = await configuredChannel(client, services, "taskChannel");
-    if (!channel) return false;
-
-    await channel.send({ embeds: [embed] });
-    return true;
+    return await postCurrentStandings(client, services, leaderboard, leaderboard.period);
 }
 
 export async function postFinalLeaderboardSnapshot(client: Client, services: ServiceContainer): Promise<boolean> {
@@ -281,12 +294,10 @@ export async function postPeriodicLeaderboardUpdate(client: Client, services: Se
 
     if (!leaderboard?.period) return;
 
-    const { ready, leaderboard: latest } = await shouldFinalizePeriodicLeaderboard(services);
-    const activeLeaderboard = latest ?? leaderboard;
+    const period = leaderboard.period;
 
-    if (ready && latest?.period) {
-        const endedPeriod = latest.period;
-        const rankedAll = buildRankedPeriodicEntries(latest.points);
+    if (await shouldFinalizePeriodicLeaderboard(services, period)) {
+        const rankedAll = buildRankedPeriodicEntries(leaderboard.points);
         const placements = resolvePeriodicPlacements(
             rankedAll.map((entry) => ({
                 userId: entry.userId,
@@ -294,26 +305,26 @@ export async function postPeriodicLeaderboardUpdate(client: Client, services: Se
             })),
         );
 
-        await finalizePeriodicLeaderboard(services, latest, placements.winners);
-        await awardTaskChampionRoles(client, services, placements, endedPeriod.index);
+        await finalizePeriodicLeaderboard(services, leaderboard, placements.winners);
+        await awardTaskChampionRoles(client, services, placements, period.index);
 
         const channel = await configuredChannel(client, services, "taskChannel");
         if (channel) {
-            const progress = await resolvePeriodicProgress(services, endedPeriod);
+            const progress = await resolvePeriodicProgress(services, period);
             const finalEmbed = await buildFinalLeaderboardEmbed(
                 client,
                 services,
-                latest,
+                leaderboard,
                 placements,
                 rankedAll.slice(0, 10),
                 undefined,
                 {
-                    periodLabel: resolvePeriodicLabel(endedPeriod.length),
+                    periodLabel: resolvePeriodicLabel(period.length),
                     footer: {
                         elapsed: progress.elapsed,
                         total: progress.total,
                     },
-                    tierCounts: latest.tierCounts ?? {},
+                    tierCounts: leaderboard.tierCounts ?? {},
                 },
             );
             const mention = await resolveTaskUserMention(services);
@@ -324,40 +335,7 @@ export async function postPeriodicLeaderboardUpdate(client: Client, services: Se
         return;
     }
 
-    const ranked = buildRankedPeriodicEntries(activeLeaderboard.points);
-    const topTen = ranked.slice(0, 10);
-    const lines = await buildTopTenTableLines(
-        topTen,
-        { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) },
-        activeLeaderboard.tierCounts,
-    );
-    const progress = activeLeaderboard.period
-        ? await resolvePeriodicProgress(services, activeLeaderboard.period)
-        : { elapsed: 0, total: 0 };
-    const progressLine = `Week ${progress.elapsed + 1} of ${activeLeaderboard.period?.length}`;
-
-    const embed = new EmbedBuilder()
-        .setTitle("🏆 Current Leaderboard Standings")
-        .setDescription("Leaderboard points are tallied from approved task submissions for the current period.")
-        .setColor(0xa60000)
-        .addFields(
-            {
-                name: "Top 10",
-                value: lines.length ? lines.join("\n") : "No points recorded yet.",
-            },
-            {
-                name: "Period Progress",
-                value: progressLine,
-            },
-        )
-        .setFooter({
-            text: `Task events elapsed: ${progress.elapsed}/${activeLeaderboard.period?.length ?? 0}`,
-        });
-
-    const channel = await configuredChannel(client, services, "taskChannel");
-    if (!channel) return;
-
-    await channel.send({ embeds: [embed] });
+    await postCurrentStandings(client, services, leaderboard, period);
 }
 
 export async function warnPendingLeaderboardFinalization(client: Client, services: ServiceContainer): Promise<void> {
@@ -367,15 +345,15 @@ export async function warnPendingLeaderboardFinalization(client: Client, service
         return;
     }
 
+    let leaderboard: TaskLeaderboard | null;
     try {
-        await ensureTaskLeaderboardsInitialized(services);
+        leaderboard = (await ensureTaskLeaderboardsInitialized(services)).periodic;
     } catch (err) {
         console.warn("[LeaderboardUpdate] Leaderboard initialisation failed:", err);
         return;
     }
 
-    const { ready, leaderboard } = await shouldFinalizePeriodicLeaderboard(services);
-    if (!ready || !leaderboard?.period) return;
+    if (!leaderboard?.period || !(await shouldFinalizePeriodicLeaderboard(services, leaderboard.period))) return;
 
     const pendingCounts = await Promise.all(
         leaderboard.period.eventIds.map(async (eventId) => {

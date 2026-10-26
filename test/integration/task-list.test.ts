@@ -1,6 +1,7 @@
 import {
     ApplicationCommandOptionType,
     ChannelType,
+    ComponentType,
     InteractionContextType,
     InteractionResponseType,
     MessageFlags,
@@ -35,7 +36,12 @@ const eventMessage = SnowflakeUtil.generate().toString();
 const pollMessage = SnowflakeUtil.generate().toString();
 const completer = SnowflakeUtil.generate().toString();
 const voter = SnowflakeUtil.generate().toString();
-const form = { taskName: "Kill {amount} Vorkath", shortName: "Vorkath", type: "kc", amounts: "5, 10/150000" };
+const form = {
+    taskName: "Kill {amount} Vorkath",
+    shortName: "Vorkath",
+    type: [TaskType.Drop],
+    amounts: "5, 10/150000",
+};
 
 const runningEvent = { id: "PVM001-week", messageId: eventMessage };
 
@@ -334,7 +340,7 @@ describe("the update task form", () => {
         expect(await tasks.getTaskById("PVM001")).toMatchObject({
             taskName: "Kill {amount} Vorkath",
             shortName: "Vorkath",
-            type: TaskType.KC,
+            type: TaskType.Drop,
             amtBronze: 5,
             amtSilver: 10,
             amtGold: 150000,
@@ -368,24 +374,6 @@ describe("the update task form", () => {
         expect(await services.repos.taskRepo.getTaskEventById("PVM001-week")).toMatchObject({
             task: { taskName: "Kill {amount} Zulrah" },
         });
-    });
-
-    test("changes nothing when the type isn't one the bot knows", async ({
-        discord,
-        interact,
-        services,
-        factories,
-    }) => {
-        await storeRunningEvent(factories, runningEvent);
-
-        const submit = await interact(modalSubmitInteraction("update_task_modal_PVM001", { ...form, type: "Kills" }));
-
-        expect(discord.originalEdits(submit)).toEqual([
-            expect.objectContaining({
-                content: "Type must be one of: XP, KC, Drop, Inventory, Points, Materials, Other. Nothing was changed.",
-            }),
-        ]);
-        expect(await services.repos.taskRepo.getTaskById("PVM001")).toMatchObject({ taskName: "Kill {amount} Zulrah" });
     });
 
     test("changes nothing when the amounts aren't three whole numbers", async ({
@@ -448,11 +436,18 @@ describe("/updatetask", () => {
         expect(modal?.custom_id).toBe("update_task_modal_PVM001");
         const values = modal?.components
             .flatMap((label) => ("component" in label ? [label.component] : []))
-            .map((input) => ["custom_id" in input ? input.custom_id : "", "value" in input ? input.value : ""]);
+            .map((input) => [
+                "custom_id" in input ? input.custom_id : "",
+                input.type === ComponentType.StringSelect
+                    ? input.options.filter((option) => option.default).map((option) => option.value)
+                    : "value" in input
+                      ? input.value
+                      : "",
+            ]);
         expect(Object.fromEntries(values ?? [])).toEqual({
             taskName: "Kill {amount} Zulrah",
             shortName: "Zulrah",
-            type: "KC",
+            type: [TaskType.KC],
             amounts: "10, 25, 50",
         });
     });
@@ -583,11 +578,58 @@ describe("/newtask", () => {
         ]);
     });
 
+    test("replies privately when Discord sends a category the bot no longer has", async ({ discord, interact }) => {
+        const command = await interact(
+            chatInputInteraction(
+                "newtask",
+                [
+                    { type: ApplicationCommandOptionType.String, name: "category", value: "Raids" },
+                    { type: ApplicationCommandOptionType.String, name: "type", value: TaskType.KC },
+                ],
+                AS.taskAdmin,
+            ),
+        );
+
+        expect(discord.callbacks(command)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "Could not read the category. Please run /newtask again.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+
+    test.for([
+        { role: "task admins", as: AS.taskAdmin },
+        { role: "bot admins", as: AS.botAdmin },
+    ])("opens the form for $role", async ({ as }, { discord, interact }) => {
+        const command = await interact(chatInputInteraction("newtask", options(TaskCategory.PvM, TaskType.KC), as));
+
+        expect(discord.modal(command)?.custom_id).toBe("new_task_modal|PvM|KC|");
+    });
+
+    test("is refused to members who are neither task admins nor bot admins", async ({ discord, interact }) => {
+        const command = await interact(chatInputInteraction("newtask", options(TaskCategory.PvM, TaskType.KC)));
+
+        expect(discord.callbacks(command)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+
     test("asks for an ID when the category has no tasks to number from", async ({ discord, interact }) => {
         const command = await interact(
             chatInputInteraction("newtask", options(TaskCategory.Leagues, TaskType.Other), AS.taskAdmin),
         );
 
+        expect(discord.modal(command)?.custom_id).toBe("new_task_modal|Leagues|Other|");
         expect(discord.modal(command)?.components[3]).toMatchObject({
             description: "No Leagues tasks to number from yet, so give one",
             component: { custom_id: "id", required: true },
@@ -626,13 +668,22 @@ describe("/newtask", () => {
 
     test("saves the task under a typed ID", async ({ discord, interact, services }) => {
         const submit = await interact(
-            modalSubmitInteraction("new_task_modal|Leagues|Other|", { ...form, id: " LEA001 " }),
+            modalSubmitInteraction("new_task_modal|Leagues|Other|", {
+                ...form,
+                taskName: "  Kill Vorkath ",
+                shortName: " Vorkath  ",
+                id: " LEA001 ",
+            }),
         );
 
         expect(discord.originalEdits(submit)).toEqual([
             expect.objectContaining({ content: "Task **LEA001** created successfully." }),
         ]);
-        expect(await services.repos.taskRepo.getTaskById("LEA001")).toMatchObject({ category: TaskCategory.Leagues });
+        expect(await services.repos.taskRepo.getTaskById("LEA001")).toMatchObject({
+            category: TaskCategory.Leagues,
+            taskName: "Kill Vorkath",
+            shortName: "Vorkath",
+        });
         expect(await services.repos.taskRepo.getTaskById("LEA001")).not.toHaveProperty("skill");
     });
 
@@ -681,5 +732,43 @@ describe("/newtask", () => {
             }),
         ]);
         expect(await services.repos.taskRepo.getAllTasks()).toEqual([]);
+    });
+
+    test("treats an ID of only spaces as left blank", async ({ discord, interact, services, factories }) => {
+        await factories.task.create({ id: "PVM063", category: TaskCategory.PvM });
+
+        const submit = await interact(modalSubmitInteraction("new_task_modal|PvM|KC|", { ...form, id: "   " }));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "Task **PVM064** created successfully." }),
+        ]);
+        expect(await services.repos.taskRepo.getTaskById("PVM064")).toMatchObject({ taskName: "Kill Vorkath" });
+    });
+
+    test.for([
+        { field: "category", customId: "new_task_modal|Raids|KC|" },
+        { field: "type", customId: "new_task_modal|PvM|Kills|" },
+    ])("saves nothing when the form's $field can't be read", async ({ customId }, { discord, interact, services }) => {
+        const submit = await interact(modalSubmitInteraction(customId, { ...form, id: "PVM001" }));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "Could not read the category or type. Please run /newtask again." }),
+        ]);
+        expect(await services.repos.taskRepo.getAllTasks()).toEqual([]);
+    });
+
+    test("saves the task without a skill when the form's skill isn't one it knows", async ({
+        discord,
+        interact,
+        services,
+    }) => {
+        const submit = await interact(
+            modalSubmitInteraction("new_task_modal|Skilling|XP|Raids", { ...form, id: "SKL001" }),
+        );
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "Task **SKL001** created successfully." }),
+        ]);
+        expect(await services.repos.taskRepo.getTaskById("SKL001")).not.toHaveProperty("skill");
     });
 });

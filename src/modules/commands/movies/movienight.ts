@@ -29,7 +29,7 @@ const movienight: Command = {
         if (!interaction) return;
 
         const today = DateTime.now()
-            .setZone(await resolveGuildTimezone(services, interaction.guildId))
+            .setZone(await resolveGuildTimezone(services))
             .startOf("day");
         const options = Array.from({ length: 14 }, (_, i) => {
             const date = today.plus({ days: i });

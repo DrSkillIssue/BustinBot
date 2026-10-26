@@ -5,7 +5,6 @@ import { createMovieNightEmbed } from "../../movies/MovieEmbeds.js";
 import type { Movie } from "../../../models/Movie.js";
 import { isPlaceholderMovie } from "../../movies/MovieLifecycle.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { DateTime } from "luxon";
 
 const currentmovie: Command = {
     name: "currentmovie",
@@ -31,15 +30,10 @@ const currentmovie: Command = {
 
         // Fetch latest scheduled movie event
         const movieEvent = await movieRepo.getActiveEvent();
-        if (!movieEvent || movieEvent.completed) {
+        if (!movieEvent) {
             await interaction.editReply("No movie night is currently scheduled.");
             return;
         }
-
-        const startDate = movieEvent.startTime;
-
-        const startTime = DateTime.fromJSDate(startDate);
-        const unixTimestamp = Math.floor(startTime.toSeconds());
 
         // Fetch current movie (if any)
         const currentMovie: Movie | null = isPlaceholderMovie(movieEvent.movie) ? null : movieEvent.movie;
@@ -53,7 +47,7 @@ const currentmovie: Command = {
         }
 
         const host = await interaction.client.users.fetch(movieEvent.hostedBy);
-        const embed = createMovieNightEmbed(currentMovie, unixTimestamp, stateMessage, host.username);
+        const embed = createMovieNightEmbed(currentMovie, movieEvent.startTime, stateMessage, host.username);
 
         await interaction.editReply({
             embeds: [embed],

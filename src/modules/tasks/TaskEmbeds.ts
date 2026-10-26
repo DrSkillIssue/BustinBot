@@ -3,7 +3,7 @@ import path from "path";
 import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
-import { SubmissionStatus } from "../../models/TaskSubmission.js";
+import { SubmissionStatus, type TaskSubmission } from "../../models/TaskSubmission.js";
 import { TaskInstructions } from "./TaskInstructions.js";
 
 const assetIconDir = path.join(import.meta.dirname, "../../../assets/icons");
@@ -23,11 +23,11 @@ function shortenAmount(amount: number): string {
     return String(amount);
 }
 
-function getTaskPollVoteSummary(tasks: Task[], voteMap: Map<string, number>): string {
+function getTaskPollVoteSummary(tasks: Task[], voteCounts: Record<string, number>): string {
     return tasks
         .map((task, i) => {
             const taskId = task.id.toString();
-            const votes = voteMap.get(taskId) || 0;
+            const votes = voteCounts[taskId] ?? 0;
             const name = getTaskDisplayName(task);
             const tierDisplay =
                 `🥉 **${shortenAmount(task.amtBronze)}** ` +
@@ -47,14 +47,15 @@ export function getTaskPollIconFile(category: TaskCategory): Array<{ attachment:
 export function buildTaskPollEmbed(
     category: TaskCategory,
     tasks: Task[],
-    voteMap: Map<string, number>,
+    voteCounts: Record<string, number>,
     options?: { endsAt?: Date | null; isClosed?: boolean },
 ) {
     const endsAt = options?.endsAt ?? null;
     const isClosed = options?.isClosed ?? false;
     const timeString = endsAt ? time(endsAt, TimestampStyles.RelativeTime) : "";
     const description =
-        `${getTaskPollVoteSummary(tasks, voteMap)}` + (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : "");
+        `${getTaskPollVoteSummary(tasks, voteCounts)}` +
+        (!isClosed && timeString ? `\n\n Poll closes ${timeString}` : "");
 
     return new EmbedBuilder()
         .setTitle(`🗳️ ${category} Task Poll`)
@@ -64,6 +65,10 @@ export function buildTaskPollEmbed(
         })
         .setColor(0x00ae86)
         .setThumbnail("attachment://category_icon.png");
+}
+
+export function submissionLabel(submission: Pick<TaskSubmission, "taskName" | "taskEventId">): string {
+    return submission.taskName ?? `Task ${submission.taskEventId}`;
 }
 
 export function getTaskDisplayName(task: Task, selectedAmount?: number): string {

@@ -5,51 +5,14 @@ import {
     ButtonStyle,
     ChatInputCommandInteraction,
     MessageFlags,
-    PermissionFlagsBits,
 } from "discord.js";
 import { randomUUID } from "node:crypto";
 import { createMovieEmbed, createMoviePreviewEmbeds } from "./MovieEmbeds.js";
-import { addMovieWithStats, fetchMovieDetailsById, searchMovies } from "./MovieService.js";
+import { addMovieWithStats, checkCanAddMovie, fetchMovieDetailsById, searchMovies } from "./MovieService.js";
 import type { Movie } from "../../models/Movie.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { memberRoleIds } from "../../utils/MemberUtils.js";
-
-export const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
 export const ADD_MOVIE_BUTTON = "addmovie|";
-
-export async function isMovieNightAdmin(
-    services: ServiceContainer,
-    interaction: ChatInputCommandInteraction | ButtonInteraction,
-): Promise<boolean> {
-    if (interaction.guild?.ownerId === interaction.user.id) return true;
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
-
-    const roleIds = memberRoleIds(interaction.member);
-    const roles = (await services.guilds.get(services.guildId))?.roles ?? {};
-    return [roles.admin, roles.movieAdmin].some((roleId) => !!roleId && roleIds.includes(roleId));
-}
-
-export async function checkCanAddMovie(
-    services: ServiceContainer,
-    interaction: ChatInputCommandInteraction | ButtonInteraction,
-    tmdbId?: number,
-): Promise<string | null> {
-    const movies = await services.repos.movieRepo.getAllMovies();
-    const active = movies.filter((movie) => !movie.watched);
-
-    const own = active.filter((movie) => movie.addedBy === interaction.user.id);
-    if (own.length >= MAX_ACTIVE_MOVIES_PER_USER && !(await isMovieNightAdmin(services, interaction))) {
-        return `You have reached the maximum of ${MAX_ACTIVE_MOVIES_PER_USER} active movies. Remove one or wait for a movie night to conclude before adding more.`;
-    }
-
-    const existing = tmdbId === undefined ? undefined : active.find((movie) => movie.tmdbId === tmdbId);
-    if (existing) {
-        const addedBy = existing.addedByDisplay ?? `<@${existing.addedBy}>`;
-        return `**${existing.title}** is already in the movie list (added by ${addedBy}). Please choose a different result.`;
-    }
-    return null;
-}
 
 export async function presentMovieSelection(
     interaction: ChatInputCommandInteraction,
@@ -109,18 +72,9 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
 
     // Build movie object
     const movie: Movie = {
+        ...metadata,
         id: randomUUID(),
-        tmdbId: metadata.tmdbId,
         title: metadata.title,
-        releaseDate: metadata.releaseDate,
-        posterUrl: metadata.posterUrl,
-        infoUrl: metadata.infoUrl,
-        overview: metadata.overview,
-        runtime: metadata.runtime,
-        genres: metadata.genres,
-        rating: metadata.rating,
-        director: metadata.director,
-        cast: metadata.cast,
         watched: false,
         addedBy: interaction.user.id,
         addedAt: new Date(),

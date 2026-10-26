@@ -2,7 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { packageVersion } from "../../../utils/version.js";
-import { isMovieNightAdmin } from "../../movies/MovieSelector.js";
+import { isMovieNightAdmin } from "../../movies/MovieService.js";
 
 const moviehelp: Command = {
     name: "moviehelp",

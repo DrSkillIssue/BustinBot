@@ -8,23 +8,20 @@ interface Session {
     totalMs: number;
 }
 
-interface Tracking {
-    eventId: string;
-    channelId: string | null;
-    sessions: Map<string, Session>;
-}
-
 export class MovieAttendance {
-    private tracking: Tracking | null = null;
+    private eventId: string | null = null;
+    private channelId: string | null = null;
+    private readonly sessions = new Map<string, Session>();
 
     isTracking(eventId: string): boolean {
-        return this.tracking?.eventId === eventId;
+        return this.eventId === eventId;
     }
 
     start(eventId: string, channelId: string | null, memberIds: string[], at: Date): void {
-        const sessions = new Map<string, Session>();
-        for (const userId of memberIds) sessions.set(userId, { joinedAt: at.getTime(), totalMs: 0 });
-        this.tracking = { eventId, channelId, sessions };
+        this.stop();
+        this.eventId = eventId;
+        this.channelId = channelId;
+        for (const userId of memberIds) this.sessions.set(userId, { joinedAt: at.getTime(), totalMs: 0 });
         console.log(
             channelId
                 ? `[MovieAttendance] Tracking ${memberIds.length} member(s) in ${channelId} for ${eventId}.`
@@ -33,50 +30,50 @@ export class MovieAttendance {
     }
 
     voiceStateChanged(oldState: VoiceState, newState: VoiceState): void {
-        if (!this.tracking?.channelId) return;
-        const { channelId, sessions } = this.tracking;
+        if (!this.channelId) return;
         const at = Date.now();
         // User joins VC
-        if (newState.channelId === channelId && oldState.channelId !== channelId) this.join(sessions, newState.id, at);
+        if (newState.channelId === this.channelId && oldState.channelId !== this.channelId) this.join(newState.id, at);
         // User leaves VC
-        if (oldState.channelId === channelId && newState.channelId !== channelId) this.leave(sessions, newState.id, at);
+        if (oldState.channelId === this.channelId && newState.channelId !== this.channelId) this.leave(newState.id, at);
     }
 
     reconcile(memberIds: string[], at: Date): void {
-        if (!this.tracking?.channelId) return;
-        const { sessions } = this.tracking;
+        if (!this.channelId) return;
         const present = new Set(memberIds);
-        for (const userId of present) this.join(sessions, userId, at.getTime());
-        for (const [userId, session] of sessions) {
-            if (session.joinedAt !== null && !present.has(userId)) this.leave(sessions, userId, at.getTime());
+        for (const userId of present) this.join(userId, at.getTime());
+        for (const [userId, session] of this.sessions) {
+            if (session.joinedAt !== null && !present.has(userId)) this.leave(userId, at.getTime());
         }
     }
 
     finish(eventId: string, at: Date): string[] {
-        if (this.tracking?.eventId !== eventId) return [];
-        const attendees = [...this.tracking.sessions].flatMap(([userId, session]) => {
+        if (this.eventId !== eventId) return [];
+        const attendees = [...this.sessions].flatMap(([userId, session]) => {
             const watchedMs = session.totalMs + (session.joinedAt !== null ? at.getTime() - session.joinedAt : 0);
             return watchedMs >= MIN_ATTENDANCE_MS ? [userId] : [];
         });
-        this.tracking = null;
+        this.stop();
         return attendees;
     }
 
     stop(): void {
-        this.tracking = null;
+        this.eventId = null;
+        this.channelId = null;
+        this.sessions.clear();
     }
 
-    private join(sessions: Map<string, Session>, userId: string, at: number): void {
-        const session = sessions.get(userId);
+    private join(userId: string, at: number): void {
+        const session = this.sessions.get(userId);
         if (!session) {
-            sessions.set(userId, { joinedAt: at, totalMs: 0 });
+            this.sessions.set(userId, { joinedAt: at, totalMs: 0 });
         } else if (session.joinedAt === null) {
             session.joinedAt = at;
         }
     }
 
-    private leave(sessions: Map<string, Session>, userId: string, at: number): void {
-        const session = sessions.get(userId);
+    private leave(userId: string, at: number): void {
+        const session = this.sessions.get(userId);
         if (session?.joinedAt == null) return;
         session.totalMs += at - session.joinedAt;
         session.joinedAt = null;

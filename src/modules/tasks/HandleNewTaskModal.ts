@@ -2,6 +2,7 @@ import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
 import { Skill, TaskCategory, TaskType, type Task } from "../../models/Task.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { AMOUNTS_ERROR, nextTaskId, parseAmounts } from "./TaskForm.js";
+import { DEFAULT_TASK_WEIGHT } from "./TaskSelector.js";
 
 export const NEW_TASK_MODAL = "new_task_modal|";
 
@@ -40,7 +41,7 @@ export async function handleNewTaskModal(interaction: ModalSubmitInteraction, se
         type,
         ...(skill && { skill }),
         ...amounts,
-        weight: 50,
+        weight: DEFAULT_TASK_WEIGHT,
     };
     if (!(await services.tasks.addTask(task))) {
         await interaction.editReply({ content: `Task **${id}** already exists. Nothing was saved.` });

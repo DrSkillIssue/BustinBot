@@ -7,6 +7,8 @@ const CSV = [
     'SKL001,Gain {amount} Sailing XP,Skilling,XP,Sailing,"150,000","400,000","800,000",60,Sailing,FALSE,35,"10,000","20,000","40,000"',
     "PVM001,Kill {amount} Zulrah,PvM,KC,,10,25,50,,Zulrah,TRUE,,,,",
     ",Row without an ID,PvM,KC,,1,2,3,,,FALSE,,,,",
+    "PVM002,Misspelt category,Pvm,KC,,1,2,3,,,FALSE,,,,",
+    "PVM003,Unknown type,PvM,Kills,,1,2,3,,,FALSE,,,,",
     "",
 ].join("\n");
 
@@ -46,7 +48,7 @@ describe("parseTasksCsv", () => {
         });
     });
 
-    test("skips rows without an ID and never emits undefined fields", () => {
+    test("skips rows without an ID or with a category or type it doesn't know, and never emits undefined fields", () => {
         const tasks = parseTasksCsv(CSV);
 
         expect(tasks.map((task) => task.id)).toEqual(["SKL001", "PVM001"]);

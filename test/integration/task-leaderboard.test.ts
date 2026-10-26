@@ -245,6 +245,24 @@ describe("the weekly leaderboard update", () => {
 });
 
 describe("/taskboard", () => {
+    test("update posts the current standings, as the weekly update does", async ({ discord, interact, factories }) => {
+        await storePeriodic(factories, {});
+        discord.acceptMessages(IDS.channel);
+
+        const command = await interact(chatInputInteraction("taskboard", [subcommand("update")], AS.botAdmin));
+
+        expect(discord.originalEdits(command)).toEqual([
+            expect.objectContaining({ content: "Leaderboard update posted." }),
+        ]);
+        const embed = discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0];
+        expect(embed?.title).toBe("🏆 Current Leaderboard Standings");
+        expect(embed?.fields).toEqual([
+            { name: "Top 10", value: "No points recorded yet." },
+            { name: "Period Progress", value: "Week 1 of 4" },
+        ]);
+        expect(embed?.footer?.text).toBe("Task events elapsed: 0/4");
+    });
+
     test("says so when the task channel can't be reached", async ({ discord, interact, services, factories }) => {
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         await storePeriodic(factories, {});
@@ -255,8 +273,7 @@ describe("/taskboard", () => {
 
         expect(discord.originalEdits(command)).toEqual([
             expect.objectContaining({
-                content:
-                    "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
+                content: "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it.",
             }),
         ]);
         expect(warn).toHaveBeenCalledExactlyOnceWith(

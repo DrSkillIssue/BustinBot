@@ -14,9 +14,8 @@ import {
     MessageFlags,
 } from "discord.js";
 import Fuse from "fuse.js";
+import { countBy } from "es-toolkit";
 import type { Movie } from "../../models/Movie.js";
-import type { MoviePoll } from "../../models/MoviePoll.js";
-import type { PollSession } from "../../models/PollSession.js";
 import { createMovieEmbed } from "./MovieEmbeds.js";
 import { pickRandomMovie, buildMovieEmbedWithMeta } from "./MovieLocalSelector.js";
 import { showMovieManualPollMenu } from "./MovieManualPoll.js";
@@ -60,25 +59,6 @@ export async function saveCurrentMovie(services: ServiceContainer, movie: Movie,
     } catch (error) {
         console.error("[MovieStorage] Failed to save current movie:", error);
     }
-}
-
-function getPollSession(poll: MoviePoll): PollSession<Movie> {
-    const voteCounts = new Map<string, number>();
-    for (const movie of poll.options) {
-        voteCounts.set(movie.id, 0);
-    }
-
-    Object.values(poll.votes).forEach((movieId) => {
-        const count = voteCounts.get(movieId);
-        if (count !== undefined) {
-            voteCounts.set(movieId, count + 1);
-        }
-    });
-
-    return {
-        ...poll,
-        optionVoteCounts: voteCounts,
-    };
 }
 
 export async function handleMoviePickChooseModalSubmit(
@@ -155,14 +135,9 @@ export async function handleRandomPollCountSelect(
     services: ServiceContainer,
     interaction: StringSelectMenuInteraction,
 ) {
-    const selectedValue = interaction.values[0];
-    if (!selectedValue) {
-        await interaction.reply({ content: "No movie count selected.", flags: MessageFlags.Ephemeral });
-        return;
-    }
-
+    const [selectedValue] = interaction.values;
     await interaction.deferUpdate();
-    await pollMovieRandom(services, interaction, parseInt(selectedValue, 10));
+    await pollMovieRandom(services, interaction, selectedValue ? parseInt(selectedValue, 10) : null);
 }
 
 export async function handleConfirmRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
@@ -221,6 +196,16 @@ export async function handleConfirmRandomMovie(services: ServiceContainer, inter
     }
 }
 
+function randomPickRow(movieId: string): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`confirm_random_movie_${movieId}`)
+            .setLabel("🎥 Lock this in")
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("reroll_random_movie").setLabel("🔁 Reroll").setStyle(ButtonStyle.Danger),
+    );
+}
+
 export async function handleRerollRandomMovie(services: ServiceContainer, interaction: ButtonInteraction) {
     const newMovie = await pickRandomMovie(services);
 
@@ -235,19 +220,10 @@ export async function handleRerollRandomMovie(services: ServiceContainer, intera
 
     const embed = await buildMovieEmbedWithMeta(newMovie, "random");
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`confirm_random_movie_${newMovie.id}`)
-            .setLabel("🎥 Lock this in")
-            .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder().setCustomId("reroll_random_movie").setLabel("🔁 Reroll").setStyle(ButtonStyle.Danger),
-    );
-
     await interaction.update({
         content: "🔁 New movie selected:",
         embeds: [embed],
-        components: [row],
+        components: [randomPickRow(newMovie.id)],
     });
 }
 
@@ -297,12 +273,12 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
         }
     }
 
-    const pollSession = getPollSession(updatedPoll);
+    const voteCounts = countBy(Object.values(updatedPoll.votes), (movieId) => movieId);
     const updatedEmbeds: EmbedBuilder[] = interaction.message.embeds.map((embedData, i) => {
         const embed = EmbedBuilder.from(embedData);
         const movie = updatedPoll.options[i];
         if (!movie) return embed;
-        const count = pollSession.optionVoteCounts.get(movie.id) ?? 0;
+        const count = voteCounts[movie.id] ?? 0;
         const runtimeText = movie.runtime ? ` | ⏱️ ${movie.runtime} mins` : "";
         embed.setFooter({
             text: `🗳️ ${count} vote${count !== 1 ? "s" : ""}${runtimeText} | Option ${i + 1}`,
@@ -314,9 +290,16 @@ export async function handleMoviePollVote(services: ServiceContainer, interactio
     await interaction.editReply({ content: "Thank you for your vote!" });
 }
 
+export const PICK_MOVIE_BUTTONS = {
+    choose: "movie_pick_choose",
+    random: "movie_pick_random",
+    pollRandom: "movie_poll_random",
+    pollManual: "movie_poll_manual",
+} as const;
+
 export async function handlePickMovieButton(services: ServiceContainer, interaction: ButtonInteraction) {
     switch (interaction.customId) {
-        case "movie_pick_choose":
+        case PICK_MOVIE_BUTTONS.choose:
             await interaction.showModal(
                 new ModalBuilder()
                     .setCustomId("movie_pick_choose_modal")
@@ -334,7 +317,7 @@ export async function handlePickMovieButton(services: ServiceContainer, interact
                     ),
             );
             return;
-        case "movie_pick_random": {
+        case PICK_MOVIE_BUTTONS.random: {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const selectedMovie = await pickRandomMovie(services);
             if (!selectedMovie) {
@@ -342,24 +325,14 @@ export async function handlePickMovieButton(services: ServiceContainer, interact
                 return;
             }
 
-            const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`confirm_random_movie_${selectedMovie.id}`)
-                    .setLabel("🎥 Lock this in")
-                    .setStyle(ButtonStyle.Success),
-                new ButtonBuilder()
-                    .setCustomId("reroll_random_movie")
-                    .setLabel("🔁 Reroll")
-                    .setStyle(ButtonStyle.Danger),
-            );
             await interaction.editReply({
                 content: "A random movie has been selected:",
                 embeds: [await buildMovieEmbedWithMeta(selectedMovie, "random")],
-                components: [row],
+                components: [randomPickRow(selectedMovie.id)],
             });
             return;
         }
-        case "movie_poll_random":
+        case PICK_MOVIE_BUTTONS.pollRandom:
             await interaction.reply({
                 content: "How many movies should be included in the poll?",
                 components: [
@@ -373,7 +346,7 @@ export async function handlePickMovieButton(services: ServiceContainer, interact
                 flags: MessageFlags.Ephemeral,
             });
             return;
-        case "movie_poll_manual":
+        case PICK_MOVIE_BUTTONS.pollManual:
             await interaction.deferUpdate();
             await showMovieManualPollMenu(services, interaction);
             return;

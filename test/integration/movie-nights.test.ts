@@ -213,16 +213,6 @@ describe("scheduling a movie night", () => {
         ]);
         expect(await services.repos.movieRepo.getActiveEvent()).toBeNull();
     });
-
-    test("asks for /setup when the guild has no configuration", async ({ discord, interact, db }) => {
-        await db.doc(`guilds/${IDS.guild}`).delete();
-
-        const submit = await interact(modalSubmitInteraction("movienight-time-2026-03-05", { "start-time": "20:30" }));
-
-        expect(discord.originalEdits(submit)).toEqual([
-            expect.objectContaining({ content: "Guild configuration not found. Please run `/setup` first." }),
-        ]);
-    });
 });
 
 describe("the movie night sweep", () => {
@@ -249,6 +239,19 @@ describe("the movie night sweep", () => {
             `<@&${movieUsers.id}> Movie night starts in **2 hours** (at ${startsAt})! We will be watching **Arrival**!`,
             `<@&${movieUsers.id}> Movie night starts in **30 minutes** (at ${startsAt})! We will be watching **Arrival**!`,
             `<@&${movieUsers.id}> Movie night is starting **now**! Join us in <#${VOICE}> 🎬\nWe will be watching **Arrival**!`,
+        ]);
+    });
+
+    test("starts the reminder with no mention when no movie role is set", async ({ discord, services, factories }) => {
+        await setUpMovieNight(discord, services);
+        await services.guilds.update(IDS.guild, { roles: { movieUser: "" } });
+        const night = await storeNight(factories, { startTime: DateTime.now().plus({ minutes: 30 }).toJSDate() });
+        discord.acceptMessages(IDS.channel);
+
+        await sweepMovieNight(discord.client, services);
+
+        expect(discord.messagesSentTo(IDS.channel).map((message) => message.content)).toEqual([
+            `Movie night starts in **30 minutes** (at ${time(night.startTime, TimestampStyles.ShortTime)})! We will be watching **Arrival**!`,
         ]);
     });
 
@@ -481,6 +484,29 @@ describe("/endmovie", () => {
             expect.objectContaining({ content: "🎞️ Movie night has ended. Thanks for watching **Arrival**!" }),
         ]);
         expect(await services.repos.movieRepo.getMovieById("movie-2")).toMatchObject({ watched: true });
+    });
+
+    test("tells the member whose movie was watched how many more they can add", async ({
+        discord,
+        interact,
+        factories,
+    }) => {
+        await storePickedNight(
+            factories,
+            factories.movieEvent.params({ startTime: DateTime.now().minus({ hours: 1 }).toJSDate() }),
+        );
+        await factories.movie.create({ id: "still-listed", addedBy: SUBMITTER });
+        await factories.movie.create({ id: "watched-before", addedBy: SUBMITTER, watched: true });
+        discord.acceptMessages(IDS.channel);
+        const dm = discord.acceptDirectMessages(apiUser({ id: SUBMITTER }));
+
+        await interact(chatInputInteraction("endmovie", [], AS.movieAdmin));
+
+        expect(discord.messagesSentTo(dm)).toEqual([
+            expect.objectContaining({
+                content: `Hey <@${SUBMITTER}>, your movie **Arrival** has been watched as part of a movie night in **${NAMES.guild}**. You can now add **2 more movies** to the list!`,
+            }),
+        ]);
     });
 
     test("says so when no movie night is on", async ({ discord, interact }) => {

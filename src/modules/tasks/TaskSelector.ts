@@ -2,6 +2,8 @@ import { random, randomInt, shuffle } from "es-toolkit";
 import type { Task } from "../../models/Task.js";
 import { TaskCategory } from "../../models/Task.js";
 
+export const DEFAULT_TASK_WEIGHT = 50;
+
 export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     if (!tasks.length) return [];
 
@@ -9,7 +11,7 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     const pool = [...tasks];
 
     for (let i = 0; i < count && pool.length > 0; i++) {
-        const weights = pool.map((task) => Math.max(task.weight ?? 50, 0));
+        const weights = pool.map((task) => Math.max(task.weight ?? DEFAULT_TASK_WEIGHT, 0));
         const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
         let chosenIndex: number;
@@ -32,7 +34,7 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     }
 
     console.log(
-        `[TaskSelector] Selected tasks: ${selected.map((t) => `${t.taskName} (weight: ${t.weight ?? 50})`).join(", ")}`,
+        `[TaskSelector] Selected tasks: ${selected.map((t) => `${t.taskName} (weight: ${t.weight ?? DEFAULT_TASK_WEIGHT})`).join(", ")}`,
     );
 
     return selected;

@@ -2,7 +2,6 @@ import cron, { type Logger, type ScheduledTask } from "node-cron";
 import { CronExpressionParser } from "cron-parser";
 import { Client } from "discord.js";
 import { DateTime, type WeekSettings } from "luxon";
-import { configuredChannel } from "../../utils/ChannelUtils.js";
 import { postAllTaskPolls } from "./HandleTaskPoll.js";
 import { startAllTaskEvents } from "./HandleTaskStart.js";
 import { generatePrizeDrawSnapshot, rollWinnerForSnapshot, announcePrizeDrawWinner } from "./HandlePrizeDraw.js";
@@ -143,18 +142,12 @@ async function drawPrize(client: Client, services: ServiceContainer): Promise<vo
 
 export async function runTaskPollJob(client: Client, services: ServiceContainer): Promise<void> {
     console.log("[TaskScheduler] Running weekly task poll post...");
-    const channel = await configuredChannel(client, services, "taskChannel");
-    if (channel) {
-        await postAllTaskPolls(client, services);
-    }
+    await postAllTaskPolls(client, services);
 }
 
 export async function runTaskStartJob(client: Client, services: ServiceContainer): Promise<void> {
     console.log("[TaskScheduler] Closing poll and starting task event...");
-    const channel = await configuredChannel(client, services, "taskChannel");
-    if (channel) {
-        await startAllTaskEvents(client, services);
-    }
+    await startAllTaskEvents(client, services);
 }
 
 export async function runPrizeDrawJob(client: Client, services: ServiceContainer): Promise<void> {

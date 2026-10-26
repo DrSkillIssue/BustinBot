@@ -13,7 +13,7 @@ import {
 } from "discord.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
-import { getTaskDisplayName, TIER_DISPLAY } from "./TaskEmbeds.js";
+import { getTaskDisplayName, submissionLabel, TIER_DISPLAY } from "./TaskEmbeds.js";
 import { getTierPoints, incrementLifetimePoints, incrementPeriodicPoints } from "./TaskLeaderboards.js";
 import { applyTaskMilestoneRoles } from "./TaskMilestones.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
@@ -243,8 +243,8 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             const kept = deltaPoints > 0 ? undefined : result.previousStatus && TIER_DISPLAY[result.previousStatus];
             const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
             const approvalMessage = kept
-                ? `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}**. They already hold ${kept.emoji} ${kept.name} for this task, so nothing changed.`
-                : `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${result.taskName ?? `Task ${result.taskEventId}`}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? "s" : ""}).`;
+                ? `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${submissionLabel(result)}**. They already hold ${kept.emoji} ${kept.name} for this task, so nothing changed.`
+                : `✅ <@${reviewerId}> approved **${formattedTier} tier** for submission by <@${result.userId}> on **${submissionLabel(result)}** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? "s" : ""}).`;
             if (interaction.channel?.isSendable()) {
                 if (suppressMentions) {
                     await interaction.channel.send(withSuppressedMentions({ content: approvalMessage }, true));
@@ -377,7 +377,7 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
     if (adminChannel) {
         try {
             const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
-            const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${updated.taskName ?? `Task ${updated.taskEventId}`}** by <@${updated.userId}>. Reason: ${reason || "No reason provided"}.${updated.archived ? " Submission moved to archive channel." : ""}`;
+            const rejectionMessage = `❌ <@${reviewerId}> rejected submission for **${submissionLabel(updated)}** by <@${updated.userId}>. Reason: ${reason || "No reason provided"}.${updated.archived ? " Submission moved to archive channel." : ""}`;
             if (suppressMentions) {
                 await adminChannel.send(withSuppressedMentions({ content: rejectionMessage }, true));
             } else {

@@ -1,7 +1,8 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import { checkCanAddMovie, presentMovieSelection } from "../../movies/MovieSelector.js";
+import { presentMovieSelection } from "../../movies/MovieSelector.js";
+import { checkCanAddMovie } from "../../movies/MovieService.js";
 
 const addmovie: Command = {
     name: "addmovie",

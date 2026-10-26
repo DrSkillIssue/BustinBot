@@ -4,12 +4,9 @@ import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { Client } from "discord.js";
 import { DateTime } from "luxon";
 import { resolveGuildContext } from "./MovieLocalSelector.js";
+import { MAX_ACTIVE_MOVIES_PER_USER } from "./MovieService.js";
 
 const AUTO_END_BUFFER_MINUTES = 30;
-
-function getStartMillis(event: MovieEvent): number {
-    return event.startTime.getTime();
-}
 
 export function isPlaceholderMovie(movie: Movie | null | undefined): boolean {
     if (!movie) return true;
@@ -36,22 +33,8 @@ function getMostRecentlySelectedUnwatchedMovie(movies: Movie[]): Movie | null {
 }
 
 async function resolveEventToFinish(services: ServiceContainer, targetEventId?: string): Promise<MovieEvent | null> {
-    const movieRepo = services.repos.movieRepo;
-
-    const allEvents = await movieRepo.getAllEvents();
-    const activeEvents = allEvents.filter((event) => !event.completed);
-    if (!activeEvents.length) return null;
-
-    if (targetEventId) {
-        return activeEvents.find((event) => event.id === targetEventId) ?? null;
-    }
-
-    const now = Date.now();
-    const startedEvents = activeEvents.filter((event) => getStartMillis(event) <= now);
-    const candidates = startedEvents.length ? startedEvents : activeEvents;
-
-    candidates.sort((a, b) => getStartMillis(b) - getStartMillis(a));
-    return candidates[0] ?? null;
+    const event = await services.repos.movieRepo.getActiveEvent();
+    return !targetEventId || event?.id === targetEventId ? event : null;
 }
 
 async function notifySubmitterMovieEnded(
@@ -74,8 +57,7 @@ async function notifySubmitterMovieEnded(
     }
 }
 
-// Ends the current movie night (or the one given) and archives its movie. The night is marked ended first, in one
-// transaction, so a night ended by an admin and by the scheduler at once is ended, archived and counted once.
+// Marks the current movie night as completed and archives it
 export async function finishMovieNight(
     endedBy: string,
     services: ServiceContainer,
@@ -109,13 +91,14 @@ export async function finishMovieNight(
             await movieRepo.upsertMovie(finishedMovie);
             console.log(`[MovieLifecycle] Movie night ended by ${endedBy}: ${finishedMovie.title}`);
 
-            const refreshedMovies = await movieRepo.getAllMovies();
-            const userMovies = refreshedMovies.filter((m) => m.addedBy === finishedMovie.addedBy && !m.watched);
+            const userMovies = allMovies.filter(
+                (m) => m.addedBy === finishedMovie.addedBy && !m.watched && m.id !== finishedMovie.id,
+            );
             await notifySubmitterMovieEnded(
                 client,
                 finishedMovie.addedBy,
                 finishedMovie,
-                Math.max(0, 3 - userMovies.length),
+                Math.max(0, MAX_ACTIVE_MOVIES_PER_USER - userMovies.length),
                 services,
             );
         } else {

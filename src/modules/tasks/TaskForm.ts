@@ -2,7 +2,7 @@ import { LabelBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
 import type { Task, TaskCategory } from "../../models/Task.js";
 
 const AMOUNTS = /^\s*(\d+)(?:\s*[,/]\s*|\s+)(\d+)(?:\s*[,/]\s*|\s+)(\d+)\s*$/;
-const TASK_ID = /^([A-Za-z]+)(\d+)$/;
+const TASK_ID = /^[A-Za-z]+\d+$/;
 
 export const AMOUNTS_ERROR = "The amounts must be three whole numbers for bronze, silver and gold, e.g. 5, 10, 20.";
 
@@ -39,16 +39,9 @@ export function parseAmounts(input: string): Pick<Task, "amtBronze" | "amtSilver
 }
 
 export function nextTaskId(tasks: Task[], category: TaskCategory): string | null {
-    let best: RegExpExecArray | null = null;
-    let highest = -1;
-    for (const task of tasks) {
-        if (task.category !== category) continue;
-        const match = TASK_ID.exec(task.id);
-        const number = Number(match?.[2]);
-        if (number > highest) {
-            highest = number;
-            best = match;
-        }
-    }
-    return best?.[1] && best[2] ? best[1] + String(highest + 1).padStart(best[2].length, "0") : null;
+    const [last] = tasks
+        .filter((task) => task.category === category && TASK_ID.test(task.id))
+        .map((task) => task.id)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    return last?.replace(/\d+$/, (digits) => String(Number(digits) + 1).padStart(digits.length, "0")) ?? null;
 }

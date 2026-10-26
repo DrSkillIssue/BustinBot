@@ -15,10 +15,12 @@ const MOVIE_REMINDERS = [
 
 const REMINDER_GRACE = Duration.fromObject({ minutes: 15 });
 
+function remindersFor(movieStart: DateTime): Reminder[] {
+    return MOVIE_REMINDERS.map(({ label, offset }) => ({ sendAt: movieStart.minus(offset), label }));
+}
+
 export function getPendingReminders(movieStart: DateTime, now: DateTime = DateTime.utc()): Reminder[] {
-    return MOVIE_REMINDERS.map(({ label, offset }) => ({ sendAt: movieStart.minus(offset), label })).filter(
-        ({ sendAt }) => sendAt > now,
-    );
+    return remindersFor(movieStart).filter(({ sendAt }) => sendAt > now);
 }
 
 export async function sendDueReminders(
@@ -31,7 +33,7 @@ export async function sendDueReminders(
 
     const start = DateTime.fromJSDate(event.startTime);
     const at = DateTime.fromJSDate(now);
-    const due = MOVIE_REMINDERS.map(({ label, offset }) => ({ label, sendAt: start.minus(offset) })).filter(
+    const due = remindersFor(start).filter(
         ({ label, sendAt }) => sendAt <= at && !(event.remindersSent ?? []).includes(label),
     );
     if (!due.length) return;
@@ -53,7 +55,7 @@ export async function sendDueReminders(
     }
 
     const guildConfig = await services.guilds.get(services.guildId);
-    const mention = guildConfig?.roles?.movieUser ? `<@&${guildConfig.roles.movieUser}>` : "";
+    const mention = guildConfig?.roles?.movieUser ? `<@&${guildConfig.roles.movieUser}> ` : "";
     const voiceChannelId = event.voiceChannelId ?? guildConfig?.channels?.movieVC;
     const voiceMention = voiceChannelId ? `<#${voiceChannelId}>` : "the movie voice channel";
 
@@ -76,10 +78,10 @@ export async function sendDueReminders(
     // Build and send message
     const content =
         latest.label === "start time"
-            ? `${mention} Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
-            : `${mention} Movie night starts in **${remaining}** (at ${time(start.toJSDate(), TimestampStyles.ShortTime)})! ${stateLine}`;
+            ? `${mention}Movie night is starting **now**! Join us in ${voiceMention} 🎬\n${stateLine}`
+            : `${mention}Movie night starts in **${remaining}** (at ${time(event.startTime, TimestampStyles.ShortTime)})! ${stateLine}`;
 
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-    await channel.send(withSuppressedMentions({ content: content.trim() }, suppressMentions));
+    await channel.send(withSuppressedMentions({ content }, suppressMentions));
     console.log(`[MovieReminders] Sent "${latest.label}" reminder for ${event.id}.`);
 }

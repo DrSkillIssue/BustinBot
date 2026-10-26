@@ -4,7 +4,7 @@ import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { createMovieEmbed } from "../../movies/MovieEmbeds.js";
 import type { Movie } from "../../../models/Movie.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { MAX_ACTIVE_MOVIES_PER_USER, isMovieNightAdmin } from "../../movies/MovieSelector.js";
+import { MAX_ACTIVE_MOVIES_PER_USER, isMovieNightAdmin } from "../../movies/MovieService.js";
 
 const mymovies: Command = {
     name: "mymovies",
@@ -32,7 +32,7 @@ const mymovies: Command = {
             // Fetch all movies from Firestore
             const movies: Movie[] = await movieRepo.getAllMovies();
 
-            // The member's movies still in the list; watched ones no longer count toward the cap
+            // Filter by user
             const userMovies = movies.filter((m) => m.addedBy === interaction.user.id && !m.watched);
             const remaining = MAX_ACTIVE_MOVIES_PER_USER - userMovies.length;
 

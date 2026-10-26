@@ -453,22 +453,18 @@ export async function getPeriodicLeaderboardTopEntries(
 
 export async function shouldFinalizePeriodicLeaderboard(
     services: ServiceContainer,
+    period: TaskLeaderboardPeriod,
     asOf: Date = new Date(),
-): Promise<{ ready: boolean; leaderboard?: TaskLeaderboard }> {
-    const repo = services.repos.taskLeaderboardRepo;
-
-    const leaderboard = await repo.getLeaderboard("periodic");
-    if (!leaderboard?.period) return { ready: false };
-
-    const progress = await resolvePeriodicProgress(services, leaderboard.period, asOf);
-    if (progress.started < leaderboard.period.length) {
-        return { ready: false, leaderboard };
+): Promise<boolean> {
+    const progress = await resolvePeriodicProgress(services, period, asOf);
+    if (progress.started < period.length) {
+        return false;
     }
-    if (progress.elapsed < leaderboard.period.length) {
-        return { ready: false, leaderboard };
+    if (progress.elapsed < period.length) {
+        return false;
     }
 
-    return { ready: true, leaderboard };
+    return true;
 }
 
 export async function finalizePeriodicLeaderboard(

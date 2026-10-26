@@ -16,7 +16,7 @@ import { injectMockUsers } from "./MovieMockUtils.js";
 import { createLocalMoviePreviewEmbed } from "./MovieEmbeds.js";
 import { saveCurrentMovie } from "./PickMovieInteractions.js";
 import { DateTime } from "luxon";
-import { sample, shuffle, uniqBy } from "es-toolkit";
+import { countBy, sample, shuffle, uniqBy } from "es-toolkit";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { notifyMovieSubmitter } from "./MovieLocalSelector.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
@@ -40,13 +40,8 @@ async function createAndSendMoviePoll(
     }
 
     const guildConfig = await services.guilds.get(services.guildId);
-    if (!guildConfig) {
-        await interaction.editReply("Guild configuration not found. Please run `/setup` first.");
-        return;
-    }
-
-    const guildRoles = guildConfig.roles ?? {};
-    const channel = guildConfig.channels?.movieNight
+    const guildRoles = guildConfig?.roles ?? {};
+    const channel = guildConfig?.channels?.movieNight
         ? await configuredChannel(client, services, "movieNight")
         : interaction.channel;
     if (!channel?.isSendable()) {
@@ -216,14 +211,14 @@ export async function closeActiveMoviePoll(
     }
 
     // Tally votes
-    const voteCounts = new Map<string, number>();
-    for (const option of activePoll.options) voteCounts.set(option.id, 0);
+    const voteCounts = countBy(
+        voteEntries.map(([, movieId]) => movieId),
+        (movieId) => movieId,
+    );
 
-    voteEntries.forEach(([, movieId]) => {
-        if (voteCounts.has(movieId)) voteCounts.set(movieId, (voteCounts.get(movieId) ?? 0) + 1);
-    });
-
-    const sorted = [...voteCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const sorted = activePoll.options
+        .map((option): [string, number] => [option.id, voteCounts[option.id] ?? 0])
+        .sort((a, b) => b[1] - a[1]);
     const topEntry = sorted[0];
     if (!topEntry) {
         return {

@@ -544,7 +544,7 @@ export function stringSelectInteraction(
 
 export function modalSubmitInteraction(
     customId: string,
-    fields: Record<string, string>,
+    fields: Record<string, string | string[]>,
     { member, ...overrides }: InteractionParams<APIModalSubmitGuildInteraction> = {},
 ): APIModalSubmitGuildInteraction {
     return {
@@ -554,7 +554,9 @@ export function modalSubmitInteraction(
             custom_id: customId,
             components: Object.entries(fields).map(([fieldId, value]) => ({
                 type: ComponentType.Label,
-                component: { type: ComponentType.TextInput, custom_id: fieldId, value },
+                component: Array.isArray(value)
+                    ? { type: ComponentType.StringSelect, custom_id: fieldId, values: value }
+                    : { type: ComponentType.TextInput, custom_id: fieldId, value },
             })),
         },
         ...overrides,

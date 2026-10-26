@@ -31,10 +31,9 @@ function isConsecutive(prevEnd: Date, nextStart: Date): boolean {
 }
 
 export async function getCurrentTaskPeriod(repo: ITaskRepository, now: Date = new Date()): Promise<TaskPeriod | null> {
-    const latestEvent = await repo.getLatestTaskEvent();
-    if (!latestEvent) return null;
+    const event = await repo.getLatestTaskEvent();
+    if (!event) return null;
 
-    const event = latestEvent;
     if (now < event.startTime || now > event.endTime) return null;
 
     return {
@@ -43,7 +42,6 @@ export async function getCurrentTaskPeriod(repo: ITaskRepository, now: Date = ne
     };
 }
 
-// A failed lookup is passed on rather than read as "no events", which would keep a broken streak alive
 async function hasTaskEventsBetween(repo: ITaskRepository, start: Date, end: Date): Promise<boolean> {
     if (start.getTime() > end.getTime()) return false;
     const events = await repo.getTaskEventsBetween(start, end);

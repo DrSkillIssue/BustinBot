@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { countBy } from "es-toolkit";
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import { DateTime } from "luxon";
 import { buildTaskEventEmbed } from "./TaskEmbeds.js";
@@ -6,8 +7,7 @@ import type { TaskEvent } from "../../models/TaskEvent.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { TaskCategory } from "../../models/Task.js";
 import { registerPeriodicTaskEvent } from "./TaskLeaderboards.js";
-import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
-import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
+import { announceToTaskUsers, refreshTaskPollMessage, weeklyTaskCategories } from "./HandleTaskPoll.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
 
 function generateTaskEventId(taskId: string): string {
@@ -37,38 +37,20 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
         console.warn(`[TaskStart] Guild configuration not found for ${services.guildId}.`);
         return;
     }
-    const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
-
-    const categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
-
-    if (leaguesEnabled) categories.push(TaskCategory.Leagues);
-
-    const sharedKeyword = await keywords.selectKeyword(`weekly-${Date.now()}`);
-
     const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return;
 
-    const roleId = guildConfig.roles?.taskUser;
-    const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
-    const mention = role ? `<@&${role.id}>` : "";
-    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+    const sharedKeyword = await keywords.selectKeyword(`weekly-${Date.now()}`);
 
-    if (!role) {
-        console.warn(`[TaskStart] Task user role not configured or not found.`);
-    }
-
-    await channel.send(
-        withSuppressedMentions(
-            {
-                content:
-                    `${mention} **The new tasks are live!**\n` +
-                    `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`,
-            },
-            suppressMentions,
-        ),
+    await announceToTaskUsers(
+        channel,
+        services,
+        guildConfig,
+        `**The new tasks are live!**\n` +
+            `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`,
     );
 
-    for (const category of categories) {
+    for (const category of weeklyTaskCategories(guildConfig)) {
         await startTaskEventForCategory(client, services, category, sharedKeyword, channel);
     }
 }
@@ -95,10 +77,7 @@ export async function startTaskEventForCategory(
     }
 
     // Tally votes per option ID
-    const voteCounts: Record<string, number> = {};
-    for (const votedTaskId of Object.values(pollData.votes)) {
-        voteCounts[votedTaskId] = (voteCounts[votedTaskId] ?? 0) + 1;
-    }
+    const voteCounts = countBy(Object.values(pollData.votes), (taskId) => taskId);
 
     const maxVotes = Math.max(...pollData.options.map((opt) => voteCounts[opt.id] ?? 0));
     const topTasks = pollData.options.filter((opt) => (voteCounts[opt.id] ?? 0) === maxVotes);

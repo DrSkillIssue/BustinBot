@@ -34,24 +34,15 @@ const tasktoggle: Command = {
             const currentState = guildConfig?.toggles?.taskScheduler ?? false;
             const newState = !currentState;
 
-            // Change the running jobs first and save the toggle only once that worked, putting the jobs back if
-            // saving fails, so the stored setting always matches what is running
             if (newState) {
+                // Enable scheduler
                 await initTaskScheduler(interaction.client, services);
             } else {
+                // Disable scheduler
                 await stopTaskScheduler(guildId);
             }
 
-            try {
-                await guildService.updateToggle(guildId, "taskScheduler", newState, interaction.user.id);
-            } catch (err) {
-                if (newState) {
-                    await stopTaskScheduler(guildId);
-                } else {
-                    await initTaskScheduler(interaction.client, services);
-                }
-                throw err;
-            }
+            await guildService.updateToggle(guildId, "taskScheduler", newState, interaction.user.id);
 
             await interaction.editReply({
                 content: newState

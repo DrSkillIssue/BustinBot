@@ -1,7 +1,7 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder, Client } from "discord.js";
 import type { TaskSubmission } from "../../models/TaskSubmission.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
-import { buildSubmissionEmbed, buildArchiveEmbed, TIER_DISPLAY } from "./TaskEmbeds.js";
+import { buildSubmissionEmbed, buildArchiveEmbed, submissionLabel, TIER_DISPLAY } from "./TaskEmbeds.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
@@ -23,7 +23,7 @@ export async function postToAdminChannel(
     // Check if this user already has an approved submission for this task
     const heldStatus = await services.tasks.getHeldStatus(submission.userId, submission.taskEventId);
 
-    const taskLabel = submission.taskName ?? `Task ${submission.taskEventId}`;
+    const taskLabel = submissionLabel(submission);
     const embed = buildSubmissionEmbed(submission, taskLabel, taskEvent, heldStatus);
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -82,18 +82,18 @@ export async function notifyUser(
         const kept = keptStatus && TIER_DISPLAY[keptStatus];
         if (kept) {
             await user.send(
-                `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**. You already hold ${kept.emoji} **${kept.name} tier** for this task, so your tier is unchanged.`,
+                `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**. You already hold ${kept.emoji} **${kept.name} tier** for this task, so your tier is unchanged.`,
             );
             return;
         }
 
         await user.send(
-            `✅ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`,
+            `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`,
         );
     } else if (submission.status === SubmissionStatus.Rejected) {
         const reason = submission.rejectionReason ?? "No reason provided.";
         await user.send(
-            `❌ Your submission for **${submission.taskName ?? `Task ${submission.taskEventId}`}** was rejected.\n**Reason:** ${reason}`,
+            `❌ Your submission for **${submissionLabel(submission)}** was rejected.\n**Reason:** ${reason}`,
         );
     }
 }
@@ -109,7 +109,7 @@ export async function archiveSubmission(
     const embed = buildArchiveEmbed(
         submission,
         submission.status,
-        submission.taskName ?? `Task ${submission.taskEventId}`,
+        submissionLabel(submission),
         submission.reviewedBy ?? "Unknown",
     );
 

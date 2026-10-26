@@ -8,11 +8,13 @@ import {
     MessageFlags,
 } from "discord.js";
 import { DateTime, Duration } from "luxon";
+import { countBy } from "es-toolkit";
 import type { Task } from "../../models/Task.js";
 import type { TaskPoll } from "../../models/TaskPoll.js";
 import { TaskCategory } from "../../models/Task.js";
 import { selectTasksForCategory } from "./TaskSelector.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import type { Guild } from "../../models/Guild.js";
 import { buildTaskPollEmbed, getTaskPollIconFile } from "./TaskEmbeds.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
@@ -25,25 +27,12 @@ function getTaskPollDuration(): Duration {
     return process.env.BOT_MODE === "dev" ? DEV_TASK_POLL_DURATION : PROD_TASK_POLL_DURATION;
 }
 
-function buildVoteMapFromPoll(poll: Pick<TaskPoll, "options" | "votes">): Map<string, number> {
-    const voteMap = new Map<string, number>();
-    for (const option of poll.options) {
-        voteMap.set(option.id, 0);
-    }
-
-    Object.values(poll.votes ?? {}).forEach((optionId) => {
-        voteMap.set(optionId, (voteMap.get(optionId) ?? 0) + 1);
-    });
-
-    return voteMap;
-}
-
 function buildPollMessage(poll: Omit<TaskPoll, "id" | "messageId">) {
     const { category } = poll;
     const embed = buildTaskPollEmbed(
         category,
         poll.options,
-        buildVoteMapFromPoll(poll),
+        countBy(Object.values(poll.votes), (taskId) => taskId),
         poll.isActive ? { endsAt: poll.endsAt } : { isClosed: true },
     );
     const buttons = poll.options.map((task, i) =>
@@ -118,6 +107,30 @@ export async function handleTaskPollVoteInteraction(interaction: ButtonInteracti
     await interaction.editReply({ content: "Thank you for your vote!" });
 }
 
+export function weeklyTaskCategories(guildConfig: Guild): TaskCategory[] {
+    return [
+        TaskCategory.PvM,
+        TaskCategory.Skilling,
+        TaskCategory.MinigameMisc,
+        ...(guildConfig.toggles?.leaguesEnabled ? [TaskCategory.Leagues] : []),
+    ];
+}
+
+export async function announceToTaskUsers(
+    channel: GuildTextBasedChannel,
+    services: ServiceContainer,
+    guildConfig: Guild,
+    text: string,
+): Promise<void> {
+    const roleId = guildConfig.roles?.taskUser;
+    const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
+    if (!role) {
+        console.warn(`[Tasks] Task user role not configured or not found.`);
+    }
+    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
+    await channel.send(withSuppressedMentions({ content: role ? `<@&${role.id}> ${text}` : text }, suppressMentions));
+}
+
 export async function postAllTaskPolls(client: Client, services: ServiceContainer) {
     const guildConfig = await services.guilds.get(services.guildId);
     if (!guildConfig) {
@@ -125,33 +138,17 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
         return;
     }
 
-    const leaguesEnabled = guildConfig.toggles?.leaguesEnabled ?? false;
-
-    const categories: TaskCategory[] = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
-
-    if (leaguesEnabled) {
-        categories.push(TaskCategory.Leagues);
-    }
-
     const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return;
 
-    const roleId = guildConfig.roles?.taskUser;
-    const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
-    const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-
-    const mention = role ? `<@&${role.id}>` : "";
-    if (!role) {
-        console.warn(`[TaskPoll] Task user role not configured or not found.`);
-    }
-    await channel.send(
-        withSuppressedMentions(
-            { content: `${mention} **New task polls are live!** Cast your votes for each category below:` },
-            suppressMentions,
-        ),
+    await announceToTaskUsers(
+        channel,
+        services,
+        guildConfig,
+        "**New task polls are live!** Cast your votes for each category below:",
     );
 
-    for (const category of categories) {
+    for (const category of weeklyTaskCategories(guildConfig)) {
         await postTaskPollForCategory(client, services, category, channel);
     }
 }

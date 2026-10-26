@@ -35,7 +35,7 @@ const taskboard: Command = {
                     : await postWeeklyLeaderboardSnapshot(interaction.client, services);
             if (!posted) {
                 await interaction.editReply(
-                    "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it, or there is no leaderboard period yet.",
+                    "Couldn't post the leaderboard: the task channel isn't set up or I can't reach it.",
                 );
             } else {
                 await interaction.editReply(

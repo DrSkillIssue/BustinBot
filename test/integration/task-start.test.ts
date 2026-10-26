@@ -73,7 +73,12 @@ describe("/taskstart", () => {
 });
 
 describe("the scheduled task start job", () => {
-    test("starts nothing when no task channel is configured", async ({ discord, services, factories }) => {
+    test("starts nothing and uses up no keyword when no task channel is configured", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        await services.repos.keywordRepo.addKeyword("Bustin");
         await storeThisWeeksPolls(factories);
         await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -85,6 +90,7 @@ describe("the scheduled task start job", () => {
         );
 
         expect(await services.repos.taskRepo.getLatestTaskEvent()).toBeNull();
+        expect(await services.repos.keywordRepo.getKeywordById("bustin")).toMatchObject({ timesUsed: 0 });
     });
 });
 

@@ -1,6 +1,7 @@
 import { parse } from "csv-parse/sync";
 import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
-import type { Task } from "../../models/Task.js";
+import { Skill, TaskCategory, TaskType, type Task } from "../../models/Task.js";
+import { DEFAULT_TASK_WEIGHT } from "./TaskSelector.js";
 
 type CsvRow = Record<string, string>;
 
@@ -26,10 +27,10 @@ function normalizeKey(key: string): string {
 
 function rowToTask(row: CsvRow): Task | null {
     const id = (row["id"] ?? row["i_d"] ?? "").trim();
-    if (!id) return null;
-
-    const category = row["category"] as Task["category"];
-    const skill = row["skill"] as Task["skill"] | "";
+    const category = Object.values(TaskCategory).find((value) => value === row["category"]);
+    const type = Object.values(TaskType).find((value) => value === row["type"]);
+    const skill = Object.values(Skill).find((value) => value === row["skill"]);
+    if (!id || !category || !type) return null;
     const shortName = row["short_name"];
     const isSkilling = category === "Skilling" || !!skill;
 
@@ -42,12 +43,12 @@ function rowToTask(row: CsvRow): Task | null {
         id,
         taskName: row["task_name"] ?? "",
         category,
-        type: row["type"] as Task["type"],
+        type,
         ...(skill && { skill }),
         amtBronze: toNumber(row["bronze_amount"]) ?? 0,
         amtSilver: toNumber(row["silver_amount"]) ?? 0,
         amtGold: toNumber(row["gold_amount"]) ?? 0,
-        weight: toNumber(row["weight"]) ?? 50,
+        weight: toNumber(row["weight"]) ?? DEFAULT_TASK_WEIGHT,
         ...(shortName && { shortName }),
         wildernessReq: row["wilderness_required?"] === "TRUE" || row["wildernessreq"] === "TRUE",
         ...(isSkilling && xpPerAction !== undefined && { xpPerAction }),

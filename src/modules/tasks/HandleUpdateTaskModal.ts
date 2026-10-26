@@ -6,10 +6,6 @@ import { refreshTaskPollMessage } from "./HandleTaskPoll.js";
 import { refreshTaskEventMessage } from "./HandleTaskStart.js";
 import { AMOUNTS_ERROR, parseAmounts } from "./TaskForm.js";
 
-function parseTaskType(input: string): TaskType | null {
-    return Object.values(TaskType).find((type) => type.toLowerCase() === input.trim().toLowerCase()) ?? null;
-}
-
 export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction, services: ServiceContainer) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -22,11 +18,10 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
         return;
     }
 
-    const type = parseTaskType(interaction.fields.getTextInputValue("type"));
+    const [rawType] = interaction.fields.getStringSelectValues("type");
+    const type = Object.values(TaskType).find((value) => value === rawType);
     if (!type) {
-        await interaction.editReply({
-            content: `Type must be one of: ${Object.values(TaskType).join(", ")}. Nothing was changed.`,
-        });
+        await interaction.editReply({ content: "Could not read the type. Please run /updatetask again." });
         return;
     }
 
@@ -68,17 +63,12 @@ async function saveAndRedraw(
         await repo.getTaskEventsBetween(now, DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate())
     ).filter((event) => event.task.id === task.id && event.startTime <= now);
 
+    const amounts = { bronze: task.amtBronze, silver: task.amtSilver, gold: task.amtGold };
     for (const activeEvent of activeEvents) {
-        activeEvent.task = task;
-        activeEvent.amounts = {
-            bronze: task.amtBronze,
-            silver: task.amtSilver,
-            gold: task.amtGold,
-        };
-        await repo.updateTaskEventTask(activeEvent.id, activeEvent.task, activeEvent.amounts);
+        await repo.updateTaskEventTask(activeEvent.id, task, amounts);
 
         try {
-            await refreshTaskEventMessage(interaction.client, activeEvent);
+            await refreshTaskEventMessage(interaction.client, { ...activeEvent, task, amounts });
         } catch (err) {
             console.error("[HandleUpdateTaskModal] Failed to update active task event embed:", err);
         }

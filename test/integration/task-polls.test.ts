@@ -50,6 +50,24 @@ describe("posting the weekly task polls", () => {
             );
         }
     });
+
+    test("announces them without a mention when no task role is configured", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await services.guilds.update(IDS.guild, { roles: { taskUser: "" } });
+        await storePollableTasks(factories);
+        discord.acceptMessages(IDS.channel);
+
+        await postAllTaskPolls(discord.client, services);
+
+        expect(discord.messagesSentTo(IDS.channel)[0]?.content).toBe(
+            "**New task polls are live!** Cast your votes for each category below:",
+        );
+        expect(warn).toHaveBeenCalledWith("[Tasks] Task user role not configured or not found.");
+    });
 });
 
 describe("the scheduled task poll job", () => {
