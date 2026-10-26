@@ -22,8 +22,15 @@ export async function handleTaskInteraction(
             return;
         }
 
-        if (interaction.customId.startsWith("task-feedback|")) {
-            return handleTaskFeedback(interaction, services.tasks.repository);
+        if (interaction.customId.startsWith(TASK_LIST_BUTTON)) {
+            const { customId } = interaction;
+            await interaction.deferUpdate();
+            await interaction.editReply(await buildTaskListPage(services, taskListButtonCategory(customId), buttonPage(customId)));
+            return;
+        }
+
+        if (interaction.customId.startsWith("task-feedback|") || interaction.customId.startsWith("task-feedback-")) {
+            return handleTaskFeedback(interaction, services.tasks);
         }
 
         if (interaction.customId.startsWith("task-leaderboard|")) {
