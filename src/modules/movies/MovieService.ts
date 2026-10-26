@@ -45,35 +45,15 @@ interface TMDbCreditsResponse {
     crew: { job: string; name: string }[];
 }
 
+export async function searchMovies(query: string, year?: number): Promise<TMDbSearchResult[]> {
+    const response = await fetch(tmdbUrl("/search/movie", year === undefined ? { query } : { query, year: `${year}` }));
+    const data = (await response.json()) as TMDbSearchResponse;
+    return data?.results ?? [];
+}
+
 export async function fetchMovieDetails(movieName: string): Promise<Partial<Movie> | null> {
-    const searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(movieName)}`;
-
-    const searchResponse = await fetch(searchUrl);
-    const searchData = await searchResponse.json() as TMDbSearchResponse;
-
-    if (!searchData?.results?.length) return null;
-
-    const topResult = searchData.results[0]!;
-
-    const detailsUrl = `${TMDB_BASE_URL}/movie/${topResult.id}?api_key=${TMDB_API_KEY}`;
-    const detailsResponse = await fetch(detailsUrl);
-    const detailsData = (await detailsResponse.json()) as TMDbDetailsResponse;
-
-    return {
-        tmdbId: detailsData.id,
-        title: detailsData.title,
-        overview: detailsData.overview,
-        releaseDate: detailsData.release_date
-            ? Number(detailsData.release_date.slice(0, 4))
-            : undefined,
-        posterUrl: detailsData.poster_path
-            ? `${TMDB_IMAGE_BASE}${detailsData.poster_path}`
-            : undefined,
-        infoUrl: `https://www.themoviedb.org/movie/${detailsData.id}`,
-        runtime: detailsData.runtime ?? undefined,
-        rating: detailsData.vote_average ?? undefined,
-        genres: detailsData.genres?.map((g) => g.name) ?? undefined,
-    } satisfies Partial<Movie>;
+    const [topResult] = await searchMovies(movieName);
+    return topResult ? fetchMovieDetailsById(topResult.id) : null;
 }
 
 export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> | null> {
