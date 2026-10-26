@@ -70,7 +70,7 @@ const announce: Command = {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const announcementsPath = path.resolve(process.cwd(), "data/announcements.json");
+        const announcementsPath = path.join(import.meta.dirname, "../../../../data/announcements.json");
         if (!fs.existsSync(announcementsPath)) {
             await interaction.editReply({
                 content: "announcements.json not found.",
