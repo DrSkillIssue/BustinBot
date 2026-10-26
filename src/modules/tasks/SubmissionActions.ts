@@ -87,19 +87,9 @@ export async function notifyUser(client: Client, submission: TaskSubmission, str
     }
 }
 
-export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer) {
-    const guildConfig = await services.guilds.get(services.guildId);
-    const archiveChannelId = guildConfig?.channels?.botArchive;
-    if (!archiveChannelId) {
-        console.warn(`[SubmissionActions] Bot archive channel not configured for guild ${services.guildId}.`);
-        return;
-    }
-
-    const archive = await resolveTextChannel(client, archiveChannelId);
-    if (!archive) {
-        console.warn(`[SubmissionActions] Unable to resolve archive channel ${archiveChannelId}.`);
-        return;
-    }
+export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<boolean> {
+    const archive = await configuredChannel(client, services, "botArchive");
+    if (!archive) return false;
 
     const embed = buildArchiveEmbed(
         submission,
@@ -110,14 +100,19 @@ export async function archiveSubmission(client: Client, submission: TaskSubmissi
 
     await archive.send({ embeds: [embed] });
 
-    if (submission.screenshotUrls?.length > 0) {
-        const filesToArchive = submission.screenshotUrls.slice(0, 10);
+    // The member's DM links expire, so the screenshots are copied from the review post
+    const verification = await configuredChannel(client, services, "taskVerification");
+    const screenshots = submission.screenshotMessage
+        ? await verification?.messages.fetch(submission.screenshotMessage).catch(() => null)
+        : null;
+    if (screenshots?.attachments.size) {
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
         await archive.send(withSuppressedMentions({
             content: `Archived screenshots for <@${submission.userId}>:`,
-            files: filesToArchive
+            files: screenshots.attachments.map((attachment) => attachment.url)
         }, suppressMentions));
     }
+    return true;
 }
 
 export async function updateTaskCounter(client: Client, taskEventId: string, userId?: string, repo?: ITaskRepository, newTier?: SubmissionStatus, prevTier?: SubmissionStatus) {
