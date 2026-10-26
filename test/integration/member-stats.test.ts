@@ -1,7 +1,7 @@
 import { SnowflakeUtil, TimestampStyles, time } from "discord.js";
 import { ApplicationCommandOptionType } from "discord-api-types/v10";
 import { describe, expect, test } from "../fixtures.js";
-import { apiUser, chatInputInteraction } from "../discord/payloads.js";
+import { IDS, apiUser, chatInputInteraction } from "../discord/payloads.js";
 
 describe("/stats", () => {
     test("shows a member's stats, with dates each viewer reads in their own timezone", async ({
@@ -41,6 +41,30 @@ describe("/stats", () => {
         expect(reply?.embeds?.[0]?.fields?.[3]?.value).toContain("🎞️ Movies Added: **3**");
         expect(reply?.embeds?.[0]?.fields?.[4]?.value).toContain("🥇 Gold Tasks: **2**");
         expect(reply?.embeds?.[0]?.fields?.[4]?.value).toContain("🔥 Current Task Streak: **4**");
+    });
+
+    test("shows Unknown for the dates a legacy import didn't store", async ({ discord, interact, db }) => {
+        const member = apiUser({ id: SnowflakeUtil.generate().toString(), username: "member" });
+        await db.doc(`guilds/${IDS.guild}/userStats/${member.id}`).set({
+            userId: member.id,
+            legacyTasksCompleted: 7,
+            createdAt: new Date("2025-06-01T00:00:00.000Z"),
+        });
+
+        const command = await interact(
+            chatInputInteraction(
+                "stats",
+                [{ type: ApplicationCommandOptionType.User, name: "user", value: member.id }],
+                {},
+                { users: { [member.id]: member } },
+            ),
+        );
+
+        const [reply] = discord.originalEdits(command);
+        expect(reply?.embeds?.[0]?.fields?.slice(0, 2)).toEqual([
+            { name: "🕧 First Active", value: "Unknown", inline: true },
+            { name: "💬 Last Active", value: "Unknown", inline: true },
+        ]);
     });
 
     test("says so when the member has no stats", async ({ discord, interact }) => {

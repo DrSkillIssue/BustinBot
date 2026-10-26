@@ -42,8 +42,8 @@ const stats: Command = {
             return;
         }
 
-        const joinedDate = time(stats.joinedAt, TimestampStyles.LongDate);
-        const lastActive = time(stats.lastActiveAt, TimestampStyles.LongDate);
+        const joinedDate = stats.joinedAt ? time(stats.joinedAt, TimestampStyles.LongDate) : "Unknown";
+        const lastActive = stats.lastActiveAt ? time(stats.lastActiveAt, TimestampStyles.LongDate) : "Unknown";
 
         const embed = new EmbedBuilder()
             .setColor(0x00ae86)
