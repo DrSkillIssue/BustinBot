@@ -9,8 +9,10 @@ import {
     vi,
     storeFinishedPeriod,
     storePeriodic,
+    storeTaskWeek,
     storeWeeks,
     test,
+    type StoringFactories,
 } from "../fixtures.js";
 import { firestoreUnavailable } from "../firestoreEmulator.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
@@ -39,6 +41,7 @@ import {
     registerPeriodicTaskEvent,
 } from "../../src/modules/tasks/TaskLeaderboards.js";
 import { periodicLeaderboardFactory } from "../factories.js";
+import { TaskCategory } from "../../src/models/Task.js";
 
 const [winner, runnerUp, third] = [
     SnowflakeUtil.generate().toString(),
@@ -268,6 +271,225 @@ describe("the weekly leaderboard update", () => {
     });
 });
 
+describe("settling Moni's Choice in the weekly leaderboard update", () => {
+    const regular = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
+    const withLeagues = [...regular, TaskCategory.Leagues];
+    const endedOnMonday = () => DateTime.now().minus({ weeks: 1, days: 2 }).toJSDate();
+
+    async function storeWeek(
+        factories: StoringFactories,
+        {
+            startTime = endedOnMonday(),
+            completed,
+            categories = regular,
+            monisStatus = SubmissionStatus.Gold,
+        }: {
+            startTime?: Date;
+            completed: TaskCategory[];
+            categories?: TaskCategory[];
+            monisStatus?: SubmissionStatus;
+        },
+    ) {
+        const week = await storeTaskWeek(factories, {
+            startTime,
+            categories,
+            completedBy: Object.fromEntries(completed.map((category) => [category, [IDS.user]])),
+            monisChoice: { completedUserIds: [IDS.user] },
+        });
+        assert(week.monisChoice);
+        await factories.taskSubmission.create({
+            id: `${week.monisChoice.id}-${IDS.user}`,
+            taskEventId: week.monisChoice.id,
+            userId: IDS.user,
+            status: monisStatus,
+        });
+        return [...week.regularEvents, week.monisChoice].map((event) => event.id);
+    }
+
+    async function storeTotals(
+        factories: StoringFactories,
+        eventIds: string[],
+        points: number,
+        tierCounts: Partial<Record<"bronze" | "silver" | "gold", number>>,
+        period: { length?: number } = {},
+    ) {
+        await factories.userStats.create({
+            userId: IDS.user,
+            tasksCompletedBronze: tierCounts.bronze ?? 0,
+            tasksCompletedSilver: tierCounts.silver ?? 0,
+            tasksCompletedGold: tierCounts.gold ?? 0,
+        });
+        await factories.periodicLeaderboard.create({
+            points: { [IDS.user]: points },
+            tierCounts: { [IDS.user]: { bronze: 0, silver: 0, gold: 0, ...tierCounts } },
+            period: { eventIds, ...period },
+        });
+        await factories.lifetimeLeaderboard.create({ points: { [IDS.user]: points } });
+    }
+
+    async function expectTotals(
+        services: ServiceContainer,
+        points: number,
+        tierCounts: Partial<Record<"bronze" | "silver" | "gold", number>>,
+    ) {
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({
+            tasksCompletedBronze: tierCounts.bronze ?? 0,
+            tasksCompletedSilver: tierCounts.silver ?? 0,
+            tasksCompletedGold: tierCounts.gold ?? 0,
+        });
+        expect((await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime"))?.points).toEqual({
+            [IDS.user]: points,
+        });
+        const periodic = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+        expect(periodic?.points).toEqual({ [IDS.user]: points });
+        expect(periodic?.tierCounts).toEqual({ [IDS.user]: { bronze: 0, silver: 0, gold: 0, ...tierCounts } });
+    }
+
+    test("takes Moni's Choice off a member who also holds every regular task of the week that ended", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const eventIds = await storeWeek(factories, { completed: regular });
+        await storeTotals(factories, eventIds, 24, { gold: 4 });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, 18, { gold: 3 });
+        expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]?.fields?.[0]?.value).toContain(" 18 0 0 3");
+    });
+
+    test("settles a week once, however often the update runs", async ({ discord, services, factories }) => {
+        const eventIds = await storeWeek(factories, { completed: regular });
+        await storeTotals(factories, eventIds, 24, { gold: 4 });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, 18, { gold: 3 });
+        const monisChoiceId = eventIds.at(-1);
+        assert(monisChoiceId);
+        expect(await services.repos.taskRepo.getTaskEventById(monisChoiceId)).toMatchObject({
+            settledAt: expect.any(Date),
+        });
+    });
+
+    test.for([
+        { tier: SubmissionStatus.Bronze, points: 1 },
+        { tier: SubmissionStatus.Silver, points: 3 },
+    ])("takes off the $tier Moni's Choice the member holds", async ({ tier, points }, {
+        discord,
+        services,
+        factories,
+    }) => {
+        const eventIds = await storeWeek(factories, { completed: regular, monisStatus: tier });
+        await storeTotals(factories, eventIds, 18 + points, { gold: 3, [tier]: 1 });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, 18, { gold: 3 });
+    });
+
+    test.for([
+        { held: "none of the week's regular tasks", completed: [], points: 6, tierCounts: { gold: 1 } },
+        {
+            held: "two of the week's regular tasks",
+            completed: [TaskCategory.PvM, TaskCategory.Skilling],
+            points: 18,
+            tierCounts: { gold: 3 },
+        },
+    ])("leaves Moni's Choice with a member holding $held", async ({ completed, points, tierCounts }, {
+        discord,
+        services,
+        factories,
+    }) => {
+        const eventIds = await storeWeek(factories, { completed });
+        await storeTotals(factories, eventIds, points, tierCounts);
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, points, tierCounts);
+    });
+
+    test.for([
+        { held: "three of the four regular tasks", completed: regular, after: 24 },
+        { held: "all four regular tasks", completed: withLeagues, after: 18 },
+    ])("with Leagues on, settles against all four regular tasks: $held", async ({ completed, after }, {
+        discord,
+        services,
+        factories,
+    }) => {
+        const eventIds = await storeWeek(factories, { completed, categories: withLeagues });
+        await storeTotals(factories, eventIds, 24, { gold: 4 });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, after, { gold: after / 6 });
+    });
+
+    test.for([
+        { week: "the week before", startTime: () => DateTime.now().minus({ weeks: 2, days: 2 }).toJSDate() },
+        { week: "the week still running", startTime: () => DateTime.now().minus({ days: 2 }).toJSDate() },
+    ])("leaves Moni's Choice from $week alone", async ({ startTime }, { discord, services, factories }) => {
+        const eventIds = await storeWeek(factories, { startTime: startTime(), completed: regular });
+        await storeTotals(factories, eventIds, 24, { gold: 4 });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, 24, { gold: 4 });
+    });
+
+    test("leaves a member whose Moni's Choice holds no tier", async ({ discord, services, factories }) => {
+        const eventIds = await storeWeek(factories, { completed: regular, monisStatus: SubmissionStatus.Rejected });
+        await storeTotals(factories, eventIds, 18, { gold: 3 });
+        const stats = await services.repos.userRepo.getUserById(IDS.user);
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        await expectTotals(services, 18, { gold: 3 });
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toEqual(stats);
+    });
+
+    test("settles before a finished period is awarded", async ({ discord, services, factories }) => {
+        const eventIds = await storeWeek(factories, { completed: regular });
+        await storeTotals(factories, eventIds, 24, { gold: 4 }, { length: 1 });
+        discord.serveMember(IDS.guild, apiGuildMember());
+        discord.acceptDirectMessages(apiUser());
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        expect((await services.repos.taskLeaderboardRepo.getLeaderboard("periodic"))?.completedPeriod).toMatchObject({
+            topThree: [{ userId: IDS.user, points: 18 }],
+            tierCounts: { [IDS.user]: { gold: 3 } },
+        });
+    });
+
+    test("settles the member's stats and all-time points with the periodic leaderboard turned off", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const eventIds = await storeWeek(factories, { completed: regular });
+        await storeTotals(factories, eventIds, 24, { gold: 4 });
+        await services.guilds.updateToggle(IDS.guild, "taskLeaderboard", false, IDS.user);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedGold: 3 });
+        expect((await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime"))?.points).toEqual({
+            [IDS.user]: 18,
+        });
+    });
+});
+
 describe("/taskboard", () => {
     test("update posts the current standings, as the weekly update does", async ({ discord, interact, factories }) => {
         await storePeriodic(factories, {});
@@ -474,6 +696,40 @@ describe("TaskLeaderboards periodic submissions", () => {
             firstPeriod + 1,
         );
         expect(discord.messagesSentTo(dms.winner)).toHaveLength(1);
+    });
+});
+
+describe("TaskLeaderboards taking a tier back off", () => {
+    test.for([
+        { period: "the current period", eventId: "week-4", board: "period", tierCounts: { bronze: 1, gold: 0 } },
+        {
+            period: "the following period",
+            eventId: "week-5",
+            board: "pendingPeriod",
+            tierCounts: { bronze: 1, silver: 0, gold: 0 },
+        },
+    ])("takes a tier's points and count off a member in $period", async ({ eventId, board, tierCounts }, {
+        services,
+        factories,
+    }) => {
+        const weeks = await storeWeeks(factories, DateTime.fromISO("2026-01-05T00:00:00Z"), [
+            "week-1",
+            "week-2",
+            "week-3",
+            "week-4",
+            "week-5",
+        ]);
+        await ensureTaskLeaderboardsInitialized(services);
+        for (const id of weeks) await registerPeriodicTaskEvent(services, id);
+        await incrementPeriodicPoints(services, winner, 6, eventId, SubmissionStatus.Gold);
+        await incrementPeriodicPoints(services, winner, 1, eventId, SubmissionStatus.Bronze);
+
+        await incrementPeriodicPoints(services, winner, -6, eventId, null, SubmissionStatus.Gold);
+
+        const stored = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+        const scores = board === "period" ? stored : stored?.pendingPeriod;
+        expect(scores?.points).toEqual({ [winner]: 1 });
+        expect(scores?.tierCounts).toEqual({ [winner]: tierCounts });
     });
 });
 

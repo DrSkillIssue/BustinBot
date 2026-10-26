@@ -16,7 +16,7 @@ import type { UserStats } from "../../models/UserStats.js";
 
 const MAX_SCREENSHOTS = 10;
 
-const TIER_STAT_MAP: Record<string, keyof UserStats> = {
+export const TIER_STAT_MAP: Record<string, keyof UserStats> = {
     bronze: "tasksCompletedBronze",
     silver: "tasksCompletedSilver",
     gold: "tasksCompletedGold",

@@ -8,7 +8,17 @@ import {
     type GatewayMessageCreateDispatchData,
     ApplicationCommandOptionType,
 } from "discord-api-types/v10";
-import { describe, expect, vi, type StoringFactories, type Interact, storeRunningEvent, test } from "../fixtures.js";
+import {
+    describe,
+    expect,
+    vi,
+    type StoringFactories,
+    type Interact,
+    storePeriodic,
+    storeRunningEvent,
+    storeTaskWeek,
+    test,
+} from "../fixtures.js";
 import { type ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 import { type DiscordHarness } from "../discord/harness.js";
 import { CONCURRENT_TRANSACTION_TIMEOUT_MS, firestoreUnavailable } from "../firestoreEmulator.js";
@@ -745,6 +755,61 @@ describe("approving a submission", () => {
         ]);
         expect(await services.repos.taskRepo.getSubmissionById(submission.id)).toMatchObject({
             status: SubmissionStatus.Pending,
+        });
+    });
+
+    describe("for Moni's Choice", () => {
+        test.for([
+            { held: "none of the week's regular tasks", completed: [] },
+            {
+                held: "every regular task of the week",
+                completed: [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc],
+            },
+        ])("adds like any task while the member holds $held, and completes the approval", async ({ completed }, {
+            discord,
+            interact,
+            services,
+            factories,
+        }) => {
+            const { regularEvents, monisChoice } = await storeTaskWeek(factories, {
+                startTime: DateTime.now().minus({ days: 1 }).toJSDate(),
+                completedBy: Object.fromEntries(completed.map((category) => [category, [IDS.user]])),
+                monisChoice: { messageId: EVENT_POST },
+            });
+            assert(monisChoice);
+            await storePeriodic(factories, {
+                period: { eventIds: [...regularEvents, monisChoice].map((event) => event.id) },
+            });
+            const submission = await storePendingSubmission(factories, {
+                taskEventId: monisChoice.id,
+                taskName: "Bank 100 Monis",
+            });
+            const { dm } = await acceptReviewEffects(discord, services);
+
+            const confirm = await approve(discord, interact, submission, "gold");
+
+            expect(discord.originalEdits(confirm).at(-1)).toMatchObject({
+                content: "✅ Submission approved for **Gold tier** (1 roll) and archived.",
+            });
+            expect(await services.repos.taskRepo.getTaskEventById(monisChoice.id)).toMatchObject({
+                completionCounts: { bronze: 0, silver: 0, gold: 1 },
+                completedUserIds: [IDS.user],
+            });
+            expect(discord.messagesSentTo(dm)).toEqual([
+                expect.objectContaining({
+                    content: expect.stringMatching(
+                        /^✅ Your submission for \*\*Bank 100 Monis\*\* has been approved for 🥇 \*\*Gold tier\*\*!/,
+                    ),
+                }),
+            ]);
+            expect(await services.repos.userRepo.getUserById(IDS.user)).toMatchObject({ tasksCompletedGold: 1 });
+            expect((await services.repos.taskLeaderboardRepo.getLeaderboard("lifetime"))?.points).toEqual({
+                [IDS.user]: 6,
+            });
+            expect(await services.repos.taskLeaderboardRepo.getLeaderboard("periodic")).toMatchObject({
+                points: { [IDS.user]: 6 },
+                tierCounts: { [IDS.user]: { gold: 1 } },
+            });
         });
     });
 });

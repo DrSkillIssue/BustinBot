@@ -10,7 +10,7 @@ import { registerPeriodicTaskEvent } from "./TaskLeaderboards.js";
 import { announceToTaskUsers, refreshTaskPollMessage, weeklyTaskCategories } from "./HandleTaskPoll.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
 
-function generateTaskEventId(taskId: string): string {
+export function generateTaskEventId(taskId: string): string {
     return `${taskId}-${DateTime.utc().toFormat("yyyyLLdd")}-${randomUUID().slice(0, 8)}`;
 }
 
@@ -60,7 +60,7 @@ export async function startTaskEventForCategory(
     sharedKeyword: string,
     channelOverride?: GuildTextBasedChannel
 ): Promise<void> {
-    const { repos, taskEvents } = services;
+    const { repos } = services;
 
     const channel = channelOverride ?? (await configuredChannel(client, services, "taskChannel"));
     if (!channel) return;
@@ -122,27 +122,7 @@ export async function startTaskEventForCategory(
         createdAt: now.toJSDate(),
     };
 
-    const { embeds, components, files } = buildTaskEventEmbed(event);
-
-    const sentMessage = await channel.send({ embeds, components, files });
-
-    event.messageId = sentMessage.id;
-    event.channelId = channel.id;
-
-    try {
-        await taskEvents.storeTaskEvent(event);
-    } catch (err) {
-        await sentMessage.delete().catch((deleteErr) => {
-            console.warn(`[TaskStart] Failed to remove the post for unsaved event ${taskEventId}:`, deleteErr);
-        });
-        throw err;
-    }
-
-    try {
-        await registerPeriodicTaskEvent(services, taskEventId);
-    } catch (err) {
-        console.warn(`[TaskStart] Failed to register periodic leaderboard event ${taskEventId}:`, err);
-    }
+    await postTaskEvent(services, channel, event);
 
     if (pollData.id) {
         await repos.taskRepo.closeTaskPoll(pollData.id);
@@ -154,4 +134,28 @@ export async function startTaskEventForCategory(
     }
 
     console.log(`[TaskStart] Task event posted for ${category} (${taskEventId})`);
+}
+
+export async function postTaskEvent(services: ServiceContainer, channel: GuildTextBasedChannel, event: TaskEvent): Promise<void> {
+    const { embeds, components, files } = buildTaskEventEmbed(event);
+
+    const sentMessage = await channel.send({ embeds, components, files });
+
+    event.messageId = sentMessage.id;
+    event.channelId = channel.id;
+
+    try {
+        await services.taskEvents.storeTaskEvent(event);
+    } catch (err) {
+        await sentMessage.delete().catch((deleteErr) => {
+            console.warn(`[TaskStart] Failed to remove the post for unsaved event ${event.id}:`, deleteErr);
+        });
+        throw err;
+    }
+
+    try {
+        await registerPeriodicTaskEvent(services, event.id);
+    } catch (err) {
+        console.warn(`[TaskStart] Failed to register periodic leaderboard event ${event.id}:`, err);
+    }
 }

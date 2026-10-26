@@ -3,6 +3,8 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPendingPeriod, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
+import { TaskCategory } from "../../models/Task.js";
+import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { UserStats } from "../../models/UserStats.js";
 import type { SubmissionStatus } from "../../models/TaskSubmission.js";
 import table from "text-table";
@@ -30,7 +32,7 @@ export function getStatusPoints(status?: SubmissionStatus): number {
 function applyTierCountDelta(
     tierCounts: Record<string, TaskTierCounts> | undefined,
     userId: string,
-    tier: LeaderboardTier,
+    tier: LeaderboardTier | null,
     previousTier: LeaderboardTier | undefined
 ): Record<string, TaskTierCounts> {
     const updated = structuredClone(tierCounts ?? {});
@@ -39,7 +41,7 @@ function applyTierCountDelta(
     if (previousTier) {
         updated[userId][previousTier] = Math.max(0, updated[userId][previousTier] - 1);
     }
-    updated[userId][tier] += 1;
+    if (tier) updated[userId][tier] += 1;
 
     return updated;
 }
@@ -48,7 +50,7 @@ function incrementPendingPeriodPoints(
     pendingPeriod: TaskLeaderboardPendingPeriod,
     userId: string,
     amount: number,
-    tier: LeaderboardTier,
+    tier: LeaderboardTier | null,
     previousTier: LeaderboardTier | undefined
 ): TaskLeaderboardPendingPeriod {
     return {
@@ -65,6 +67,20 @@ const DEFAULT_PERIOD_EVENTS = 4;
 
 function resolvePeriodKey(event: TaskEvent): string {
     return `start:${event.startTime.toISOString().slice(0, 10)}`;
+}
+
+export async function weekRegularEvents(taskRepo: ITaskRepository, event: TaskEvent): Promise<TaskEvent[]> {
+    const week = resolvePeriodKey(event);
+    return (await taskRepo.getTaskEventsBetween(event.startTime, event.endTime))
+        .filter((weekEvent) => weekEvent.category !== TaskCategory.MonisChoice && resolvePeriodKey(weekEvent) === week);
+}
+
+export function holdsEveryTask(events: TaskEvent[], userId: string): boolean {
+    return events.every((event) => event.completedUserIds?.includes(userId));
+}
+
+export async function eventCountsForMember(taskRepo: ITaskRepository, event: TaskEvent, userId: string): Promise<boolean> {
+    return event.category !== TaskCategory.MonisChoice || !holdsEveryTask(await weekRegularEvents(taskRepo, event), userId);
 }
 
 async function loadPeriodicEvents(services: ServiceContainer, eventIds: string[]): Promise<TaskEvent[]> {
@@ -293,7 +309,7 @@ export async function incrementPeriodicPoints(
     userId: string,
     amount: number,
     taskEventId: string,
-    tier: "bronze" | "silver" | "gold",
+    tier: "bronze" | "silver" | "gold" | null,
     previousStatus?: SubmissionStatus
 ): Promise<void> {
     const repo = services.repos.taskLeaderboardRepo;
@@ -336,7 +352,7 @@ export async function incrementPeriodicPoints(
 
     try {
         await repo.incrementPoints("periodic", userId, amount, {
-            [tier]: 1,
+            ...(tier && { [tier]: 1 }),
             ...(previousTier && { [previousTier]: -1 }),
         });
     } catch (err) {

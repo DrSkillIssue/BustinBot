@@ -10,6 +10,7 @@ import type { Client } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
+import { eventCountsForMember } from "./TaskLeaderboards.js";
 
 const DEFAULT_PERIOD_DAYS = parseInt(process.env.PRIZE_PERIOD_DAYS ?? "14");
 
@@ -129,17 +130,26 @@ export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository,
     );
     const qualifyingEventIds = qualifyingEvents.map((event) => event.id);
 
+    const events = new Map(qualifyingEvents.map((event) => [event.id, event]));
+    const countedSubmissions: TaskSubmission[] = [];
+    for (const submission of deduplicatedSubmissions) {
+        const event = events.get(submission.taskEventId) ?? await taskRepo.getTaskEventById(submission.taskEventId);
+        if (!event || await eventCountsForMember(taskRepo, event, submission.userId)) {
+            countedSubmissions.push(submission);
+        }
+    }
+
     const participants: Record<string, number> = {};
     const entries: string[] = [];
-    for (const submission of deduplicatedSubmissions) {
+    for (const submission of countedSubmissions) {
         participants[submission.userId] = (participants[submission.userId] || 0) + ROLLS_PER_SUBMISSION;
         entries.push(submission.userId);
     }
 
     const tierCounts = {
-        bronze: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Bronze).length,
-        silver: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Silver).length,
-        gold: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Gold).length,
+        bronze: countedSubmissions.filter(s => s.status === SubmissionStatus.Bronze).length,
+        silver: countedSubmissions.filter(s => s.status === SubmissionStatus.Silver).length,
+        gold: countedSubmissions.filter(s => s.status === SubmissionStatus.Gold).length,
     };
 
     const totalEntries = entries.length;

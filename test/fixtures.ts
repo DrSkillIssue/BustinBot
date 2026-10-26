@@ -12,7 +12,7 @@ import { routeInteraction } from "../src/core/events/routeInteraction.js";
 import { handleMessage } from "../src/core/events/onMessage.js";
 import { GuildRepository } from "../src/core/database/GuildRepo.js";
 import type { ServiceContainer } from "../src/core/services/ServiceContainer.js";
-import { Skill, TaskCategory, type Task } from "../src/models/Task.js";
+import { Skill, TaskCategory, TaskType, type Task } from "../src/models/Task.js";
 import type { TaskEvent } from "../src/models/TaskEvent.js";
 import type { Firestore } from "firebase-admin/firestore";
 import { DiscordHarness } from "./discord/harness.js";
@@ -76,6 +76,7 @@ const TASK_ID_PREFIXES: Record<TaskCategory, string> = {
     [TaskCategory.Skilling]: "SKL",
     [TaskCategory.MinigameMisc]: "MIN",
     [TaskCategory.Leagues]: "LEA",
+    [TaskCategory.MonisChoice]: "MONIS",
 };
 const POLL_SKILLS = [Skill.Mining, Skill.Fishing, Skill.Cooking];
 
@@ -92,6 +93,57 @@ export async function storeRunningEvent(
 ): Promise<TaskEvent> {
     const task = await factories.task.create(event.task);
     return factories.taskEvent.running().create({ channelId: IDS.channel, ...event, task });
+}
+
+export const WEEKLY_CATEGORIES = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
+
+export async function storeTaskWeek(
+    factories: StoringFactories,
+    {
+        startTime,
+        categories = WEEKLY_CATEGORIES,
+        completedBy = {},
+        monisChoice = {},
+    }: {
+        startTime: Date;
+        categories?: TaskCategory[];
+        completedBy?: Partial<Record<TaskCategory, string[]>>;
+        monisChoice?: Parameters<StoringFactories["taskEvent"]["create"]>[0] | false;
+    },
+): Promise<{ regularEvents: TaskEvent[]; monisChoice: TaskEvent | undefined }> {
+    const week = DateTime.fromJSDate(startTime, { zone: "utc" });
+    const regularEvents: TaskEvent[] = [];
+    for (const [index, category] of categories.entries()) {
+        const id = `${TASK_ID_PREFIXES[category]}001`;
+        regularEvents.push(
+            await factories.taskEvent.create({
+                id: `${id}-${week.toFormat("yyyyLLdd")}`,
+                task: { id, category },
+                startTime: week.plus({ seconds: index }).toJSDate(),
+                channelId: IDS.channel,
+                completedUserIds: completedBy[category] ?? [],
+            }),
+        );
+    }
+    if (monisChoice === false) return { regularEvents, monisChoice: undefined };
+
+    const { task, ...overrides } = monisChoice;
+    const event = await factories.taskEvent.create({
+        id: `MONIS-${week.toFormat("yyyyLLdd")}`,
+        task: {
+            id: "MONIS",
+            taskName: "Bank 100 Monis",
+            description: "Screenshot your bank with the keyword visible.",
+            category: TaskCategory.MonisChoice,
+            type: TaskType.Other,
+            ...task,
+        },
+        startTime,
+        endTime: regularEvents.at(-1)?.endTime ?? week.plus({ weeks: 1 }).toJSDate(),
+        channelId: IDS.channel,
+        ...overrides,
+    });
+    return { regularEvents, monisChoice: event };
 }
 
 export async function storePeriodic(

@@ -5,10 +5,12 @@ import {
     InteractionContextType,
     InteractionResponseType,
     MessageFlags,
+    RESTJSONErrorCodes,
+    TextInputStyle,
     type APIApplicationCommandAutocompleteDMInteraction,
     type APIApplicationCommandInteractionDataOption,
 } from "discord-api-types/v10";
-import { describe, expect, vi, storeRunningEvent, test } from "../fixtures.js";
+import { describe, expect, vi, storePeriodic, storeRunningEvent, storeTaskWeek, test } from "../fixtures.js";
 import {
     apiMessage,
     apiUser,
@@ -20,11 +22,17 @@ import {
     IDS,
     modalSubmitInteraction,
     PRIVATE_DEFERRAL,
+    DiscordError,
 } from "../discord/payloads.js";
 import { Skill, TaskCategory, TaskType } from "../../src/models/Task.js";
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
 import { taskFactory } from "../factories.js";
+import { resolvePeriodicProgress } from "../../src/modules/tasks/TaskLeaderboards.js";
+import { TaskInstructions } from "../../src/modules/tasks/TaskInstructions.js";
+import assert from "node:assert";
+import type { DiscordHarness } from "../discord/harness.js";
+import type { ServiceContainer } from "../../src/core/services/ServiceContainer.js";
 
 const CSV = [
     "ID,Task Name,Category,Type,Skill,Bronze Amount,Silver Amount,Gold Amount,Weight,Short Name,Wilderness Required?",
@@ -770,5 +778,412 @@ describe("/newtask", () => {
             expect.objectContaining({ content: "Task **SKL001** created successfully." }),
         ]);
         expect(await services.repos.taskRepo.getTaskById("SKL001")).not.toHaveProperty("skill");
+    });
+});
+
+describe("/monischoice", () => {
+    const thisWeek = () => DateTime.now().minus({ days: 1 }).toJSDate();
+
+    function formValues(modal: ReturnType<DiscordHarness["modal"]>) {
+        return Object.fromEntries(
+            (modal?.components ?? [])
+                .flatMap((label) => ("component" in label ? [label.component] : []))
+                .map((input) => ["custom_id" in input ? input.custom_id : "", "value" in input ? input.value : undefined]),
+        );
+    }
+
+    test.for([
+        { role: "task admins", as: AS.taskAdmin },
+        { role: "bot admins", as: AS.botAdmin },
+    ])("opens an empty form for $role as its first response when the week has no Moni's Choice", async (
+        { as },
+        { discord, interact, factories },
+    ) => {
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+
+        const command = await interact(chatInputInteraction("monischoice", [], as));
+
+        expect(discord.callbacks(command)).toHaveLength(1);
+        const modal = discord.modal(command);
+        expect(modal).toMatchObject({ custom_id: "monis_choice_modal", title: "New Moni's Choice" });
+        expect(modal?.components).toMatchObject([
+            { label: "Task Name", component: { custom_id: "taskName", style: TextInputStyle.Short } },
+            { label: "Description", component: { custom_id: "description", style: TextInputStyle.Paragraph } },
+            { label: "Bronze Amount", component: { custom_id: "bronze", style: TextInputStyle.Short } },
+            { label: "Silver Amount", component: { custom_id: "silver", style: TextInputStyle.Short } },
+            { label: "Gold Amount", component: { custom_id: "gold", style: TextInputStyle.Short } },
+        ]);
+        expect(formValues(modal)).toEqual({
+            taskName: undefined,
+            description: undefined,
+            bronze: undefined,
+            silver: undefined,
+            gold: undefined,
+        });
+    });
+
+    test("fills the form in from the week's Moni's Choice", async ({ discord, interact, factories }) => {
+        await storeTaskWeek(factories, {
+            startTime: thisWeek(),
+            monisChoice: { task: { taskName: "Bank 100 Monis", description: "Show your bank.", amtBronze: 1, amtSilver: 5, amtGold: 100 } },
+        });
+
+        const command = await interact(chatInputInteraction("monischoice", [], AS.taskAdmin));
+
+        expect(discord.modal(command)).toMatchObject({ custom_id: "monis_choice_modal", title: "Update Moni's Choice" });
+        expect(formValues(discord.modal(command))).toEqual({
+            taskName: "Bank 100 Monis",
+            description: "Show your bank.",
+            bronze: "1",
+            silver: "5",
+            gold: "100",
+        });
+    });
+
+    test("is refused to members who are neither task admins nor bot admins", async ({ discord, interact, factories }) => {
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+
+        const command = await interact(chatInputInteraction("monischoice"));
+
+        expect(discord.callbacks(command)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+
+    test.for([
+        { when: "no task has ever run", weeksAgo: undefined },
+        { when: "only last week's tasks exist", weeksAgo: 1 },
+    ])("replies privately without a form when $when", async ({ weeksAgo }, { discord, interact, factories }) => {
+        if (weeksAgo) {
+            await storeTaskWeek(factories, {
+                startTime: DateTime.now().minus({ weeks: weeksAgo, days: 1 }).toJSDate(),
+                monisChoice: false,
+            });
+        }
+
+        const command = await interact(chatInputInteraction("monischoice", [], AS.taskAdmin));
+
+        expect(discord.callbacks(command)).toEqual([
+            {
+                type: InteractionResponseType.ChannelMessageWithSource,
+                data: expect.objectContaining({
+                    content: "There are no weekly tasks running for Moni's Choice to end with.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            },
+        ]);
+    });
+});
+
+describe("the Moni's Choice form", () => {
+    const thisWeek = () => DateTime.now().minus({ days: 1 }).toJSDate();
+    const form = {
+        taskName: "Bank 100 Monis",
+        description: "Screenshot your bank with the keyword visible.",
+        bronze: "1",
+        silver: "50",
+        gold: "100",
+    };
+
+    async function storedMonisChoice(services: ServiceContainer) {
+        const now = new Date();
+        const running = await services.repos.taskRepo.getTaskEventsBetween(
+            now,
+            DateTime.fromJSDate(now).plus({ weeks: 1 }).toJSDate(),
+        );
+        return running.filter((event) => event.category === TaskCategory.MonisChoice);
+    }
+
+    test("posts Moni's Choice into the running week, ending with its tasks, with no feedback buttons", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const { regularEvents } = await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+        discord.acceptMessages(IDS.channel);
+
+        const submit = await interact(modalSubmitInteraction("monis_choice_modal", form, AS.taskAdmin));
+
+        expect(discord.callbacks(submit)).toEqual([PRIVATE_DEFERRAL]);
+        expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Moni's Choice posted." })]);
+        const [first, , last] = regularEvents;
+        assert(first && last);
+        const [event, ...others] = await storedMonisChoice(services);
+        assert(event);
+        expect(others).toEqual([]);
+        expect(event).toEqual({
+            id: expect.stringMatching(/^MONIS-\d{8}-[0-9a-f]{8}$/),
+            task: {
+                id: "MONIS",
+                taskName: "Bank 100 Monis",
+                description: "Screenshot your bank with the keyword visible.",
+                category: TaskCategory.MonisChoice,
+                type: TaskType.Other,
+                amtBronze: 1,
+                amtSilver: 50,
+                amtGold: 100,
+            },
+            category: TaskCategory.MonisChoice,
+            keyword: first.keyword,
+            startTime: first.startTime,
+            endTime: last.endTime,
+            amounts: { bronze: 1, silver: 50, gold: 100 },
+            completionCounts: { bronze: 0, silver: 0, gold: 0 },
+            completedUserIds: [],
+            channelId: IDS.channel,
+            messageId: expect.any(String),
+            createdAt: expect.any(Date),
+        });
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([
+            expect.objectContaining({
+                embeds: [
+                    expect.objectContaining({
+                        title: "Moni's Choice Task",
+                        description: [
+                            "**Bank 100 Monis**\nScreenshot your bank with the keyword visible.",
+                            "Amounts required for each tier of completion:\n\n🥉 **1**\u2003🥈 **50**\u2003🥇 **100**",
+                            "**Completions:** 🥉0 🥈0 🥇0",
+                            `**Submission Instructions:**\n${TaskInstructions[TaskType.Other]}`,
+                            "Click **Submit Screenshot(s)** below to make your submission.",
+                        ].join("\n\n"),
+                        footer: { text: `Ends ${last.endTime.toUTCString()} • ${event.id}` },
+                        thumbnail: { url: "attachment://category_icon.png" },
+                    }),
+                ],
+                components: [
+                    {
+                        type: ComponentType.ActionRow,
+                        components: [expect.objectContaining({ custom_id: `task-submit-${event.id}` })],
+                    },
+                ],
+                files: ["category_icon.png"],
+            }),
+        ]);
+    });
+
+    test("ends with the week's Leagues task too when Leagues is on", async ({ discord, interact, services, factories }) => {
+        const { regularEvents } = await storeTaskWeek(factories, {
+            startTime: thisWeek(),
+            categories: [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc, TaskCategory.Leagues],
+            monisChoice: false,
+        });
+        discord.acceptMessages(IDS.channel);
+
+        await interact(modalSubmitInteraction("monis_choice_modal", form, AS.taskAdmin));
+
+        expect((await storedMonisChoice(services))[0]?.endTime).toEqual(regularEvents.at(-1)?.endTime);
+    });
+
+    test("joins the running week in the periodic leaderboard without adding a week to it", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const { regularEvents } = await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+        const eventIds = regularEvents.map((event) => event.id);
+        await storePeriodic(factories, { period: { eventIds } });
+        discord.acceptMessages(IDS.channel);
+
+        await interact(modalSubmitInteraction("monis_choice_modal", form, AS.taskAdmin));
+
+        const [event] = await storedMonisChoice(services);
+        const leaderboard = await services.repos.taskLeaderboardRepo.getLeaderboard("periodic");
+        assert(event && leaderboard?.period);
+        expect(leaderboard.period.eventIds).toEqual([...eventIds, event.id]);
+        expect(await resolvePeriodicProgress(services, leaderboard.period)).toMatchObject({ started: 1 });
+    });
+
+    test("trims spaces around the name, description and amounts", async ({ discord, interact, services, factories }) => {
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+        discord.acceptMessages(IDS.channel);
+
+        await interact(
+            modalSubmitInteraction(
+                "monis_choice_modal",
+                { taskName: "  Bank 100 Monis ", description: " Show your bank.  ", bronze: " 1", silver: "50 ", gold: " 100 " },
+                AS.taskAdmin,
+            ),
+        );
+
+        expect((await storedMonisChoice(services))[0]?.task).toMatchObject({
+            taskName: "Bank 100 Monis",
+            description: "Show your bank.",
+            amtBronze: 1,
+            amtSilver: 50,
+            amtGold: 100,
+        });
+    });
+
+    test.for([
+        { field: "bronze", value: "1.5" },
+        { field: "silver", value: "lots" },
+        { field: "gold", value: "-100" },
+        { field: "bronze", value: "" },
+        { field: "silver", value: "   " },
+        { field: "gold", value: "1,000" },
+    ])("saves and posts nothing when the $field amount is '$value'", async ({ field, value }, {
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+
+        const submit = await interact(modalSubmitInteraction("monis_choice_modal", { ...form, [field]: value }, AS.taskAdmin));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({
+                content: "The bronze, silver and gold amounts must be whole numbers. Nothing was saved.",
+            }),
+        ]);
+        expect(await storedMonisChoice(services)).toEqual([]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+
+    test.for([
+        { field: "taskName", value: "   " },
+        { field: "description", value: "  " },
+    ])("saves and posts nothing when the $field is empty", async ({ field, value }, {
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+
+        const submit = await interact(modalSubmitInteraction("monis_choice_modal", { ...form, [field]: value }, AS.taskAdmin));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({ content: "The task name and description can't be empty. Nothing was saved." }),
+        ]);
+        expect(await storedMonisChoice(services)).toEqual([]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+
+    test("updates the week's Moni's Choice and its post instead of posting another, keeping its completions", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const { monisChoice } = await storeTaskWeek(factories, {
+            startTime: thisWeek(),
+            monisChoice: {
+                messageId: eventMessage,
+                completionCounts: { bronze: 1, silver: 0, gold: 0 },
+                completedUserIds: [completer],
+            },
+        });
+        assert(monisChoice);
+        discord.serveMessage(apiMessage({ id: eventMessage }));
+        discord.acceptMessageEdits(IDS.channel);
+
+        const submit = await interact(
+            modalSubmitInteraction("monis_choice_modal", { ...form, taskName: "Bank 200 Monis", gold: "200" }, AS.taskAdmin),
+        );
+
+        expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Moni's Choice updated." })]);
+        expect(await storedMonisChoice(services)).toEqual([
+            {
+                ...monisChoice,
+                task: {
+                    id: "MONIS",
+                    taskName: "Bank 200 Monis",
+                    description: "Screenshot your bank with the keyword visible.",
+                    category: TaskCategory.MonisChoice,
+                    type: TaskType.Other,
+                    amtBronze: 1,
+                    amtSilver: 50,
+                    amtGold: 200,
+                },
+                amounts: { bronze: 1, silver: 50, gold: 200 },
+            },
+        ]);
+        const [edit, ...moreEdits] = discord.messageEdits(IDS.channel, eventMessage);
+        expect(moreEdits).toEqual([]);
+        expect(edit?.embeds?.[0]?.description).toContain(
+            "**Bank 200 Monis**\nScreenshot your bank with the keyword visible.\n\n",
+        );
+        expect(edit?.embeds?.[0]?.description).toContain("**Completions:** 🥉1 🥈0 🥇0");
+        expect(edit?.components).toEqual([
+            {
+                type: ComponentType.ActionRow,
+                components: [expect.objectContaining({ custom_id: `task-submit-${monisChoice.id}` })],
+            },
+        ]);
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+
+    test("still saves the update when the Moni's Choice post has been deleted", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        const { monisChoice } = await storeTaskWeek(factories, {
+            startTime: thisWeek(),
+            monisChoice: { messageId: eventMessage },
+        });
+        assert(monisChoice);
+        discord.refuse("GET", `/channels/${IDS.channel}/messages/${eventMessage}`, DiscordError.unknownMessage);
+
+        const submit = await interact(
+            modalSubmitInteraction("monis_choice_modal", { ...form, taskName: "Bank 200 Monis" }, AS.taskAdmin),
+        );
+
+        expect(discord.originalEdits(submit)).toEqual([expect.objectContaining({ content: "Moni's Choice updated." })]);
+        expect((await services.repos.taskRepo.getTaskEventById(monisChoice.id))?.task.taskName).toBe("Bank 200 Monis");
+        expect(error).toHaveBeenCalledWith(
+            "[HandleMonisChoiceModal] Failed to update the Moni's Choice post:",
+            expect.objectContaining({ code: RESTJSONErrorCodes.UnknownMessage }),
+        );
+    });
+
+    test("saves nothing when the week's tasks have ended by the time the form is sent", async ({
+        discord,
+        interact,
+        services,
+        factories,
+    }) => {
+        await storeTaskWeek(factories, { startTime: DateTime.now().minus({ weeks: 1, days: 1 }).toJSDate(), monisChoice: false });
+
+        const submit = await interact(modalSubmitInteraction("monis_choice_modal", form, AS.taskAdmin));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({
+                content: "There are no weekly tasks running for Moni's Choice to end with. Nothing was saved.",
+            }),
+        ]);
+        expect(await services.repos.taskRepo.getTaskEventsBetween(new Date(0), DateTime.now().plus({ weeks: 2 }).toJSDate())).not.toContainEqual(
+            expect.objectContaining({ category: TaskCategory.MonisChoice }),
+        );
+        expect(discord.messagesSentTo(IDS.channel)).toEqual([]);
+    });
+
+    test("saves nothing when no task channel is set up", async ({ discord, interact, services, factories }) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        await storeTaskWeek(factories, { startTime: thisWeek(), monisChoice: false });
+        await services.guilds.update(IDS.guild, { channels: { taskChannel: "" } });
+
+        const submit = await interact(modalSubmitInteraction("monis_choice_modal", form, AS.taskAdmin));
+
+        expect(discord.originalEdits(submit)).toEqual([
+            expect.objectContaining({
+                content: "The task channel isn't set up, so Moni's Choice can't be posted. Nothing was saved.",
+            }),
+        ]);
+        expect(await storedMonisChoice(services)).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(
+            `[Channels] The taskChannel channel (not set) of guild ${IDS.guild} isn't set or can't be reached.`,
+        );
     });
 });

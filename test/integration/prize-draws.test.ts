@@ -1,6 +1,6 @@
 import { SnowflakeUtil } from "discord.js";
 import { DateTime } from "luxon";
-import { describe, expect, vi, type StoringFactories, test } from "../fixtures.js";
+import { describe, expect, vi, type StoringFactories, storeTaskWeek, test } from "../fixtures.js";
 import { DiscordError, IDS, NAMES, apiUser, AS, chatInputInteraction, PRIVATE_DEFERRAL } from "../discord/payloads.js";
 import { SubmissionStatus } from "../../src/models/TaskSubmission.js";
 import {
@@ -11,6 +11,8 @@ import {
 import { runPrizeDrawJob } from "../../src/modules/tasks/TaskScheduler.js";
 import assert from "node:assert";
 import { ApplicationCommandOptionType, RESTJSONErrorCodes } from "discord-api-types/v10";
+import { TaskCategory } from "../../src/models/Task.js";
+import type { TaskEvent } from "../../src/models/TaskEvent.js";
 
 const [winner, second, third, fourth] = [
     SnowflakeUtil.generate().toString(),
@@ -172,6 +174,155 @@ describe("a prize draw snapshot", () => {
             (await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants,
         ).toEqual({ [members.latest]: 1 });
         expect(warn).toHaveBeenCalledWith("[PrizeDraw] No task events found in range for snapshot.");
+    });
+});
+
+describe("a prize draw snapshot with Moni's Choice", () => {
+    const regular = [TaskCategory.PvM, TaskCategory.Skilling, TaskCategory.MinigameMisc];
+
+    async function storeEndedWeek(
+        factories: StoringFactories,
+        endedDaysAgo: number,
+        completed: Record<string, TaskCategory[]>,
+        categories: TaskCategory[] = regular,
+    ): Promise<{ regularEvents: TaskEvent[]; monisChoice: TaskEvent }> {
+        const completedBy = Object.fromEntries(
+            categories.map((category) => [
+                category,
+                Object.keys(completed).filter((userId) => completed[userId]?.includes(category)),
+            ]),
+        );
+        const week = await storeTaskWeek(factories, {
+            startTime: DateTime.now().minus({ days: endedDaysAgo, weeks: 1 }).toJSDate(),
+            categories,
+            completedBy,
+        });
+        assert(week.monisChoice);
+        for (const event of week.regularEvents) {
+            for (const userId of completedBy[event.category] ?? []) {
+                await factories.taskSubmission.create({
+                    id: `${event.id}-${userId}`,
+                    taskEventId: event.id,
+                    userId,
+                    status: SubmissionStatus.Gold,
+                });
+            }
+        }
+        return { regularEvents: week.regularEvents, monisChoice: week.monisChoice };
+    }
+
+    async function storeMonisChoiceApprovals(factories: StoringFactories, monisChoice: TaskEvent, userIds: string[]) {
+        for (const userId of userIds) {
+            await factories.taskSubmission.create({
+                id: `${monisChoice.id}-${userId}`,
+                taskEventId: monisChoice.id,
+                userId,
+                status: SubmissionStatus.Gold,
+            });
+        }
+    }
+
+    test("gives Moni's Choice an entry to a member missing a regular task of its week, and none to one holding them all", async ({
+        services,
+        factories,
+    }) => {
+        const { monisChoice } = await storeEndedWeek(factories, 1, {
+            [winner]: regular,
+            [second]: [TaskCategory.PvM, TaskCategory.Skilling],
+        });
+        await storeMonisChoiceApprovals(factories, monisChoice, [winner, second]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 3, [second]: 3 },
+            totalEntries: 6,
+            tierCounts: { bronze: 0, silver: 0, gold: 6 },
+        });
+    });
+
+    test("gives Moni's Choice an entry to a member holding none of the week's regular tasks", async ({
+        services,
+        factories,
+    }) => {
+        const { monisChoice } = await storeEndedWeek(factories, 1, {});
+        await storeMonisChoiceApprovals(factories, monisChoice, [winner]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 1 },
+            totalEntries: 1,
+        });
+    });
+
+    test("with Leagues on, gives Moni's Choice an entry to a member holding three of the four regular tasks only", async ({
+        services,
+        factories,
+    }) => {
+        const withLeagues = [...regular, TaskCategory.Leagues];
+        const { monisChoice } = await storeEndedWeek(factories, 1, { [winner]: regular, [second]: withLeagues }, withLeagues);
+        await storeMonisChoiceApprovals(factories, monisChoice, [winner, second]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 4, [second]: 4 },
+            totalEntries: 8,
+        });
+    });
+
+    test("judges each Moni's Choice by its own week", async ({ services, factories }) => {
+        const earlier = await storeEndedWeek(factories, 8, { [winner]: regular });
+        const later = await storeEndedWeek(factories, 1, {});
+        await storeMonisChoiceApprovals(factories, earlier.monisChoice, [winner]);
+        await storeMonisChoiceApprovals(factories, later.monisChoice, [winner]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 4 },
+            totalEntries: 4,
+        });
+    });
+
+    test("gives no Moni's Choice entry to a member holding its week's regular tasks but not the week before's, which ends as it starts", async ({
+        services,
+        factories,
+    }) => {
+        await storeEndedWeek(factories, 8, {});
+        const { monisChoice } = await storeEndedWeek(factories, 1, { [winner]: regular });
+        await storeMonisChoiceApprovals(factories, monisChoice, [winner]);
+
+        expect(await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).toMatchObject({
+            participants: { [winner]: 3 },
+            totalEntries: 3,
+        });
+    });
+
+    test("judges a carried-over Moni's Choice by its week too", async ({ services, factories }) => {
+        const { monisChoice } = await storeEndedWeek(factories, 21, { [winner]: regular, [second]: [TaskCategory.PvM] });
+        const previousEnd = DateTime.fromJSDate(monisChoice.endTime);
+        const previousSnapshot = previousEnd.plus({ days: 1 });
+        await factories.prizeDraw.create({
+            ...yesterdaysDraw,
+            id: "previous",
+            start: previousEnd.minus({ days: 14 }).toJSDate().toISOString(),
+            end: previousEnd.toJSDate().toISOString(),
+            snapshotTakenAt: previousSnapshot.toJSDate().toISOString(),
+            rolledAt: previousSnapshot.plus({ days: 1 }).toJSDate().toISOString(),
+            taskEventIds: [monisChoice.id],
+        });
+        for (const userId of [winner, second]) {
+            await factories.taskSubmission.create({
+                id: `carried-${userId}`,
+                taskEventId: monisChoice.id,
+                userId,
+                status: SubmissionStatus.Gold,
+                submittedAt: previousEnd.minus({ days: 1 }).toJSDate(),
+                reviewedAt: previousSnapshot.plus({ hours: 1 }).toJSDate(),
+            });
+        }
+        await storeEvent(factories, "current-event", factories.taskEvent.ended(), [
+            { userId: third, status: SubmissionStatus.Gold },
+        ]);
+
+        expect((await generatePrizeDrawSnapshot(services.repos.prizeRepo, services.repos.taskRepo)).participants).toEqual({
+            [second]: 1,
+            [third]: 1,
+        });
     });
 });
 
