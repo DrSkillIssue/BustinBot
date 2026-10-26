@@ -3,6 +3,8 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import type { TaskLeaderboard, TaskLeaderboardChampions, TaskLeaderboardEntry, TaskLeaderboardId, TaskLeaderboardPendingPeriod, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import type { TaskEvent } from "../../models/TaskEvent.js";
+import { TaskCategory } from "../../models/Task.js";
+import type { ITaskRepository } from "../../core/database/interfaces/ITaskRepo.js";
 import type { UserStats } from "../../models/UserStats.js";
 import type { SubmissionStatus } from "../../models/TaskSubmission.js";
 import table from "text-table";
@@ -39,7 +41,7 @@ function applyTierCountDelta(
     if (previousTier) {
         updated[userId][previousTier] = Math.max(0, updated[userId][previousTier] - 1);
     }
-    updated[userId][tier] += 1;
+    if (tier) updated[userId][tier] += 1;
 
     return updated;
 }
@@ -64,11 +66,21 @@ function incrementPendingPeriodPoints(
 const DEFAULT_PERIOD_EVENTS = 4;
 
 function resolvePeriodKey(event: TaskEvent): string {
-    if (event.startTime instanceof Date) return `start:${event.startTime.toISOString().slice(0, 10)}`;
-    const keyword = event.keyword?.trim().toLowerCase();
-    if (keyword) return `kw:${keyword}`;
-    if (event.endTime instanceof Date) return `end:${event.endTime.toISOString().slice(0, 10)}`;
-    return `id:${event.id}`;
+    return `start:${event.startTime.toISOString().slice(0, 10)}`;
+}
+
+export async function weekRegularEvents(taskRepo: ITaskRepository, event: TaskEvent): Promise<TaskEvent[]> {
+    const week = resolvePeriodKey(event);
+    return (await taskRepo.getTaskEventsBetween(event.startTime, event.endTime))
+        .filter((weekEvent) => weekEvent.category !== TaskCategory.MonisChoice && resolvePeriodKey(weekEvent) === week);
+}
+
+export function holdsEveryTask(events: TaskEvent[], userId: string): boolean {
+    return events.every((event) => event.completedUserIds?.includes(userId));
+}
+
+export async function eventCountsForMember(taskRepo: ITaskRepository, event: TaskEvent, userId: string): Promise<boolean> {
+    return event.category !== TaskCategory.MonisChoice || !holdsEveryTask(await weekRegularEvents(taskRepo, event), userId);
 }
 
 async function loadPeriodicEvents(services: ServiceContainer, eventIds: string[]): Promise<TaskEvent[]> {
@@ -339,12 +351,10 @@ export async function incrementPeriodicPoints(
     }
 
     try {
-        await repo.incrementPoints("periodic", userId, amount);
-        const previousTier = inferPreviousTierFromDelta(tier, amount);
-        if (previousTier) {
-            await repo.incrementTierCount("periodic", userId, previousTier, -1);
-        }
-        await repo.incrementTierCount("periodic", userId, tier, 1);
+        await repo.incrementPoints("periodic", userId, amount, {
+            ...(tier && { [tier]: 1 }),
+            ...(previousTier && { [previousTier]: -1 }),
+        });
     } catch (err) {
         console.warn(`[TaskLeaderboards] Failed to increment periodic points for ${userId}:`, err);
     }

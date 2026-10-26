@@ -1,21 +1,31 @@
-import { Client, EmbedBuilder, TextChannel } from "discord.js";
-import type { Guild } from "discord.js";
+import { Client, EmbedBuilder } from "discord.js";
+import type { GuildTextBasedChannel } from "discord.js";
+import { DateTime } from "luxon";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { configuredChannel } from "../../utils/ChannelUtils.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
+import { TaskCategory } from "../../models/Task.js";
+import { TIER_STAT_MAP } from "./TaskService.js";
 import {
     awardTaskChampionRoles,
     buildRankedPeriodicEntries,
     buildTopTenTableLines,
     ensureTaskLeaderboardsInitialized,
     finalizePeriodicLeaderboard,
+    getStatusPoints,
     getUniquePeriodCount,
+    getUserLabel,
+    holdsEveryTask,
+    incrementLifetimePoints,
+    incrementPeriodicPoints,
     isPeriodicLeaderboardEnabled,
     rankPeriodicEntries,
     resolvePeriodicLabel,
     resolvePeriodicPlacements,
     resolvePeriodicProgress,
     shouldFinalizePeriodicLeaderboard,
+    weekRegularEvents,
+    type RankedEntry,
 } from "./TaskLeaderboards.js";
 import type { TaskLeaderboard, TaskLeaderboardEntry, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
@@ -268,12 +278,27 @@ export async function postFinalLeaderboardSnapshot(client: Client, services: Ser
     return true;
 }
 
-export async function postPeriodicLeaderboardUpdate(
-    client: Client,
-    services: ServiceContainer
-): Promise<void> {
-    const repo = services.repos.taskLeaderboardRepo;
-    if (!repo) return;
+async function settleMonisChoice(services: ServiceContainer): Promise<void> {
+    const taskRepo = services.repos.taskRepo;
+    const now = DateTime.now();
+    const ended = await taskRepo.getTaskEventsBetween(now.minus({ weeks: 1 }).toJSDate(), now.toJSDate());
+    for (const monisChoice of ended.filter((event) => event.category === TaskCategory.MonisChoice && !event.settledAt)) {
+        const regularEvents = await weekRegularEvents(taskRepo, monisChoice);
+        for (const userId of monisChoice.completedUserIds ?? []) {
+            if (!holdsEveryTask(regularEvents, userId)) continue;
+            const status = await services.tasks.getHeldStatus(userId, monisChoice.id);
+            const stat = status && TIER_STAT_MAP[status];
+            if (!stat) continue;
+            await services.repos.userRepo.incrementStat(userId, stat, -1);
+            await incrementLifetimePoints(services, userId, -getStatusPoints(status));
+            await incrementPeriodicPoints(services, userId, -getStatusPoints(status), monisChoice.id, null, status);
+        }
+        await taskRepo.createTaskEvent({ ...monisChoice, settledAt: new Date() });
+    }
+}
+
+export async function postPeriodicLeaderboardUpdate(client: Client, services: ServiceContainer): Promise<void> {
+    await settleMonisChoice(services);
 
     if (!(await isPeriodicLeaderboardEnabled(services))) {
         return;

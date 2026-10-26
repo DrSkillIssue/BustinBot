@@ -8,7 +8,11 @@ import {
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
-import { hasActiveTaskPollCollector, handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
+import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonCategory } from "./TaskList.js";
+import { buttonPage } from "../../utils/Pagination.js";
+import { NEW_TASK_MODAL, handleNewTaskModal } from "./HandleNewTaskModal.js";
+import { MONIS_CHOICE_MODAL, handleMonisChoiceModal } from "./HandleMonisChoiceModal.js";
 
 export async function handleTaskInteraction(
     interaction: Interaction,
@@ -118,6 +122,12 @@ export async function handleTaskInteraction(
         }
         if (interaction.customId.startsWith("update_task_modal_")) {
             await handleUpdateTaskModal(interaction, services);
+        }
+        if (interaction.customId.startsWith(NEW_TASK_MODAL)) {
+            await handleNewTaskModal(interaction, services);
+        }
+        if (interaction.customId === MONIS_CHOICE_MODAL) {
+            await handleMonisChoiceModal(interaction, services);
         }
     }
 

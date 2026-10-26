@@ -8,10 +8,11 @@ import { TaskInstructions } from "./TaskInstructions.js";
 
 const assetIconDir = path.join(import.meta.dirname, "../../../assets/icons");
 const categoryIcons: Record<TaskCategory, string> = {
-    [TaskCategory.PvM]: path.join(assetIconDir, 'task_pvm.png'),
-    [TaskCategory.Skilling]: path.join(assetIconDir, 'task_skilling.png'),
-    [TaskCategory.MinigameMisc]: path.join(assetIconDir, 'task_minigame.png'),
-    [TaskCategory.Leagues]: path.join(assetIconDir, 'task_minigame.png'), // temp
+    [TaskCategory.PvM]: path.join(assetIconDir, "task_pvm.png"),
+    [TaskCategory.Skilling]: path.join(assetIconDir, "task_skilling.png"),
+    [TaskCategory.MinigameMisc]: path.join(assetIconDir, "task_minigame.png"),
+    [TaskCategory.Leagues]: path.join(assetIconDir, "task_minigame.png"), // temp
+    [TaskCategory.MonisChoice]: path.join(assetIconDir, "task_monischoice.png"),
 };
 const pollNumberEmojis = ['1️⃣', '2️⃣', '3️⃣'];
 
@@ -108,6 +109,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
 
     const instructionText =
         TaskInstructions[event.task.type] ?? "Include proof of completion showing progress or XP change.";
+    const description = event.task.description ? `\n${event.task.description}` : "";
 
     const tierDisplay = `Amounts required for each tier of completion:\n
 🥉 **${shortenAmount(event.amounts?.bronze ?? 0)}**\u2003🥈 **${shortenAmount(event.amounts?.silver ?? 0)}**\u2003🥇 **${shortenAmount(event.amounts?.gold ?? 0)}**`;
@@ -118,7 +120,7 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     const embed = new EmbedBuilder()
         .setTitle(`${category} Task`)
         .setDescription(
-            `**${taskTitle}**\n\n${tierDisplay}\n\n${completionLine}\n\n**Submission Instructions:**\n${instructionText}\n\nClick **Submit Screenshot(s)** below to make your submission.`
+            `**${taskTitle}**${description}\n\n${tierDisplay}\n\n${completionLine}\n\n**Submission Instructions:**\n${instructionText}\n\nClick **Submit Screenshot(s)** below to make your submission.`
         )
         .setColor(0xa60000)
         .setFooter({ text: `Ends ${event.endTime.toUTCString()} • ${event.id}` })
@@ -127,17 +129,21 @@ export function buildTaskEventEmbed(event: TaskEvent) {
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
             .setCustomId(`task-submit-${event.id}`)
-            .setLabel('📤 Submit Screenshot(s)')
-            .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-            .setCustomId(`task-feedback|up|${event.task.id}|${event.id}`)
-            .setLabel('👍')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(`task-feedback|down|${event.task.id}|${event.id}`)
-            .setLabel('👎')
-            .setStyle(ButtonStyle.Secondary)
+            .setLabel("📤 Submit Screenshot(s)")
+            .setStyle(ButtonStyle.Primary)
     );
+    if (category !== TaskCategory.MonisChoice) {
+        buttonRow.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`task-feedback|up|${event.task.id}|${event.id}`)
+                .setLabel("👍")
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`task-feedback|down|${event.task.id}|${event.id}`)
+                .setLabel("👎")
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
 
     return {
         embeds: [embed],
