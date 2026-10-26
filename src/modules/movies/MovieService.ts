@@ -118,6 +118,41 @@ export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> 
     };
 }
 
+export const MAX_ACTIVE_MOVIES_PER_USER = 3;
+
+export async function isMovieNightAdmin(
+    services: ServiceContainer,
+    interaction: ChatInputCommandInteraction | ButtonInteraction
+): Promise<boolean> {
+    if (interaction.guild?.ownerId === interaction.user.id) return true;
+    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+
+    const roleIds = memberRoleIds(interaction.member);
+    const roles = (await services.guilds.get(services.guildId))?.roles ?? {};
+    return [roles.admin, roles.movieAdmin].some((roleId) => !!roleId && roleIds.includes(roleId));
+}
+
+export async function checkCanAddMovie(
+    services: ServiceContainer,
+    interaction: ChatInputCommandInteraction | ButtonInteraction,
+    tmdbId?: number
+): Promise<string | null> {
+    const movies = await services.repos.movieRepo.getAllMovies();
+    const active = movies.filter((movie) => !movie.watched);
+
+    const own = active.filter((movie) => movie.addedBy === interaction.user.id);
+    if (own.length >= MAX_ACTIVE_MOVIES_PER_USER && !(await isMovieNightAdmin(services, interaction))) {
+        return `You have reached the maximum of ${MAX_ACTIVE_MOVIES_PER_USER} active movies. Remove one or wait for a movie night to conclude before adding more.`;
+    }
+
+    const existing = tmdbId === undefined ? undefined : active.find((movie) => movie.tmdbId === tmdbId);
+    if (existing) {
+        const addedBy = existing.addedByDisplay ?? `<@${existing.addedBy}>`;
+        return `**${existing.title}** is already in the movie list (added by ${addedBy}). Please choose a different result.`;
+    }
+    return null;
+}
+
 export async function addMovieWithStats(movie: Movie, services: ServiceContainer) {
     const movieRepo = services.repos.movieRepo;
     const userRepo = services.repos.userRepo;
