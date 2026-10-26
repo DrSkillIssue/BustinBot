@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ActionRowBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
+import { channelLabel } from "../../../utils/TextUtils.js";
 
 const setup: Command = {
     name: "setup",
@@ -22,22 +23,10 @@ const setup: Command = {
         const guildConfig = await services.guilds.ensureExists(guildId, interaction.user.id);
         const current = guildConfig?.channels ?? {};
 
-        const announceChannelName = current.announcements
-            ? guild.channels.cache.get(current.announcements)?.name ?? `#${current.announcements}`
-            : 'None';
-
-        const logChannelName = current.botLog
-            ? guild.channels.cache.get(current.botLog)?.name ?? `#${current.botLog}`
-            : 'None';
-
-        const archiveChannelName = current.botArchive
-            ? guild.channels.cache.get(current.botArchive)?.name ?? `#${current.botArchive}`
-            : 'None';
-
         const announceSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_announce")
             .setPlaceholder(
-                `Channel for bot announcements (Current: #${announceChannelName})`)
+                `Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
@@ -45,7 +34,7 @@ const setup: Command = {
         const logSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_log")
             .setPlaceholder(
-                `Channel for errors and logs (Current: #${logChannelName})`
+                `Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`
             )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
@@ -54,7 +43,7 @@ const setup: Command = {
         const archiveSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_archive")
             .setPlaceholder(
-                `Channel for archived posts (Current: #${archiveChannelName})`
+                `Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`
             )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)

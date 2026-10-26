@@ -163,24 +163,24 @@ export async function handleInteraction(
         const { customId } = interaction;
         const userId = interaction.user.id;
 
-        if (customId === 'setup_confirm') {
-            const selections = setupService.getSelections('core', userId);
-            const missing = setupService.getMissingFields('core', selections);
-            if (missing.length) {
-                await interaction.reply({ content: `Please select: ${missing.join(', ')}`, flags: 1 << 6 });
+        if (customId === "setup_confirm") {
+            const selections = services.setup.getSelections("core", userId);
+            const missing = services.setup.getMissingFields("core", selections);
+            if (!selections || missing.length) {
+                await interaction.reply({ content: `Please select: ${missing.join(", ")}`, flags: MessageFlags.Ephemeral });
                 return;
             }
 
-            await setupService.persist('core', services.guilds, interaction.guildId!, selections!);
-            setupService.clearSelections('core', userId);
+            await services.setup.persist("core", services.guilds, services.guildId, selections);
+            services.setup.clearSelections("core", userId);
 
             await interaction.update({ content: "Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.", components: [] });
             return;
         }
 
-        if (customId === 'setup_cancel') {
-            setupService.clearSelections('core', userId);
-            await interaction.update({ content: 'Setup cancelled. No changes were made.', components: [] });
+        if (customId === "setup_cancel") {
+            services.setup.clearSelections("core", userId);
+            await interaction.update({ content: "Setup cancelled. No changes were made.", components: [] });
             return;
         }
 
@@ -200,14 +200,14 @@ export async function handleInteraction(
         }
 
         switch (interaction.customId) {
-            case 'setup_announce':
-                setupService.setSelection('core', userId, 'announcements', channelId);
+            case "setup_announce":
+                services.setup.setSelection("core", userId, "announcements", channelId);
                 break;
-            case 'setup_log':
-                setupService.setSelection('core', userId, 'botLog', channelId);
+            case "setup_log":
+                services.setup.setSelection("core", userId, "botLog", channelId);
                 break;
-            case 'setup_archive':
-                setupService.setSelection('core', userId, 'botArchive', channelId);
+            case "setup_archive":
+                services.setup.setSelection("core", userId, "botArchive", channelId);
                 break;
             default:
                 return;

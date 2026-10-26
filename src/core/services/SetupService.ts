@@ -126,5 +126,3 @@ export class SetupService {
     }
 
 }
-
-export const setupService = new SetupService();

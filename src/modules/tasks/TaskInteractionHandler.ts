@@ -8,7 +8,6 @@ import {
     handleRejectionModal,
 } from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
-import { setupService } from "../../core/services/SetupService.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
 import { hasActiveTaskPollCollector, handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
 
@@ -68,19 +67,19 @@ export async function handleTaskInteraction(
 
         const userId = interaction.user.id;
         if (interaction.customId === "tasksetup_confirm") {
-            const selections = setupService.getSelections("task", userId);
-            const missing = setupService.getMissingFields("task", selections);
+            const selections = services.setup.getSelections("task", userId);
+            const missing = services.setup.getMissingFields("task", selections);
 
-            if (missing.length) {
+            if (!selections || missing.length) {
                 await interaction.reply({
                     content: `Please select: ${missing.join(", ")} before confirming.`,
-                    flags: 1 << 6,
+                    flags: MessageFlags.Ephemeral,
                 });
                 return;
             }
 
-            await setupService.persist("task", services.guilds, interaction.guildId!, selections!);
-            setupService.clearSelections("task", userId);
+            await services.setup.persist("task", services.guilds, services.guildId, selections);
+            services.setup.clearSelections("task", userId);
 
             await interaction.update({
                 content: "Task module setup complete! Task roles and channels have been saved.",
@@ -90,7 +89,7 @@ export async function handleTaskInteraction(
         }
 
         if (interaction.customId === "tasksetup_cancel") {
-            setupService.clearSelections("task", userId);
+            services.setup.clearSelections("task", userId);
             await interaction.update({
                 content: "Task setup cancelled. No changes were made.",
                 components: [],
@@ -109,7 +108,7 @@ export async function handleTaskInteraction(
             const userId = interaction.user.id;
             const selection = interaction.values[0];
             if (selection) {
-                setupService.setSelection("task", userId, "taskPeriodEvents", selection);
+                services.setup.setSelection("task", userId, "taskPeriodEvents", selection);
             }
             await interaction.deferUpdate();
             return;
@@ -129,10 +128,10 @@ export async function handleTaskInteraction(
         const userId = interaction.user.id;
         switch (interaction.customId) {
             case "tasksetup_admin_role":
-                setupService.setSelection("task", userId, "taskAdmin", interaction.values[0] ?? "");
+                services.setup.setSelection("task", userId, "taskAdmin", interaction.values[0] ?? "");
                 break;
             case "tasksetup_user_role":
-                setupService.setSelection("task", userId, "taskUser", interaction.values[0] ?? "");
+                services.setup.setSelection("task", userId, "taskUser", interaction.values[0] ?? "");
                 break;
             default:
                 return;
@@ -145,10 +144,10 @@ export async function handleTaskInteraction(
         const userId = interaction.user.id;
         switch (interaction.customId) {
             case "tasksetup_channel":
-                setupService.setSelection("task", userId, "taskChannel", interaction.values[0] ?? "");
+                services.setup.setSelection("task", userId, "taskChannel", interaction.values[0] ?? "");
                 break;
             case "tasksetup_verification_channel":
-                setupService.setSelection("task", userId, "taskVerification", interaction.values[0] ?? "");
+                services.setup.setSelection("task", userId, "taskVerification", interaction.values[0] ?? "");
                 break;
             default:
                 return;
