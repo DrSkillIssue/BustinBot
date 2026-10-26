@@ -1,15 +1,23 @@
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-import type { Movie } from '../../models/Movie.js';
-import type { ServiceContainer } from '../../core/services/ServiceContainer.js';
-dotenv.config();
+import { PermissionFlagsBits, type ButtonInteraction, type ChatInputCommandInteraction } from "discord.js";
+import type { Movie } from "../../models/Movie.js";
+import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
+import { memberRoleIds } from "../../utils/MemberUtils.js";
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
-if (!TMDB_API_KEY) {
-    throw new Error('TMDB_API_KEY is not set in your environment variables.');
+export function tmdbApiKey(): string {
+    const key = process.env.TMDB_API_KEY;
+    if (!key) {
+        throw new Error("TMDB_API_KEY is not set in your environment variables.");
+    }
+    return key;
+}
+
+function tmdbUrl(path: string, params: Record<string, string> = {}): URL {
+    const url = new URL(`${TMDB_BASE_URL}${path}`);
+    url.search = new URLSearchParams({ api_key: tmdbApiKey(), ...params }).toString();
+    return url;
 }
 
 // TMDb Response Types
