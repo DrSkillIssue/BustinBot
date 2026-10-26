@@ -1,8 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
+import { configuredChannel } from "../../../utils/ChannelUtils.js";
 
 const cancelmovie: Command = {
     name: "cancelmovie",
@@ -152,26 +153,13 @@ const cancelmovie: Command = {
         }
 
         if (!announcementHandled) {
-            let targetChannel: TextChannel | undefined;
-
-            if (fallbackAnnouncementChannelId) {
-                const fetched = await interaction.client.channels.fetch(fallbackAnnouncementChannelId).catch(() => null);
-                if (fetched?.isTextBased()) {
-                    targetChannel = fetched as TextChannel;
-                }
-            }
-
-            if (!targetChannel) {
-                targetChannel = guild.channels.cache.find(
-                    (ch) => ch.name === "movie-night" && ch.isTextBased()
-                ) as TextChannel | undefined;
-            }
-
-            if (targetChannel) {
-                await targetChannel.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
-            } else {
-                console.warn("[CancelMovie] Could not find movie night channel for cancellation notice.");
-            }
+            const fetched = fallbackAnnouncementChannelId
+                ? await interaction.client.channels.fetch(fallbackAnnouncementChannelId).catch(() => null)
+                : null;
+            const targetChannel = fetched?.isSendable()
+                ? fetched
+                : await configuredChannel(interaction.client, services, "movieNight");
+            await targetChannel?.send(withSuppressedMentions({ content: cancellationMessage }, suppressMentions));
         }
 
         await interaction.editReply({
