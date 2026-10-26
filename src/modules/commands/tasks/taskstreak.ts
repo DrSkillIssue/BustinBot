@@ -4,8 +4,6 @@ import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { calculateTaskStreakSummary, formatDuration } from "../../tasks/TaskStreaks.js";
 import { packageVersion } from "../../../utils/version.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
-import type { UserStats } from "../../../models/UserStats.js";
 
 const taskstreak: Command = {
     name: "taskstreak",
@@ -41,17 +39,14 @@ const taskstreak: Command = {
         let displayLongest = summary.longestStreak;
 
         const userRepo = services.repos.userRepo;
-        if (userRepo) {
-            try {
-                const raw = await userRepo.getUserById(interaction.user.id);
-                const stats: UserStats | null = raw ? normaliseFirestoreDates(raw) : null;
-                if (stats) {
-                    displayCurrent = stats.taskStreak ?? displayCurrent;
-                    displayLongest = stats.longestTaskStreak ?? displayLongest;
-                }
-            } catch (err) {
-                console.warn(`[TaskStreak] Failed to load user streak stats for ${interaction.user.id}:`, err);
+        try {
+            const stats = await userRepo.getUserById(interaction.user.id);
+            if (stats) {
+                displayCurrent = stats.taskStreak ?? displayCurrent;
+                displayLongest = stats.longestTaskStreak ?? displayLongest;
             }
+        } catch (err) {
+            console.warn(`[TaskStreak] Failed to load user streak stats for ${interaction.user.id}:`, err);
         }
 
         let deadlineLine = "No active task period right now.";

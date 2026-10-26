@@ -2,7 +2,6 @@ import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
-import { normaliseFirestoreDates } from "../../../utils/DateUtils.js";
 
 const setstreak: Command = {
     name: "setstreak",
@@ -41,8 +40,7 @@ const setstreak: Command = {
         const streakValue = interaction.options.getInteger("streak", true);
 
         try {
-            const raw = await userRepo.getUserById(targetUser.id);
-            const stats = raw ? normaliseFirestoreDates(raw) : null;
+            const stats = await userRepo.getUserById(targetUser.id);
 
             if (!stats) {
                 await userRepo.incrementStat(targetUser.id, "taskStreak", streakValue);

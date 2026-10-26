@@ -133,7 +133,7 @@ const cancelmovie: Command = {
             }
 
             // Unpick currently selected movie (if any)
-            const movies = (await movieRepo.getAllMovies()).map((movie) => normaliseFirestoreDates(movie));
+            const movies = await movieRepo.getAllMovies();
             const withSelection = movies
                 .filter((m) => !m.watched && m.selectedAt)
                 .map((movie) => {

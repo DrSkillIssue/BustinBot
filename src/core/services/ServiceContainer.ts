@@ -19,12 +19,12 @@ export interface ServiceContainer {
     keywords: KeywordSelector;
     guilds: GuildService;
     repos: {
-        guildRepo?: IGuildRepository;
-        taskRepo?: ITaskRepository;
-        prizeRepo?: IPrizeDrawRepository;
-        movieRepo?: IMovieRepository;
-        keywordRepo?: IKeywordRepository;
-        userRepo?: IUserRepository;
-        taskLeaderboardRepo?: ITaskLeaderboardRepository;
+        guildRepo: IGuildRepository;
+        taskRepo: ITaskRepository;
+        prizeRepo: IPrizeDrawRepository;
+        movieRepo: IMovieRepository;
+        keywordRepo: IKeywordRepository;
+        userRepo: IUserRepository;
+        taskLeaderboardRepo: ITaskLeaderboardRepository;
     };
 }
