@@ -14,7 +14,7 @@ export class TaskLeaderboardRepository extends GuildScopedRepository<TaskLeaderb
     }
 
     async createLeaderboard(data: TaskLeaderboard): Promise<void> {
-        await this.collection.doc(data.id).set(data);
+        await this.createIfAbsent(data.id, data);
     }
 
     async updateLeaderboard(id: TaskLeaderboardId, data: Partial<TaskLeaderboard>): Promise<void> {

@@ -32,7 +32,10 @@ export abstract class GuildScopedRepository<T extends DocumentData> {
         return doc.data() ?? null;
     }
 
-    async delete(id: string): Promise<void> {
-        await this.collection.doc(id).delete();
+    protected async createIfAbsent(id: string, data: T): Promise<boolean> {
+        return this.collection.doc(id).create(data).then(() => true, (err: unknown) => {
+            if (err instanceof Error && "code" in err && err.code === GrpcStatus.ALREADY_EXISTS) return false;
+            throw err;
+        });
     }
 }
