@@ -27,30 +27,23 @@ export async function sendDueReminders(
     client: Client,
     services: ServiceContainer,
     event: MovieEvent,
-    now: Date,
+    now: Date
 ): Promise<void> {
     const movieRepo = services.repos.movieRepo;
 
     const start = DateTime.fromJSDate(event.startTime);
     const at = DateTime.fromJSDate(now);
-    const due = remindersFor(start).filter(
-        ({ label, sendAt }) => sendAt <= at && !(event.remindersSent ?? []).includes(label),
-    );
+    const due = remindersFor(start).filter(({ label, sendAt }) => sendAt <= at && !(event.remindersSent ?? []).includes(label));
     if (!due.length) return;
 
     const channel = await configuredChannel(client, services, "movieNight");
     if (!channel) return;
 
-    const claimed = await movieRepo.claimReminders(
-        event.id,
-        due.map(({ label }) => label),
-    );
+    const claimed = await movieRepo.claimReminders(event.id, due.map(({ label }) => label));
     const latest = due.filter(({ label }) => claimed.includes(label)).at(-1);
     if (!latest) return;
     if (latest.sendAt.plus(REMINDER_GRACE) < at) {
-        console.warn(
-            `[MovieReminders] Skipped the "${latest.label}" reminder for ${event.id}: it came due while the bot was down.`,
-        );
+        console.warn(`[MovieReminders] Skipped the "${latest.label}" reminder for ${event.id}: it came due while the bot was down.`);
         return;
     }
 
@@ -66,8 +59,8 @@ export async function sendDueReminders(
     const stateLine = activePoll?.isActive
         ? `A movie poll is currently running! Go cast your vote before it closes.`
         : title
-          ? `We will be watching **${title}**!`
-          : `No movie has been selected yet — stay tuned!`;
+            ? `We will be watching **${title}**!`
+            : `No movie has been selected yet — stay tuned!`;
 
     // Format remaining time
     const minutesLeft = Math.max(Math.round(start.diff(at, "minutes").minutes), 0);

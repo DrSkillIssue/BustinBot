@@ -1,12 +1,4 @@
-import {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    type Client,
-    type ButtonInteraction,
-    type GuildTextBasedChannel,
-    MessageFlags,
-} from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Client, type ButtonInteraction, type GuildTextBasedChannel, MessageFlags } from "discord.js";
 import { DateTime, Duration } from "luxon";
 import { countBy } from "es-toolkit";
 import type { Task } from "../../models/Task.js";
@@ -33,13 +25,13 @@ function buildPollMessage(poll: Omit<TaskPoll, "id" | "messageId">) {
         category,
         poll.options,
         countBy(Object.values(poll.votes), (taskId) => taskId),
-        poll.isActive ? { endsAt: poll.endsAt } : { isClosed: true },
+        poll.isActive ? { endsAt: poll.endsAt } : { isClosed: true }
     );
     const buttons = poll.options.map((task, i) =>
         new ButtonBuilder()
             .setCustomId(`vote_${category}_${task.id}`)
             .setLabel(`${emojiNumbers[i]} ${task.shortName ?? `Task ${i + 1}`}`)
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
     );
     const files = getTaskPollIconFile(category);
 
@@ -50,7 +42,10 @@ function buildPollMessage(poll: Omit<TaskPoll, "id" | "messageId">) {
     };
 }
 
-export async function handleTaskPollVoteInteraction(interaction: ButtonInteraction, services: ServiceContainer) {
+export async function handleTaskPollVoteInteraction(
+    interaction: ButtonInteraction,
+    services: ServiceContainer
+) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const [, categoryRaw, voteId] = interaction.customId.split("_");
@@ -120,7 +115,7 @@ export async function announceToTaskUsers(
     channel: GuildTextBasedChannel,
     services: ServiceContainer,
     guildConfig: Guild,
-    text: string,
+    text: string
 ): Promise<void> {
     const roleId = guildConfig.roles?.taskUser;
     const role = roleId ? channel.guild.roles.cache.get(roleId) : null;
@@ -145,7 +140,7 @@ export async function postAllTaskPolls(client: Client, services: ServiceContaine
         channel,
         services,
         guildConfig,
-        "**New task polls are live!** Cast your votes for each category below:",
+        "**New task polls are live!** Cast your votes for each category below:"
     );
 
     for (const category of weeklyTaskCategories(guildConfig)) {
@@ -157,7 +152,7 @@ export async function postTaskPollForCategory(
     client: Client,
     services: ServiceContainer,
     category: TaskCategory,
-    channelOverride?: GuildTextBasedChannel,
+    channelOverride?: GuildTextBasedChannel
 ) {
     const channel = channelOverride ?? (await configuredChannel(client, services, "taskChannel"));
     if (!channel) return;
@@ -165,7 +160,7 @@ export async function postTaskPollForCategory(
     const repo = services.repos.taskRepo;
 
     const allTasks: Task[] = await services.tasks.getAllTasks();
-    const taskData = allTasks.filter((t) => t.category === category);
+    const taskData = allTasks.filter(t => t.category === category);
     if (taskData.length < 3) {
         console.warn(`[TaskPoll] Not enough tasks to create a poll for category ${category}`);
         return;

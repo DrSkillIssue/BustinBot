@@ -17,18 +17,20 @@ const botinfo: Command = {
         .setName("botinfo")
         .setDescription("Display information about BustinBot, including version, uptime, and credits."),
 
-    async execute({ interaction, message }: { interaction?: ChatInputCommandInteraction; message?: Message }) {
+    async execute({ interaction, message }: { interaction?: ChatInputCommandInteraction, message?: Message }) {
         const uptime = Duration.fromMillis(Date.now() - START_TIME).toFormat("d'd' h'h' m'm' s's'");
         const ping = interaction?.client.ws.ping ?? "N/A";
 
         const guild = interaction?.guild ?? null;
         const emoji = replaceBustinEmote("🤖", guild);
         const title = `${emoji} BustinBot Information`;
-
+    
         const embed = new EmbedBuilder()
             .setColor(0x00c6ff)
             .setTitle(title)
-            .setDescription("A custom-built Discord bot designed for community OSRS events and movie nights.")
+            .setDescription(
+                "A custom-built Discord bot designed for community OSRS events and movie nights."
+            )
             .addFields(
                 { name: "Version", value: packageVersion, inline: true },
                 { name: "Uptime", value: uptime, inline: true },
@@ -42,7 +44,7 @@ const botinfo: Command = {
                 {
                     name: "Developer",
                     value: "Developed by **dossyb** (2025)\nBuilt using Discord.js, TypeScript, and Firestore.",
-                },
+                }
             )
             .setTimestamp();
 
@@ -51,7 +53,7 @@ const botinfo: Command = {
         } else if (message) {
             await message.reply({ embeds: [embed] });
         }
-    },
+    }
 };
 
 export default botinfo;

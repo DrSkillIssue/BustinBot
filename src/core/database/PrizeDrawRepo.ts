@@ -34,13 +34,17 @@ export class PrizeDrawRepository extends GuildScopedRepository<PrizeDraw> implem
         await batch.commit();
     }
 
-    async updateParticipants(drawId: string, participants: Record<string, number>): Promise<void> {
+    async updateParticipants(
+        drawId: string,
+        participants: Record<string, number>
+    ): Promise<void> {
         const docRef = this.collection.doc(drawId);
         await docRef.update({
             participants,
             totalEntries: Object.values(participants).reduce((a, b) => a + b, 0),
         });
     }
+
 
     async addEntry(drawId: string, userId: string): Promise<void> {
         const docRef = this.collection.doc(drawId);

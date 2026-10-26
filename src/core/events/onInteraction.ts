@@ -6,10 +6,7 @@ import type { GuildSetupComplete } from "../../models/Guild.js";
 import { createTimezoneModal, timezoneService } from "../services/TimezoneService.js";
 import { memberRoleIds } from "../../utils/MemberUtils.js";
 
-async function memberRoleNames(
-    interaction: ChatInputCommandInteraction<"raw" | "cached">,
-    roleIds: string[],
-): Promise<string[]> {
+async function memberRoleNames(interaction: ChatInputCommandInteraction<"raw" | "cached">, roleIds: string[]): Promise<string[]> {
     const guild = await interaction.client.guilds.fetch(interaction.guildId);
     return roleIds.flatMap((roleId) => guild.roles.cache.get(roleId)?.name ?? []);
 }
@@ -17,7 +14,7 @@ async function memberRoleNames(
 export async function handleInteraction(
     interaction: Interaction,
     commands: Map<string, Command>,
-    services: ServiceContainer,
+    services: ServiceContainer
 ) {
     if (interaction.isAutocomplete()) {
         if (!interaction.inGuild()) {
@@ -65,7 +62,10 @@ export async function handleInteraction(
         }
 
         // Role-based permission logic
-        if (command.allowedRoles.length > 0 && !command.allowedRoles.includes(CommandRole.Everyone)) {
+        if (
+            command.allowedRoles.length > 0 &&
+            !command.allowedRoles.includes(CommandRole.Everyone)
+        ) {
             const guildConfig = await services.guilds.requireConfig(interaction);
             if (!guildConfig) return;
 
@@ -81,7 +81,7 @@ export async function handleInteraction(
                 return userRoleNames.includes(value);
             };
 
-            const roleMatch = command.allowedRoles.some((role) => {
+            const roleMatch = command.allowedRoles.some(role => {
                 switch (role) {
                     case CommandRole.BotAdmin:
                         return hasRole(guildRoles.admin, process.env.ADMIN_ROLE_NAME);
@@ -95,10 +95,7 @@ export async function handleInteraction(
             });
 
             if (!roleMatch) {
-                await interaction.reply({
-                    content: "You don't have permission to use this command.",
-                    flags: MessageFlags.Ephemeral,
-                });
+                await interaction.reply({ content: "You don't have permission to use this command.", flags: MessageFlags.Ephemeral });
                 return;
             }
         }
@@ -112,10 +109,7 @@ export async function handleInteraction(
         const moduleReady = setupMap[requiredModule];
 
         if (!setupMap.core && !isSetupCommand) {
-            await interaction.reply({
-                content: "The bot has not been set up yet. Please run `/setup` first to configure the core channels.",
-                flags: MessageFlags.Ephemeral,
-            });
+            await interaction.reply({ content: "The bot has not been set up yet. Please run `/setup` first to configure the core channels.", flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -131,10 +125,7 @@ export async function handleInteraction(
                     break;
             }
 
-            await interaction.reply({
-                content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`,
-                flags: MessageFlags.Ephemeral,
-            });
+            await interaction.reply({ content: `This command can't be used yet! An admin needs to run \`${setupCommandHint}\` to configure its required channels and roles first.`, flags: MessageFlags.Ephemeral });
             return;
         }
 
@@ -168,21 +159,14 @@ export async function handleInteraction(
             const selections = services.setup.getSelections("core", userId);
             const missing = services.setup.getMissingFields("core", selections);
             if (!selections || missing.length) {
-                await interaction.reply({
-                    content: `Please select: ${missing.join(", ")}`,
-                    flags: MessageFlags.Ephemeral,
-                });
+                await interaction.reply({ content: `Please select: ${missing.join(", ")}`, flags: MessageFlags.Ephemeral });
                 return;
             }
 
             await services.setup.persist("core", services.guilds, services.guildId, selections);
             services.setup.clearSelections("core", userId);
 
-            await interaction.update({
-                content:
-                    "Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.",
-                components: [],
-            });
+            await interaction.update({ content: "Setup complete! Your general bot channels have been updated. To set up channels and roles for the movie and task modules, use `/moviesetup` and `/tasksetup` respectively.", components: [] });
             return;
         }
 
@@ -232,8 +216,7 @@ export async function handleInteraction(
         if (!matchedZone) {
             await interaction.reply({
                 content:
-                    "Could not recognise that timezone. Please try again using an IANA name (e.g., `Australia/Melbourne`, `America/New_York`).",
-                flags: MessageFlags.Ephemeral,
+                    "Could not recognise that timezone. Please try again using an IANA name (e.g., `Australia/Melbourne`, `America/New_York`).", flags: MessageFlags.Ephemeral,
             });
             return;
         }
@@ -242,10 +225,7 @@ export async function handleInteraction(
         await services.guilds.update(guildId, { timezone: matchedZone });
 
         const currentTime = timezoneService.getCurrentTimeInZone(matchedZone);
-        await interaction.reply({
-            content: `Timezone set to **${matchedZone}**.\nCurrent local time: **${currentTime}**`,
-            flags: MessageFlags.Ephemeral,
-        });
+        await interaction.reply({ content: `Timezone set to **${matchedZone}**.\nCurrent local time: **${currentTime}**`, flags: MessageFlags.Ephemeral });
 
         console.log(`[Setup] Timezone updated for ${guildId}: ${matchedZone}`);
     }

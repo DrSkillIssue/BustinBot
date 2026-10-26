@@ -10,15 +10,11 @@ const taskstart: Command = {
     module: CommandModule.Task,
     allowedRoles: [CommandRole.BotAdmin],
 
-    slashData: new SlashCommandBuilder().setName("taskstart").setDescription("Manually start a task event."),
+    slashData: new SlashCommandBuilder()
+        .setName("taskstart")
+        .setDescription("Manually start a task event."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -30,7 +26,7 @@ const taskstart: Command = {
             console.error("[TaskStart Command Error]", error);
             await interaction.editReply("Failed to start the task event. Check console for details.");
         }
-    },
+    }
 };
 
 export default taskstart;

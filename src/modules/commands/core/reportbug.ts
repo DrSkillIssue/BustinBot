@@ -8,16 +8,17 @@ const reportbug: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
     usage: "/reportbug <message>",
-    examples: ['/reportbug The "bustin" command did not reply to me.'],
+    examples: [
+        '/reportbug The "bustin" command did not reply to me.'
+    ],
 
     slashData: new SlashCommandBuilder()
         .setName("reportbug")
         .setDescription("Report a bug to the BustinBot dev team")
-        .addStringOption((option) =>
-            option
-                .setName("message")
+        .addStringOption(option =>
+            option.setName("message")
                 .setDescription("Include all relevant details about the bug here.")
-                .setRequired(true),
+                .setRequired(true)
         ),
 
     async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
@@ -31,14 +32,14 @@ const reportbug: Command = {
         try {
             const devGuild = await interaction.client.guilds.fetch(devServerId);
             let bugReportChannel = devGuild.channels.cache.find(
-                (channel) => channel.isTextBased() && channel.name === bugReportChannelName,
+                (channel) => channel.isTextBased() && channel.name === bugReportChannelName
             );
 
             if (!bugReportChannel) {
                 const channels = await devGuild.channels.fetch();
-                bugReportChannel =
-                    channels.find((channel) => channel?.isTextBased() && channel.name === bugReportChannelName) ??
-                    undefined;
+                bugReportChannel = channels.find(
+                    (channel) => channel?.isTextBased() && channel.name === bugReportChannelName
+                ) ?? undefined;
             }
 
             if (!bugReportChannel || !bugReportChannel.isTextBased()) {
@@ -49,10 +50,9 @@ const reportbug: Command = {
             // Bug report functionality is simple and self-contained - were this to be made more robust, highly recommend defining Bug as a type and storing in DB
             const bugId = `BUG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
             const timestamp = new Date().toISOString();
-            const channelName =
-                interaction.channel && "name" in interaction.channel
-                    ? `#${interaction.channel.name}`
-                    : "Unknown channel";
+            const channelName = interaction.channel && "name" in interaction.channel
+                ? `#${interaction.channel.name}`
+                : "Unknown channel";
             const channelId = interaction.channel?.id ?? "unknown";
             const reportContent = [
                 "🐞 **New Bug Report** 🐞",
@@ -61,7 +61,7 @@ const reportbug: Command = {
                 `**Reporter:** ${interaction.user.tag} (*${interaction.user.id}*)`,
                 `**Server:** ${interaction.guild?.name} (*${interaction.guild?.id}*)`,
                 `**Channel:** ${channelName} (*${channelId}*)`,
-                `**Message:** ${messageText ?? ""}`,
+                `**Message:** ${messageText ?? ""}`
             ].join("\n");
 
             await bugReportChannel.send({ content: reportContent });
@@ -70,7 +70,7 @@ const reportbug: Command = {
             console.error("Error sending message:", error);
             await interaction.editReply({ content: "Failed to send message." });
         }
-    },
-};
+    }
+}
 
 export default reportbug;

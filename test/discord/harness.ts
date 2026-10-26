@@ -255,6 +255,13 @@ export class DiscordHarness {
         return this.bodies("POST", Routes.interactionCallback(interaction.id, interaction.token));
     }
 
+    async callback(interaction: Interaction): Promise<RESTPostAPIInteractionCallbackJSONBody> {
+        await this.sentOnce("POST", Routes.interactionCallback(interaction.id, interaction.token));
+        const [callback] = this.callbacks(interaction);
+        if (!callback) throw new Error(`Interaction ${interaction.id} was never answered.`);
+        return callback;
+    }
+
     reply(interaction: Interaction): APIInteractionResponseCallbackData | undefined {
         return this.callbacks(interaction).find(
             (sent) => sent.type === InteractionResponseType.ChannelMessageWithSource,
@@ -270,10 +277,7 @@ export class DiscordHarness {
     }
 
     async originalEdit(interaction: Interaction): Promise<RESTPatchAPIWebhookWithTokenMessageJSONBody> {
-        const route = Routes.webhookMessage(IDS.application, interaction.token, "@original");
-        while (!this.requests.some((request) => request.method === "PATCH" && request.path === route)) {
-            await REST.once(this.client.rest, RESTEvents.Response);
-        }
+        await this.sentOnce("PATCH", Routes.webhookMessage(IDS.application, interaction.token, "@original"));
         const [edit] = this.originalEdits(interaction);
         if (!edit) throw new Error(`Interaction ${interaction.id}'s reply was never edited.`);
         return edit;
@@ -360,6 +364,12 @@ export class DiscordHarness {
 
     private sentTo(method: string, path: string): APIRequest[] {
         return this.requests.filter((request) => request.method === method && request.path === path);
+    }
+
+    private async sentOnce(method: string, path: string): Promise<void> {
+        while (!this.sentTo(method, path).length) {
+            await REST.once(this.client.rest, RESTEvents.Response);
+        }
     }
 
     private pathIds(method: string, pathname: string): Record<string, string | undefined>[] {

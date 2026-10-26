@@ -70,7 +70,7 @@ This launches the bot with **guild-level command registration** for instant test
 
 2. **Choose your hosting platform**
 
-   BustinBot runs on any Node.js 24+ environment with Git access.  
+   BustinBot runs on any Node.js 26+ environment with Git access.  
    Common options include **Cybrancee**, **Pterodactyl**, **Railway**, and **Render**.
 
 3. **Set your startup command**

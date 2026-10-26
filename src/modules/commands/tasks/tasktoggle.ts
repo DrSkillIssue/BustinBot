@@ -12,9 +12,15 @@ const tasktoggle: Command = {
     slashData: new SlashCommandBuilder()
         .setName("tasktoggle")
         .setDescription("Toggle task automations on and off.")
-        .addSubcommand((sub) => sub.setName("schedule").setDescription("Toggle the task scheduler on and off."))
         .addSubcommand((sub) =>
-            sub.setName("leaderboard").setDescription("Toggle periodic leaderboard automation on and off."),
+            sub
+                .setName("schedule")
+                .setDescription("Toggle the task scheduler on and off.")
+        )
+        .addSubcommand((sub) =>
+            sub
+                .setName("leaderboard")
+                .setDescription("Toggle periodic leaderboard automation on and off.")
         ),
 
     async execute({ interaction, services }) {
@@ -42,7 +48,12 @@ const tasktoggle: Command = {
                 await stopTaskScheduler(guildId);
             }
 
-            await guildService.updateToggle(guildId, "taskScheduler", newState, interaction.user.id);
+            await guildService.updateToggle(
+                guildId,
+                "taskScheduler",
+                newState,
+                interaction.user.id
+            );
 
             await interaction.editReply({
                 content: newState
@@ -56,7 +67,12 @@ const tasktoggle: Command = {
             const currentState = guildConfig?.toggles?.taskLeaderboard ?? true;
             const newState = !currentState;
 
-            await guildService.updateToggle(guildId, "taskLeaderboard", newState, interaction.user.id);
+            await guildService.updateToggle(
+                guildId,
+                "taskLeaderboard",
+                newState,
+                interaction.user.id
+            );
 
             await interaction.editReply({
                 content: newState

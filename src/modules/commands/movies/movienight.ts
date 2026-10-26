@@ -1,10 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ActionRowBuilder,
-    StringSelectMenuBuilder,
-    ChatInputCommandInteraction,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { DateTime } from "luxon";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
@@ -17,20 +11,14 @@ const movienight: Command = {
     module: CommandModule.Movie,
     allowedRoles: [CommandRole.MovieAdmin],
 
-    slashData: new SlashCommandBuilder().setName("movienight").setDescription("Schedule the next movie night."),
+    slashData: new SlashCommandBuilder()
+        .setName("movienight")
+        .setDescription("Schedule the next movie night."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
 
-        const today = DateTime.now()
-            .setZone(await resolveGuildTimezone(services))
-            .startOf("day");
+        const today = DateTime.now().setZone(await resolveGuildTimezone(services)).startOf("day");
         const options = Array.from({ length: 14 }, (_, i) => {
             const date = today.plus({ days: i });
             return {
@@ -49,9 +37,9 @@ const movienight: Command = {
         await interaction.reply({
             content: "📆 Choose a date for the next movie night:",
             components: [row],
-            flags: MessageFlags.Ephemeral,
+            flags: MessageFlags.Ephemeral
         });
-    },
+    }
 };
 
 export default movienight;

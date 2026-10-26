@@ -3,7 +3,8 @@ import path from "node:path";
 import cron from "node-cron";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { Routes } from "discord-api-types/v10";
+import { InteractionResponseType, Routes } from "discord-api-types/v10";
+import { SnowflakeUtil } from "discord.js";
 import { COMMANDS_DIR, describe, expect, storeRunningEvent, test, vi } from "../fixtures.js";
 import { startBot } from "../../src/bot.js";
 import { DiscordHarness } from "../discord/harness.js";
@@ -12,6 +13,8 @@ import {
     IDS,
     apiAttachment,
     apiTextChannel,
+    buttonInteraction,
+    channelSelectInteraction,
     chatInputInteraction,
     directMessage,
     apiOtherGuild,
@@ -121,6 +124,34 @@ describe("startBot", () => {
             expect.objectContaining({ content: expect.stringContaining("good bot 2 times") }),
         );
         expect(services.guildId).toBe(IDS.guild);
+    });
+
+    test("keeps a guild's choices from one interaction to the next", async ({ db, http, services, onTestFinished }) => {
+        const discord = new DiscordHarness(http);
+        onTestFinished(
+            await startBot(discord.client, { db, commandsDir: COMMANDS_DIR, fallbackGuildId: null, commandSync: null }),
+        );
+        await discord.connect();
+        const channels = {
+            announcements: SnowflakeUtil.generate().toString(),
+            botLog: SnowflakeUtil.generate().toString(),
+            botArchive: SnowflakeUtil.generate().toString(),
+        };
+
+        for (const [picker, channel] of [
+            ["setup_announce", channels.announcements],
+            ["setup_log", channels.botLog],
+            ["setup_archive", channels.botArchive],
+        ] as const) {
+            await discord.callback(await discord.sendInteraction(channelSelectInteraction(picker, [channel])));
+        }
+        const confirm = await discord.sendInteraction(buttonInteraction("setup_confirm"));
+
+        expect(await discord.callback(confirm)).toEqual({
+            type: InteractionResponseType.UpdateMessage,
+            data: expect.objectContaining({ content: expect.stringContaining("Setup complete!") }),
+        });
+        expect((await services.repos.guildRepo.getGuild(IDS.guild))?.channels).toMatchObject(channels);
     });
 
     test("stops every scheduled job and disconnects when shut down", async ({ db, http, services }) => {

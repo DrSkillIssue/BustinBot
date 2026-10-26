@@ -8,11 +8,7 @@ import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 import { refreshTaskEventMessage } from "./HandleTaskStart.js";
 
-export async function postToAdminChannel(
-    client: Client,
-    submission: TaskSubmission,
-    services: ServiceContainer,
-): Promise<boolean> {
+export async function postToAdminChannel(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<boolean> {
     const channel = await configuredChannel(client, services, "taskVerification");
     if (!channel) return false;
 
@@ -39,7 +35,10 @@ export async function postToAdminChannel(
             .setCustomId(`approve_gold_${submission.id}`)
             .setLabel("🥇 Gold")
             .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`reject_${submission.id}`).setLabel("Reject").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`reject_${submission.id}`)
+            .setLabel("Reject")
+            .setStyle(ButtonStyle.Danger)
     );
 
     // First message: embed with info and buttons
@@ -51,29 +50,19 @@ export async function postToAdminChannel(
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
         try {
             const sentScreens = await channel.send({
-                ...withSuppressedMentions(
-                    { content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` },
-                    suppressMentions,
-                ),
-                files: submission.screenshotUrls,
+                ...withSuppressedMentions({ content: `Submission screenshots for <@${submission.userId}> — ${taskLabel}:` }, suppressMentions),
+                files: submission.screenshotUrls
             });
             submission.screenshotMessage = sentScreens.id;
         } catch (err) {
-            await sentMessage
-                .delete()
-                .catch((deleteErr: unknown) => console.warn(`[Admin Embed Cleanup Error]:`, deleteErr));
+            await sentMessage.delete().catch((deleteErr: unknown) => console.warn(`[Admin Embed Cleanup Error]:`, deleteErr));
             throw err;
         }
     }
     return true;
 }
 
-export async function notifyUser(
-    client: Client,
-    submission: TaskSubmission,
-    streakLine?: string,
-    keptStatus?: SubmissionStatus,
-) {
+export async function notifyUser(client: Client, submission: TaskSubmission, streakLine?: string, keptStatus?: SubmissionStatus) {
     const user = await client.users.fetch(submission.userId);
     if (!user) return;
 
@@ -82,27 +71,23 @@ export async function notifyUser(
         const kept = keptStatus && TIER_DISPLAY[keptStatus];
         if (kept) {
             await user.send(
-                `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**. You already hold ${kept.emoji} **${kept.name} tier** for this task, so your tier is unchanged.`,
+                `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**. You already hold ${kept.emoji} **${kept.name} tier** for this task, so your tier is unchanged.`
             );
             return;
         }
 
         await user.send(
-            `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`,
+            `✅ Your submission for **${submissionLabel(submission)}** has been approved for ${tierInfo.emoji} **${tierInfo.name} tier**!${streakLine ?? ""}`
         );
     } else if (submission.status === SubmissionStatus.Rejected) {
         const reason = submission.rejectionReason ?? "No reason provided.";
         await user.send(
-            `❌ Your submission for **${submissionLabel(submission)}** was rejected.\n**Reason:** ${reason}`,
+            `❌ Your submission for **${submissionLabel(submission)}** was rejected.\n**Reason:** ${reason}`
         );
     }
 }
 
-export async function archiveSubmission(
-    client: Client,
-    submission: TaskSubmission,
-    services: ServiceContainer,
-): Promise<boolean> {
+export async function archiveSubmission(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<boolean> {
     const archive = await configuredChannel(client, services, "botArchive");
     if (!archive) return false;
 
@@ -110,7 +95,7 @@ export async function archiveSubmission(
         submission,
         submission.status,
         submissionLabel(submission),
-        submission.reviewedBy ?? "Unknown",
+        submission.reviewedBy ?? "Unknown"
     );
 
     await archive.send({ embeds: [embed] });
@@ -122,27 +107,15 @@ export async function archiveSubmission(
         : null;
     if (screenshots?.attachments.size) {
         const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
-        await archive.send(
-            withSuppressedMentions(
-                {
-                    content: `Archived screenshots for <@${submission.userId}>:`,
-                    files: screenshots.attachments.map((attachment) => attachment.url),
-                },
-                suppressMentions,
-            ),
-        );
+        await archive.send(withSuppressedMentions({
+            content: `Archived screenshots for <@${submission.userId}>:`,
+            files: screenshots.attachments.map((attachment) => attachment.url)
+        }, suppressMentions));
     }
     return true;
 }
 
-export async function updateTaskCounter(
-    client: Client,
-    taskEventId: string,
-    userId?: string,
-    repo?: ITaskRepository,
-    newTier?: SubmissionStatus,
-    prevTier?: SubmissionStatus,
-) {
+export async function updateTaskCounter(client: Client, taskEventId: string, userId?: string, repo?: ITaskRepository, newTier?: SubmissionStatus, prevTier?: SubmissionStatus) {
     if (!repo) {
         console.warn(`[UpdateTaskCounter] Missing repository reference.`);
         return;
@@ -174,9 +147,7 @@ export async function updateTaskCounter(
     try {
         await refreshTaskEventMessage(client, event);
 
-        console.log(
-            `[UpdateTaskCounter] Updated completions for ${event.task.taskName}: 🥉${event.completionCounts.bronze} 🥈${event.completionCounts.silver} 🥇${event.completionCounts.gold}`,
-        );
+        console.log(`[UpdateTaskCounter] Updated completions for ${event.task.taskName}: 🥉${event.completionCounts.bronze} 🥈${event.completionCounts.silver} 🥇${event.completionCounts.gold}`);
     } catch (err) {
         console.error(`[UpdateTaskCounter] Failed to update task embed for event ${event.id}:`, err);
     }

@@ -13,15 +13,11 @@ const importtasks: Command = {
     slashData: new SlashCommandBuilder()
         .setName("importtasks")
         .setDescription("Import new tasks from a CSV file.")
-        .addAttachmentOption((option) => option.setName("file").setDescription("CSV file to import").setRequired(true)),
+        .addAttachmentOption((option) =>
+            option.setName("file").setDescription("CSV file to import").setRequired(true)
+        ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -46,7 +42,7 @@ const importtasks: Command = {
             console.error(err);
             await interaction.editReply({ content: "Import failed. Check logs for details." });
         }
-    },
+    }
 };
 
 export default importtasks;

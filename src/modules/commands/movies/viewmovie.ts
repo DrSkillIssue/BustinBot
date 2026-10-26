@@ -15,15 +15,13 @@ const viewmovie: Command = {
     slashData: new SlashCommandBuilder()
         .setName("viewmovie")
         .setDescription("View a movie from the local movie list.")
-        .addStringOption((option) => option.setName("title").setDescription("Name of the movie.").setRequired(true)),
+        .addStringOption(option =>
+            option.setName("title")
+                .setDescription("Name of the movie.")
+                .setRequired(true)
+        ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -63,11 +61,13 @@ const viewmovie: Command = {
 
             await interaction.editReply({ embeds: [embed] });
 
-            console.log(`[ViewMovie] ${interaction.user.username} viewed details for "${matchedMovie.title}".`);
+            console.log(
+                `[ViewMovie] ${interaction.user.username} viewed details for "${matchedMovie.title}".`
+            );
         } catch (error) {
             console.error("[ViewMovie Command Error]", error);
             await interaction.editReply(
-                "An error occurred while fetching the movie details. Check console for details.",
+                "An error occurred while fetching the movie details. Check console for details."
             );
         }
     },

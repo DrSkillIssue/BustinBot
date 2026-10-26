@@ -23,23 +23,23 @@ const support: Command = {
             fields: [
                 {
                     name: "🛠️ Contribute to the Project",
-                    value: "[GitHub Repo](https://github.com/dossyb/BustinBot) - Report issues, suggest features, or submit pull requests for your own modules/features",
+                    value: "[GitHub Repo](https://github.com/dossyb/BustinBot) - Report issues, suggest features, or submit pull requests for your own modules/features"
                 },
                 {
                     name: "☕ Buy Me a Coffee",
-                    value: "[Ko-fi Donation Page](https://ko-fi.com/dossyb) - Show your appreciation by contributing to the server/API costs and the dev's coffee addiction",
+                    value: "[Ko-fi Donation Page](https://ko-fi.com/dossyb) - Show your appreciation by contributing to the server/API costs and the dev's coffee addiction"
                 },
                 {
                     name: "ℹ️ More Info",
-                    value: "BustinBot is lovingly maintained by an Aussie dev as a passion project.",
-                },
+                    value: "BustinBot is lovingly maintained by an Aussie dev as a passion project."
+                }
             ],
             footer: {
-                text: `BustinBot ${packageVersion} • Developed by dossyb`,
-            },
+                text: `BustinBot ${packageVersion} • Developed by dossyb`
+            }
         };
 
-        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral});
     },
 };
 

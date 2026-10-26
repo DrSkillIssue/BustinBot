@@ -42,7 +42,7 @@ export class TaskService {
     private tasks: Map<string, Task> | null = null;
     private search: Fuse<Task> | null = null;
 
-    constructor(private repo: ITaskRepository) {}
+    constructor(private repo: ITaskRepository) { }
 
     get repository() {
         return this.repo;
@@ -86,14 +86,7 @@ export class TaskService {
         if (kept) kept.weight = (kept.weight ?? 0) + amount;
     }
 
-    async completeSubmission(
-        client: Client,
-        userId: string,
-        taskEventId: string,
-        screenshotUrls: string[],
-        services: ServiceContainer,
-        notes?: string,
-    ): Promise<SubmitOutcome> {
+    async completeSubmission(client: Client, userId: string, taskEventId: string, screenshotUrls: string[], services: ServiceContainer, notes?: string): Promise<SubmitOutcome> {
         const taskEvent = await this.repo.getTaskEventById(taskEventId);
         if (!taskEvent) {
             await this.repo.deleteSubmissionDraft(userId);
@@ -142,7 +135,7 @@ export class TaskService {
         newStatus: SubmissionStatus.Approved | SubmissionStatus.Rejected,
         reviewedBy: string,
         services: ServiceContainer,
-        rejectionReason?: string,
+        rejectionReason?: string
     ): Promise<(TaskSubmission & { archived: boolean }) | null> {
         const submission = await this.repo.getSubmissionById(submissionId);
         if (!submission) return null;
@@ -191,16 +184,8 @@ export class TaskService {
         submissionId: string,
         tier: "bronze" | "silver" | "gold",
         reviewedBy: string,
-        services: ServiceContainer,
-    ): Promise<
-        | (TaskSubmission & {
-              streakLine?: string;
-              previousTierPoints: number;
-              previousStatus?: SubmissionStatus;
-              archived: boolean;
-          })
-        | null
-    > {
+        services: ServiceContainer
+    ): Promise<(TaskSubmission & { streakLine?: string; previousTierPoints: number; previousStatus?: SubmissionStatus; archived: boolean }) | null> {
         const TIER_MAP = {
             bronze: { status: SubmissionStatus.Bronze },
             silver: { status: SubmissionStatus.Silver },
@@ -285,14 +270,7 @@ export class TaskService {
 
         if (raised) {
             try {
-                await updateTaskCounter(
-                    client,
-                    submission.taskEventId,
-                    submission.userId,
-                    this.repo,
-                    submission.status,
-                    previousStatus,
-                );
+                await updateTaskCounter(client, submission.taskEventId, submission.userId, this.repo, submission.status, previousStatus);
             } catch (err) {
                 console.warn(`[TaskService] Failed to update counter for event ${submission.taskEventId}:`, err);
             }
@@ -311,11 +289,10 @@ export class TaskService {
     }
 
     async getHeldStatus(userId: string, taskEventId: string): Promise<SubmissionStatus | undefined> {
-        const approved = (await this.repo.getSubmissionsForTask(taskEventId)).filter(
-            (s) => s.userId === userId && getStatusPoints(s.status) > 0,
-        );
+        const approved = (await this.repo.getSubmissionsForTask(taskEventId)).filter((s) => s.userId === userId && getStatusPoints(s.status) > 0);
         return maxBy(approved, (s) => getStatusPoints(s.status))?.status;
     }
+
 
     async setPendingTask(userId: string, taskEventId: string): Promise<void> {
         await this.repo.saveSubmissionDraft({ userId, taskEventId, createdAt: new Date() });
@@ -335,11 +312,7 @@ export class TaskService {
         return taskId;
     }
 
-    private async removeReviewMessages(
-        client: Client,
-        submission: TaskSubmission,
-        services: ServiceContainer,
-    ): Promise<void> {
+    private async removeReviewMessages(client: Client, submission: TaskSubmission, services: ServiceContainer): Promise<void> {
         const adminChannel = await configuredChannel(client, services, "taskVerification");
         if (!adminChannel) return;
         if (submission.message) {

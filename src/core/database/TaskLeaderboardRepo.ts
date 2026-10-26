@@ -4,10 +4,7 @@ import type { TaskLeaderboard, TaskLeaderboardId, TaskTierCounts } from "../../m
 import type { ITaskLeaderboardRepository } from "./interfaces/ITaskLeaderboardRepo.js";
 import { taskLeaderboardConverter } from "./converters.js";
 
-export class TaskLeaderboardRepository
-    extends GuildScopedRepository<TaskLeaderboard>
-    implements ITaskLeaderboardRepository
-{
+export class TaskLeaderboardRepository extends GuildScopedRepository<TaskLeaderboard> implements ITaskLeaderboardRepository {
     constructor(db: Firestore, guildId: string) {
         super(db, guildId, "taskLeaderboards", taskLeaderboardConverter);
     }
@@ -28,15 +25,12 @@ export class TaskLeaderboardRepository
         id: TaskLeaderboardId,
         userId: string,
         amount: number,
-        tierCounts: Partial<TaskTierCounts> = {},
+        tierCounts: Partial<TaskTierCounts> = {}
     ): Promise<void> {
         await this.collection.doc(id).update({
             [`points.${userId}`]: FieldValue.increment(amount),
             ...Object.fromEntries(
-                Object.entries(tierCounts).map(([tier, count]) => [
-                    `tierCounts.${userId}.${tier}`,
-                    FieldValue.increment(count),
-                ]),
+                Object.entries(tierCounts).map(([tier, count]) => [`tierCounts.${userId}.${tier}`, FieldValue.increment(count)])
             ),
             updatedAt: new Date().toISOString(),
         });

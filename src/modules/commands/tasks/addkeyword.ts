@@ -11,8 +11,11 @@ const addkeyword: Command = {
     slashData: new SlashCommandBuilder()
         .setName("addkeyword")
         .setDescription("Add a new keyword to the keyword pool.")
-        .addStringOption((opt) =>
-            opt.setName("word").setDescription('The keyword to add (e.g. "bustinbot")').setRequired(true),
+        .addStringOption(opt =>
+            opt
+                .setName("word")
+                .setDescription('The keyword to add (e.g. "bustinbot")')
+                .setRequired(true)
         ),
 
     async execute({ interaction, services }) {
@@ -24,10 +27,7 @@ const addkeyword: Command = {
 
         const word = interaction.options.getString("word", true).trim();
         const existing = await repo.getKeywordById(
-            word
-                .toLowerCase()
-                .replace(/\s+/g, "_")
-                .replace(/[^\w_]/g, ""),
+            word.toLowerCase().replace(/\s+/g, "_").replace(/[^\w_]/g, "")
         );
 
         if (existing) {

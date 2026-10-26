@@ -1,13 +1,4 @@
-import {
-    ButtonBuilder,
-    ButtonStyle,
-    ActionRowBuilder,
-    EmbedBuilder,
-    Client,
-    time,
-    TimestampStyles,
-    MessageFlags,
-} from "discord.js";
+import { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, Client, time, TimestampStyles, MessageFlags } from "discord.js";
 import type { RepliableInteraction } from "discord.js";
 import { randomUUID } from "node:crypto";
 import type { Movie } from "../../models/Movie.js";
@@ -29,7 +20,7 @@ async function createAndSendMoviePoll(
     services: ServiceContainer,
     interaction: RepliableInteraction,
     client: Client,
-    movies: Movie[],
+    movies: Movie[]
 ) {
     const movieRepo = services.repos.movieRepo;
 
@@ -45,9 +36,7 @@ async function createAndSendMoviePoll(
         ? await configuredChannel(client, services, "movieNight")
         : interaction.channel;
     if (!channel?.isSendable()) {
-        await interaction.editReply(
-            "Could not find the configured movie announcement channel. Please run `/moviesetup` again.",
-        );
+        await interaction.editReply("Could not find the configured movie announcement channel. Please run `/moviesetup` again.");
         return;
     }
 
@@ -63,9 +52,7 @@ async function createAndSendMoviePoll(
             const oneHourBefore = movieStart.minus({ hours: 1 });
             if (oneHourBefore < endsAt) {
                 endsAt = oneHourBefore;
-                console.log(
-                    `[MoviePoll] Adjusted poll close time to 1 hour before movie night (${oneHourBefore.toISO()})`,
-                );
+                console.log(`[MoviePoll] Adjusted poll close time to 1 hour before movie night (${oneHourBefore.toISO()})`);
             }
         }
     }
@@ -94,14 +81,17 @@ async function createAndSendMoviePoll(
             const truncatedTitle = movie.title.length > 20 ? movie.title.slice(0, 17) + "…" : movie.title;
             const label = `${emojiNumbers[i]} ${truncatedTitle}`;
 
-            return new ButtonBuilder().setCustomId(`movie_vote_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary);
-        }),
+            return new ButtonBuilder()
+                .setCustomId(`movie_vote_${i}`)
+                .setLabel(label)
+                .setStyle(ButtonStyle.Secondary);
+        })
     );
 
     // Mention movie role if exists
     let mention = "";
 
-    if (guildRoles.movieUser) {
+    if (guildRoles.movieUser){
         mention = `<@&${guildRoles.movieUser}>`;
     }
 
@@ -125,11 +115,7 @@ async function createAndSendMoviePoll(
     await movieRepo.createPoll(poll);
 }
 
-export async function pollMovieRandom(
-    services: ServiceContainer,
-    interaction: RepliableInteraction,
-    count: number | null,
-) {
+export async function pollMovieRandom(services: ServiceContainer, interaction: RepliableInteraction, count: number | null) {
     const movieRepo = services.repos.movieRepo;
 
     const client = interaction.client;
@@ -153,18 +139,16 @@ export async function pollMovieRandom(
     await createAndSendMoviePoll(services, interaction, client, uniqueMovies.slice(0, maxChoices));
 }
 
-export async function pollMovieWithList(
-    services: ServiceContainer,
-    interaction: RepliableInteraction,
-    selected: Movie[],
-) {
+export async function pollMovieWithList(services: ServiceContainer, interaction: RepliableInteraction, selected: Movie[]) {
     const client = interaction.client;
     const activeSelection = selected.filter((movie) => !movie.watched);
 
     if (activeSelection.length < 2 || activeSelection.length > MAX_CHOICES) {
         const msg = "You must select between 2 and 5 movies.";
-        if (interaction.replied || interaction.deferred) await interaction.editReply(msg);
-        else await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+        if (interaction.replied || interaction.deferred)
+            await interaction.editReply(msg);
+        else
+            await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
         return;
     }
 
@@ -187,11 +171,7 @@ export async function pollMovieWithList(
     await createAndSendMoviePoll(services, interaction, client, moviesWithUsers);
 }
 
-export async function closeActiveMoviePoll(
-    services: ServiceContainer,
-    client: Client,
-    closedBy: string,
-): Promise<{ success: boolean; message: string; winner?: Movie; winningVotes?: number; tieBreak?: boolean }> {
+export async function closeActiveMoviePoll(services: ServiceContainer, client: Client, closedBy: string): Promise<{ success: boolean; message: string; winner?: Movie, winningVotes?: number, tieBreak?: boolean }> {
     const movieRepo = services.repos.movieRepo;
 
     const openPoll = await movieRepo.getActivePoll();
@@ -211,10 +191,7 @@ export async function closeActiveMoviePoll(
     }
 
     // Tally votes
-    const voteCounts = countBy(
-        voteEntries.map(([, movieId]) => movieId),
-        (movieId) => movieId,
-    );
+    const voteCounts = countBy(voteEntries.map(([, movieId]) => movieId), (movieId) => movieId);
 
     const sorted = activePoll.options
         .map((option): [string, number] => [option.id, voteCounts[option.id] ?? 0])
@@ -235,9 +212,7 @@ export async function closeActiveMoviePoll(
     if (tiedEntries.length > 1) {
         tieBreak = true;
         [winningId] = sample(tiedEntries);
-        console.log(
-            `[MoviePoll] Tie detected among ${tiedEntries.length} movies (${topVotes} votes each). Randomly selected one.`,
-        );
+        console.log(`[MoviePoll] Tie detected among ${tiedEntries.length} movies (${topVotes} votes each). Randomly selected one.`);
     }
 
     const winningMovie = activePoll.options.find((m) => m.id === winningId);
@@ -253,9 +228,7 @@ export async function closeActiveMoviePoll(
         ? `Poll closed successfully. After a tie with ${topVotes} votes, BustinBot chose ${winningMovie.title}.`
         : `Poll closed successfully. ${winningMovie.title} won with ${topVotes} votes.`;
 
-    console.log(
-        `[MoviePoll] Poll closed by ${closedBy}. Winner: ${winningMovie.title}${tieBreak ? " (tie-breaker)" : ""}`,
-    );
+    console.log(`[MoviePoll] Poll closed by ${closedBy}. Winner: ${winningMovie.title}${tieBreak ? " (tie-breaker)" : ""}`);
 
     // Update the poll message to show it's closed and disable buttons
     try {
@@ -273,7 +246,7 @@ export async function closeActiveMoviePoll(
                             .setLabel(label)
                             .setStyle(ButtonStyle.Secondary)
                             .setDisabled(true);
-                    }),
+                    })
                 );
                 await message.edit({
                     content: `📊 **Vote for the next movie night pick!**\n~~Poll ended~~ - **${winningMovie.title}** was selected!`,

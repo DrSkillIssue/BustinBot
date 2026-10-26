@@ -20,17 +20,17 @@ const help: Command = {
         const guild = interaction.guild ?? null;
         const emoji = replaceBustinEmote("🤖", guild);
         const title = `${emoji} Welcome to BustinBot`;
-
+        
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle(title)
             .setDescription(
-                "BustinBot is a custom community Discord bot that helps manage **movie nights**, **OSRS community tasks** and a bit of personality through fun interactions.",
+                "BustinBot is a custom community Discord bot that helps manage **movie nights**, **OSRS community tasks** and a bit of personality through fun interactions."
             )
             .addFields(
                 {
                     name: "🎥 Movie Nights",
-                    value: "Host and vote on regular movie nights with your community. Users can add movies to the watchlist and participate in polls to choose what to watch next.\nRun `/moviehelp` to learn more.",
+                    value: "Host and vote on regular movie nights with your community. Users can add movies to the watchlist and participate in polls to choose what to watch next.\nRun `/moviehelp` to learn more."
                 },
                 {
                     name: "🗺️ OSRS Community Tasks",
@@ -50,14 +50,14 @@ const help: Command = {
                 {
                     name: "❓ More Questions?",
                     value: "Click here to view the BustinBot FAQ: https://github.com/dossyb/BustinBot/wiki",
-                },
+                }
             )
             .setFooter({
                 text: `BustinBot ${packageVersion} • Developed by dossyb`,
             });
 
         await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-    },
+    }
 };
 
 export default help;

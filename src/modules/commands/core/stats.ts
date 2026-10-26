@@ -1,11 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    EmbedBuilder,
-    time,
-    TimestampStyles,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -22,16 +15,13 @@ const stats: Command = {
         .setName("stats")
         .setDescription("View user-specific BustinBot stats.")
         .addUserOption((option) =>
-            option.setName("user").setDescription("View stats for another user.").setRequired(false),
+            option
+                .setName("user")
+                .setDescription("View stats for another user.")
+                .setRequired(false)
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -48,9 +38,7 @@ const stats: Command = {
         }
 
         if (!stats) {
-            await interaction.editReply(
-                `No stats found for ${targetUser.username}. They may not have interacted with me yet.`,
-            );
+            await interaction.editReply(`No stats found for ${targetUser.username}. They may not have interacted with me yet.`);
             return;
         }
 
@@ -64,7 +52,7 @@ const stats: Command = {
             .addFields([
                 { name: "🕧 First Active", value: joinedDate, inline: true },
                 { name: "💬 Last Active", value: lastActive, inline: true },
-                { name: "🕹️ Commands Run", value: `${stats.commandsRun ?? 0}`, inline: true },
+                { name: "🕹️ Commands Run", value: `${stats.commandsRun ?? 0}`, inline: true }
             ])
             .addFields([
                 {
@@ -96,7 +84,7 @@ const stats: Command = {
             });
 
         await interaction.editReply({ embeds: [embed] });
-    },
-};
+    }
+}
 
 export default stats;

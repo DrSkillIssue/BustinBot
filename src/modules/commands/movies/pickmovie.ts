@@ -36,12 +36,12 @@ const pickmovie: Command = {
             new ButtonBuilder()
                 .setCustomId(PICK_MOVIE_BUTTONS.pollManual)
                 .setLabel("🗳️ Poll specific movies")
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.editReply({
             content: "How would you like to pick the movie?",
-            components: [row],
+            components: [row]
         });
     },
 };

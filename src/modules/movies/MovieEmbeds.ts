@@ -63,21 +63,19 @@ export function createMovieNightEmbed(
     movie: Partial<Movie> | null,
     startTime: Date,
     stateMessage: string,
-    scheduledBy: string,
+    scheduledBy: string
 ): EmbedBuilder {
     const startTimeValue = [
         `${time(startTime, TimestampStyles.LongDateTime)} (${time(startTime, TimestampStyles.RelativeTime)})`,
-        stateMessage.trim(),
-    ]
-        .filter(Boolean)
-        .join("\n\n");
+        stateMessage.trim()
+    ].filter(Boolean).join("\n\n");
 
     if (!movie) {
         // No movie selected yet
         return new EmbedBuilder()
             .setTitle("🎞️ Upcoming Movie Night!")
             .setDescription(startTimeValue)
-            .setColor(0xe91e63)
+            .setColor(0xE91E63)
             .setFooter({ text: `Scheduled by ${scheduledBy}` });
     }
 
@@ -91,7 +89,7 @@ export function createMovieNightEmbed(
     return createMovieEmbed(movie)
         .setTitle(`Now showing: ${titleWithRelease(movie)}`)
         .setDescription(overview + addedBy)
-        .setColor(0xe91e63)
+        .setColor(0xE91E63)
         .addFields({
             name: "🎥 Start Time",
             value: startTimeValue,
@@ -104,7 +102,7 @@ export function createMoviePollClosedEmbed(
     movie: Movie,
     closedBy: string,
     winningVotes: number,
-    tieBreak = false,
+    tieBreak = false
 ): EmbedBuilder {
     const titleText = `🏆 Movie poll closed!`;
     let description = `The poll has concluded, and the winner is:\n\n**${titleWithRelease(movie)}**\n\n`;
@@ -126,7 +124,7 @@ export function createMoviePollClosedEmbed(
         .setTitle(titleText)
         .setDescription(description)
         .setThumbnail(movie.posterUrl ?? null)
-        .setColor(0xe91e63)
+        .setColor(0xE91E63)
         .setFooter({ text: `Closed by ${closedBy} • Powered by TMDb` })
         .setTimestamp();
 }

@@ -13,31 +13,27 @@ const mytask: Command = {
     module: CommandModule.Task,
     allowedRoles: [CommandRole.Everyone],
     usage: "/mytask [task_event]",
-    examples: ["/mytask", "/mytask task_event:PVM054-20260126"],
+    examples: [
+        "/mytask",
+        "/mytask task_event:PVM054-20260126"
+    ],
 
     slashData: new SlashCommandBuilder()
         .setName("mytask")
         .setDescription("Check the status of your task submissions")
-        .addStringOption((option) =>
-            option
-                .setName("task_event")
+        .addStringOption(option =>
+            option.setName("task_event")
                 .setDescription("Select a specific task event (optional)")
                 .setRequired(false)
                 .addChoices(
                     { name: "Current PvM Task", value: "current_pvm" },
                     { name: "Current Skilling Task", value: "current_skilling" },
                     { name: "Current Minigame/Misc Task", value: "current_minigame" },
-                    { name: "Current Leagues Task", value: "current_leagues" },
-                ),
+                    { name: "Current Leagues Task", value: "current_leagues" }
+                )
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -51,10 +47,13 @@ const mytask: Command = {
             // Get active task events
             const activeEvents = await taskRepo.getTaskEventsBetween(
                 DateTime.fromJSDate(now).minus({ days: 30 }).toJSDate(),
-                DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate(),
+                DateTime.fromJSDate(now).plus({ days: 30 }).toJSDate()
             );
 
-            const currentlyActive = activeEvents.filter((event) => event.startTime <= now && event.endTime > now);
+            const currentlyActive = activeEvents
+                .filter((event: TaskEvent) => {
+                    return event.startTime <= now && event.endTime > now;
+                });
 
             if (currentlyActive.length === 0) {
                 await interaction.editReply({
@@ -69,14 +68,14 @@ const mytask: Command = {
             if (taskEventChoice) {
                 // Map choice to category
                 const categoryMap: Record<string, TaskCategory> = {
-                    current_pvm: TaskCategory.PvM,
-                    current_skilling: TaskCategory.Skilling,
-                    current_minigame: TaskCategory.MinigameMisc,
-                    current_leagues: TaskCategory.Leagues,
+                    "current_pvm": TaskCategory.PvM,
+                    "current_skilling": TaskCategory.Skilling,
+                    "current_minigame": TaskCategory.MinigameMisc,
+                    "current_leagues": TaskCategory.Leagues
                 };
 
                 const targetCategory = categoryMap[taskEventChoice];
-                selectedEvent = currentlyActive.find((e) => e.category === targetCategory);
+                selectedEvent = currentlyActive.find(e => e.category === targetCategory);
 
                 if (!selectedEvent) {
                     await interaction.editReply({
@@ -87,7 +86,7 @@ const mytask: Command = {
 
                 // Get submissions for specific task event
                 const allSubmissions = await taskRepo.getSubmissionsForTask(selectedEvent.id);
-                submissions = allSubmissions.filter((s) => s.userId === userId);
+                submissions = allSubmissions.filter(s => s.userId === userId);
 
                 if (submissions.length === 0) {
                     await interaction.editReply({
@@ -98,10 +97,10 @@ const mytask: Command = {
             } else {
                 // Get all submissions for this user
                 const allUserSubmissions = await taskRepo.getSubmissionsByUser(userId);
-
+                
                 // Filter to only active task events
-                const activeEventIds = currentlyActive.map((e) => e.id);
-                submissions = allUserSubmissions.filter((s) => activeEventIds.includes(s.taskEventId));
+                const activeEventIds = currentlyActive.map(e => e.id);
+                submissions = allUserSubmissions.filter(s => activeEventIds.includes(s.taskEventId));
 
                 if (submissions.length === 0) {
                     await interaction.editReply({
@@ -114,7 +113,7 @@ const mytask: Command = {
                 submissions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
             }
 
-            const statusLines = submissions.map((sub) => {
+            const statusLines = submissions.map(sub => {
                 const taskName = sub.taskName || "Unknown Task";
                 let statusText = "";
 
@@ -144,6 +143,7 @@ const mytask: Command = {
                 return `• ${taskName}: ${statusText}`;
             });
 
+
             const replyText = taskEventChoice
                 ? `**Task Submission Status:**\n\n${statusLines.join("\n")}`
                 : `**Your Active Task Submissions:**\n\n${statusLines.join("\n")}`;
@@ -153,7 +153,7 @@ const mytask: Command = {
             console.error("[MyTask] Error fetching submissions:", error);
             await interaction.editReply({ content: "Failed to fetch your task submissions." });
         }
-    },
+    }
 };
 
 export default mytask;

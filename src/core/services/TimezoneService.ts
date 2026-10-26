@@ -3,7 +3,9 @@ import { DateTime, IANAZone } from "luxon";
 import Fuse from "fuse.js";
 
 export function createTimezoneModal() {
-    const modal = new ModalBuilder().setCustomId("setup_timezone_modal").setTitle("Set Guild Timezone");
+    const modal = new ModalBuilder()
+        .setCustomId("setup_timezone_modal")
+        .setTitle("Set Guild Timezone");
 
     const tzInput = new TextInputBuilder()
         .setCustomId("timezone_input")
@@ -12,7 +14,7 @@ export function createTimezoneModal() {
         .setRequired(true);
 
     modal.addLabelComponents(
-        new LabelBuilder().setLabel('Enter timezone (e.g. "Australia/Melbourne")').setTextInputComponent(tzInput),
+        new LabelBuilder().setLabel('Enter timezone (e.g. "Australia/Melbourne")').setTextInputComponent(tzInput)
     );
 
     return modal;
@@ -24,7 +26,9 @@ export class TimezoneService {
 
     constructor() {
         this.allZones =
-            typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : this.getFallbackZones();
+            typeof Intl.supportedValuesOf === "function"
+                ? Intl.supportedValuesOf("timeZone")
+                : this.getFallbackZones();
 
         this.fuse = new Fuse(this.allZones, {
             threshold: 0.4,

@@ -14,15 +14,11 @@ const testtask: Command = {
     module: CommandModule.Task,
     allowedRoles: [CommandRole.BotAdmin],
 
-    slashData: new SlashCommandBuilder().setName("testtask").setDescription("Post a fake task event for testing."),
+    slashData: new SlashCommandBuilder()
+        .setName("testtask")
+        .setDescription("Post a fake task event for testing."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -35,6 +31,7 @@ const testtask: Command = {
         }
         const randomTask = sample(taskData);
         const selectedAmount = randomTask.amounts?.length ? sample(randomTask.amounts) : undefined;
+
 
         // Fake task event data
         const now = DateTime.utc();
@@ -53,9 +50,11 @@ const testtask: Command = {
             startTime: now.toJSDate(),
             endTime: now.plus({ weeks: 1 }).toJSDate(),
             createdAt: now.toJSDate(),
-        };
+        }
 
-        const event: TaskEvent = selectedAmount !== undefined ? { ...baseEvent, selectedAmount } : baseEvent;
+        const event: TaskEvent = selectedAmount !== undefined
+            ? { ...baseEvent, selectedAmount }
+            : baseEvent;
 
         const channel = interaction.channel;
         if (!channel?.isSendable()) {

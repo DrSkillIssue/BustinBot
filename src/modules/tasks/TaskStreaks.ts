@@ -30,7 +30,10 @@ function isConsecutive(prevEnd: Date, nextStart: Date): boolean {
     return gap.toMillis() >= 0 && gap <= PERIOD_GAP_TOLERANCE;
 }
 
-export async function getCurrentTaskPeriod(repo: ITaskRepository, now: Date = new Date()): Promise<TaskPeriod | null> {
+export async function getCurrentTaskPeriod(
+    repo: ITaskRepository,
+    now: Date = new Date()
+): Promise<TaskPeriod | null> {
     const event = await repo.getLatestTaskEvent();
     if (!event) return null;
 
@@ -42,20 +45,26 @@ export async function getCurrentTaskPeriod(repo: ITaskRepository, now: Date = ne
     };
 }
 
-async function hasTaskEventsBetween(repo: ITaskRepository, start: Date, end: Date): Promise<boolean> {
+async function hasTaskEventsBetween(
+    repo: ITaskRepository,
+    start: Date,
+    end: Date
+): Promise<boolean> {
     if (start.getTime() > end.getTime()) return false;
-    const events = await repo.getTaskEventsBetween(start, end);
-    return events.length > 0;
+    try {
+        const events = await repo.getTaskEventsBetween(start, end);
+        return events.length > 0;
+    } catch (err) {
+        console.warn(`[TaskStreaks] Failed to load task events between ${start.toISOString()} and ${end.toISOString()}:`, err);
+        return false;
+    }
 }
 
-function buildSummary(
-    base: {
-        currentStreak: number;
-        longestStreak: number;
-        hasCompletedCurrentPeriod: boolean;
-    },
-    extras?: { currentPeriod?: TaskPeriod; lastCompletedPeriodEnd?: Date },
-): TaskStreakSummary {
+function buildSummary(base: {
+    currentStreak: number;
+    longestStreak: number;
+    hasCompletedCurrentPeriod: boolean;
+}, extras?: { currentPeriod?: TaskPeriod; lastCompletedPeriodEnd?: Date; }): TaskStreakSummary {
     const summary: TaskStreakSummary = {
         currentStreak: base.currentStreak,
         longestStreak: base.longestStreak,
@@ -76,7 +85,7 @@ function buildSummary(
 export async function calculateTaskStreakSummary(
     userId: string,
     repo: ITaskRepository,
-    now: Date = new Date(),
+    now: Date = new Date()
 ): Promise<TaskStreakSummary> {
     const currentPeriod = await getCurrentTaskPeriod(repo, now);
 
@@ -90,7 +99,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined,
+            currentPeriod ? { currentPeriod } : undefined
         );
     }
 
@@ -113,17 +122,17 @@ export async function calculateTaskStreakSummary(
         const submittedAt = submission.submittedAt ?? submission.createdAt;
         if (submittedAt.getTime() > event.endTime.getTime()) continue;
 
-        const endKey = event.endTime.getTime();
-        const existing = periodMap.get(endKey);
-        if (!existing) {
-            periodMap.set(endKey, { start: event.startTime, end: event.endTime });
-        } else {
-            if (event.startTime < existing.start) existing.start = event.startTime;
-            if (event.endTime > existing.end) existing.end = event.endTime;
-        }
+        const period = periodMap.getOrInsertComputed(event.endTime.getTime(), () => ({
+            start: event.startTime,
+            end: event.endTime,
+        }));
+        if (event.startTime < period.start) period.start = event.startTime;
+        if (event.endTime > period.end) period.end = event.endTime;
     }
 
-    const periods = Array.from(periodMap.values()).sort((a, b) => a.end.getTime() - b.end.getTime());
+    const periods = Array.from(periodMap.values()).sort(
+        (a, b) => a.end.getTime() - b.end.getTime()
+    );
 
     if (periods.length === 0) {
         return buildSummary(
@@ -132,7 +141,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined,
+            currentPeriod ? { currentPeriod } : undefined
         );
     }
 
@@ -164,7 +173,7 @@ export async function calculateTaskStreakSummary(
                 longestStreak: 0,
                 hasCompletedCurrentPeriod: false,
             },
-            currentPeriod ? { currentPeriod } : undefined,
+            currentPeriod ? { currentPeriod } : undefined
         );
     }
 
@@ -200,6 +209,6 @@ export async function calculateTaskStreakSummary(
         {
             ...(currentPeriod ? { currentPeriod } : {}),
             lastCompletedPeriodEnd: lastCompleted.end,
-        },
+        }
     );
 }

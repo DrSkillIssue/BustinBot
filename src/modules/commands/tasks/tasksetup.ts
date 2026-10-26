@@ -1,13 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ActionRowBuilder,
-    RoleSelectMenuBuilder,
-    ChannelSelectMenuBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ChannelType,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { channelLabel, roleLabel } from "../../../utils/TextUtils.js";
@@ -54,9 +45,7 @@ const tasksetup: Command = {
 
         const verificationChannelSelect = new ChannelSelectMenuBuilder()
             .setCustomId("tasksetup_verification_channel")
-            .setPlaceholder(
-                `Channel for managing submissions (Current: ${channelLabel(guild, currentChannels.taskVerification)})`,
-            )
+            .setPlaceholder(`Channel for managing submissions (Current: ${channelLabel(guild, currentChannels.taskVerification)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
@@ -79,9 +68,9 @@ const tasksetup: Command = {
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(taskChannelSelect),
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(verificationChannelSelect),
                 new ActionRowBuilder<ButtonBuilder>().addComponents(confirmButton, cancelButton),
-            ],
+            ]
         });
-    },
+    }
 };
 
 export default tasksetup;

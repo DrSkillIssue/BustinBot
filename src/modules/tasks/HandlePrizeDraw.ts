@@ -15,13 +15,7 @@ const DEFAULT_PERIOD_DAYS = parseInt(process.env.PRIZE_PERIOD_DAYS ?? "14");
 
 function getPeriodRange(endDate: Date, days: number): [Date, Date] {
     const end = DateTime.fromJSDate(endDate, { zone: "utc" }).endOf("day");
-    return [
-        end
-            .minus({ days: days - 1 })
-            .startOf("day")
-            .toJSDate(),
-        end.toJSDate(),
-    ];
+    return [end.minus({ days: days - 1 }).startOf("day").toJSDate(), end.toJSDate()];
 }
 
 function isSubmissionApprovedLike(status: SubmissionStatus): boolean {
@@ -60,7 +54,7 @@ function getMostRecentRolledDrawBeforeWindow(draws: PrizeDraw[], windowStart: Da
 async function getCarryOverSubmissions(
     prizeRepo: IPrizeDrawRepository,
     taskRepo: ITaskRepository,
-    currentWindowStart: Date,
+    currentWindowStart: Date
 ): Promise<TaskSubmission[]> {
     const draws = await prizeRepo.getAllPrizeDraws();
     const previousDraw = getMostRecentRolledDrawBeforeWindow(draws, currentWindowStart);
@@ -74,7 +68,7 @@ async function getCarryOverSubmissions(
     if (!previousEventIds.length) return [];
 
     const previousEventSubmissions = await Promise.all(
-        previousEventIds.map((eventId) => taskRepo.getSubmissionsForTask(eventId)),
+        previousEventIds.map((eventId) => taskRepo.getSubmissionsForTask(eventId))
     );
 
     return previousEventSubmissions
@@ -92,10 +86,7 @@ async function getCarryOverSubmissions(
         });
 }
 
-export async function generatePrizeDrawSnapshot(
-    prizeRepo: IPrizeDrawRepository,
-    taskRepo: ITaskRepository,
-): Promise<PrizeDraw> {
+export async function generatePrizeDrawSnapshot(prizeRepo: IPrizeDrawRepository, taskRepo: ITaskRepository): Promise<PrizeDraw> {
     const now = new Date();
     const [start, end] = getPeriodRange(now, DEFAULT_PERIOD_DAYS);
 
@@ -106,14 +97,14 @@ export async function generatePrizeDrawSnapshot(
     }
 
     const submissionsPerEvent = await Promise.all(
-        qualifyingEvents.map((event) => taskRepo.getSubmissionsForTask(event.id)),
+        qualifyingEvents.map((event) => taskRepo.getSubmissionsForTask(event.id))
     );
 
     const currentSubmissions = submissionsPerEvent.flat();
     const carryOverSubmissions = await getCarryOverSubmissions(prizeRepo, taskRepo, start);
 
     const filtered = [...currentSubmissions, ...carryOverSubmissions].filter((submission) =>
-        isSubmissionApprovedLike(submission.status),
+        isSubmissionApprovedLike(submission.status)
     );
 
     const STATUS_RANK: Partial<Record<SubmissionStatus, number>> = {
@@ -125,25 +116,16 @@ export async function generatePrizeDrawSnapshot(
     const ROLLS_PER_SUBMISSION = 1;
 
     // Deduplicate submissions so a user only gets the highest tier per task
-    const userBestSubmissions = new Map<string, (typeof filtered)[number]>();
-    for (const submission of filtered) {
-        const key = `${submission.userId}-${submission.taskEventId}`;
-        const existing = userBestSubmissions.get(key);
-        const currentRank = STATUS_RANK[submission.status] ?? 0;
-        const existingRank = existing ? (STATUS_RANK[existing.status] ?? 0) : 0;
-
-        if (!existing || currentRank >= existingRank) {
-            userBestSubmissions.set(key, submission);
-        }
-    }
-
-    const deduplicatedSubmissions = Array.from(userBestSubmissions.values());
+    const deduplicatedSubmissions = [...Map.groupBy(filtered, (submission) => `${submission.userId}-${submission.taskEventId}`).values()]
+        .map((submissions) => submissions.reduce((best, submission) =>
+            (STATUS_RANK[submission.status] ?? 0) >= (STATUS_RANK[best.status] ?? 0) ? submission : best
+        ));
     const deduplicatedEventIds = Array.from(
         new Set(
             deduplicatedSubmissions
                 .map((submission) => submission.taskEventId)
-                .filter((eventId): eventId is string => typeof eventId === "string" && eventId.length > 0),
-        ),
+                .filter((eventId): eventId is string => typeof eventId === "string" && eventId.length > 0)
+        )
     );
     const qualifyingEventIds = qualifyingEvents.map((event) => event.id);
 
@@ -155,9 +137,9 @@ export async function generatePrizeDrawSnapshot(
     }
 
     const tierCounts = {
-        bronze: deduplicatedSubmissions.filter((s) => s.status === SubmissionStatus.Bronze).length,
-        silver: deduplicatedSubmissions.filter((s) => s.status === SubmissionStatus.Silver).length,
-        gold: deduplicatedSubmissions.filter((s) => s.status === SubmissionStatus.Gold).length,
+        bronze: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Bronze).length,
+        silver: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Silver).length,
+        gold: deduplicatedSubmissions.filter(s => s.status === SubmissionStatus.Gold).length,
     };
 
     const totalEntries = entries.length;
@@ -172,7 +154,7 @@ export async function generatePrizeDrawSnapshot(
         entries,
         totalEntries,
         tierCounts,
-    };
+    }
 
     // Persist snapshot
     await prizeRepo.createPrizeDraw(snapshot);
@@ -180,11 +162,7 @@ export async function generatePrizeDrawSnapshot(
     return snapshot;
 }
 
-export async function rollWinnerForSnapshot(
-    prizeRepo: IPrizeDrawRepository,
-    snapshotId: string,
-    services: ServiceContainer,
-): Promise<string | null> {
+export async function rollWinnerForSnapshot(prizeRepo: IPrizeDrawRepository, snapshotId: string, services: ServiceContainer): Promise<string | null> {
     const snapshot = await prizeRepo.getPrizeDrawById(snapshotId);
 
     if (!snapshot) throw new Error(`Snapshot ${snapshotId} not found.`);
@@ -224,7 +202,7 @@ export async function announcePrizeDrawWinner(
     client: Client,
     services: ServiceContainer,
     prizeRepo: IPrizeDrawRepository,
-    snapshotId: string,
+    snapshotId: string
 ): Promise<boolean> {
     const snapshot = await prizeRepo.getPrizeDrawById(snapshotId);
     if (!snapshot || !snapshot.winnerId) {
@@ -267,22 +245,20 @@ export async function announcePrizeDrawWinner(
 
     // Use the count of unique task completions (deduplicated submissions)
     const totalUniqueCompletions = Object.values(snapshot.participants).reduce((sum, count) => sum + count, 0);
-
+    
     const embedData = buildPrizeDrawEmbed(
         winnerUsername,
         totalUniqueCompletions,
         Object.keys(snapshot.participants).length,
         snapshot.start,
         snapshot.end,
-        snapshot.tierCounts,
+        snapshot.tierCounts
     );
 
     const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return false;
 
-    await channel.send(
-        withSuppressedMentions({ ...embedData, ...(mention ? { content: mention } : {}) }, suppressMentions),
-    );
+    await channel.send(withSuppressedMentions({ ...embedData, ...(mention ? { content: mention } : {}) }, suppressMentions));
     console.log(`[PrizeDraw] Winner embed sent to #${channel.name}`);
 
     // Send the winner a DM
@@ -290,9 +266,7 @@ export async function announcePrizeDrawWinner(
         const winnerUser = await client.users.fetch(snapshot.winnerId);
 
         if (winnerUser) {
-            await winnerUser.send(
-                `**🏆 Congratulations!** You've won the latest OSRS community tasks prize draw in **${guildName}**! Please contact a **Task Admin** to claim your prize.`,
-            );
+            await winnerUser.send(`**🏆 Congratulations!** You've won the latest OSRS community tasks prize draw in **${guildName}**! Please contact a **Task Admin** to claim your prize.`);
 
             console.log(`[PrizeDraw] DM set to winner ${winnerUser.tag}`);
         } else {

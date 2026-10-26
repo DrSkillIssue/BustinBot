@@ -34,7 +34,7 @@ const leagues: Command = {
         });
 
         console.log(`[Leagues Toggle] ${interaction.guild?.name ?? guildId}: ${status}`);
-    },
-};
+    }
+}
 
 export default leagues;

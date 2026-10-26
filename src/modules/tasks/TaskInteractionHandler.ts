@@ -1,7 +1,11 @@
 import { MessageFlags, type Interaction } from "discord.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { handleTaskFeedback } from "./HandleTaskFeedback.js";
-import { handleSubmitButton, handleAdminButton, handleRejectionModal } from "./TaskInteractions.js";
+import {
+    handleSubmitButton,
+    handleAdminButton,
+    handleRejectionModal,
+} from "./TaskInteractions.js";
 import { handleUpdateTaskModal } from "./HandleUpdateTaskModal.js";
 import { buildLeaderboardMessage } from "./TaskLeaderboards.js";
 import { handleTaskPollVoteInteraction } from "./HandleTaskPoll.js";
@@ -9,7 +13,10 @@ import { TASK_LIST_BUTTON, buildTaskListPage, taskListButtonCategory } from "./T
 import { buttonPage } from "../../utils/Pagination.js";
 import { NEW_TASK_MODAL, handleNewTaskModal } from "./HandleNewTaskModal.js";
 
-export async function handleTaskInteraction(interaction: Interaction, services: ServiceContainer) {
+export async function handleTaskInteraction(
+    interaction: Interaction,
+    services: ServiceContainer
+) {
     if (interaction.isButton()) {
         if (interaction.customId.startsWith("vote_")) {
             await handleTaskPollVoteInteraction(interaction, services);
@@ -19,9 +26,7 @@ export async function handleTaskInteraction(interaction: Interaction, services: 
         if (interaction.customId.startsWith(TASK_LIST_BUTTON)) {
             const { customId } = interaction;
             await interaction.deferUpdate();
-            await interaction.editReply(
-                await buildTaskListPage(services, taskListButtonCategory(customId), buttonPage(customId)),
-            );
+            await interaction.editReply(await buildTaskListPage(services, taskListButtonCategory(customId), buttonPage(customId)));
             return;
         }
 

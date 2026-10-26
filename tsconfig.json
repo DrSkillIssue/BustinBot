@@ -1,23 +1,24 @@
 {
-    // Visit https://aka.ms/tsconfig to read more about this file
-    "extends": "@tsconfig/node24/tsconfig.json",
-    "compilerOptions": {
-        // File Layout
-        "rootDir": "src",
-        "outDir": "dist",
-        // Other Outputs
-        "sourceMap": true,
-        // Stricter Typechecking Options
-        "noUncheckedIndexedAccess": true,
-        "exactOptionalPropertyTypes": true,
-        // Style Options
-        "noImplicitReturns": true,
-        "noImplicitOverride": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noFallthroughCasesInSwitch": true,
-        // Recommended Options
-        "verbatimModuleSyntax": true
-    },
-    "include": ["src"]
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "extends": "@tsconfig/node26/tsconfig.json",
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "src",
+    "outDir": "dist",
+    // Other Outputs
+    "sourceMap": true,
+    // Stricter Typechecking Options
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    // Style Options
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    // Recommended Options
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src"]
 }

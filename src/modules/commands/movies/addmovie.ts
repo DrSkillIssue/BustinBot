@@ -13,11 +13,15 @@ const addmovie: Command = {
     slashData: new SlashCommandBuilder()
         .setName("addmovie")
         .setDescription("Add a movie to the watchlist.")
-        .addStringOption((option) =>
-            option.setName("title").setDescription("The movie title to search for.").setRequired(true),
+        .addStringOption(option =>
+            option.setName("title")
+                .setDescription("The movie title to search for.")
+                .setRequired(true)
         )
-        .addIntegerOption((option) =>
-            option.setName("year").setDescription("(Optional) Release year of the movie").setRequired(false),
+        .addIntegerOption(option =>
+            option.setName("year")
+                .setDescription("(Optional) Release year of the movie")
+                .setRequired(false)
         ),
 
     async execute({ interaction, services }) {
@@ -37,7 +41,9 @@ const addmovie: Command = {
             await presentMovieSelection(interaction, query, year);
         } catch (error) {
             console.error("[AddMovie Command Error]", error);
-            await interaction.editReply("An error occurred while adding the movie. Check console for details.");
+            await interaction.editReply(
+                "An error occurred while adding the movie. Check console for details."
+            );
         }
     },
 };

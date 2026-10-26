@@ -50,11 +50,7 @@ export async function handleUpdateTaskModal(interaction: ModalSubmitInteraction,
     await interaction.editReply({ content: `Task **${taskId}** updated successfully.` });
 }
 
-async function saveAndRedraw(
-    interaction: ModalSubmitInteraction,
-    services: ServiceContainer,
-    task: Task,
-): Promise<void> {
+async function saveAndRedraw(interaction: ModalSubmitInteraction, services: ServiceContainer, task: Task): Promise<void> {
     const repo = services.repos.taskRepo;
     await services.tasks.createTask(task);
 
@@ -75,9 +71,9 @@ async function saveAndRedraw(
     }
 
     const activePoll = await repo.getActiveTaskPollByCategory(task.category);
-    if (activePoll?.options.some((option) => option.id === task.id)) {
-        activePoll.options = activePoll.options.map((option) =>
-            option.id === task.id ? { ...option, ...task } : option,
+    if (activePoll?.options.some(option => option.id === task.id)) {
+        activePoll.options = activePoll.options.map(option =>
+            option.id === task.id ? { ...option, ...task } : option
         );
         await repo.updateTaskPollOptions(activePoll.id, activePoll.options);
         try {

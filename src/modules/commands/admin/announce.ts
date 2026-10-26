@@ -22,7 +22,10 @@ interface Announcement {
     footer?: string;
 }
 
-function buildSection(content: string | string[], accessoryUrl?: string): APIMessageTopLevelComponent[] {
+function buildSection(
+    content: string | string[],
+    accessoryUrl?: string
+): APIMessageTopLevelComponent[] {
     const textArray = Array.isArray(content) ? content : [content];
 
     if (accessoryUrl) {
@@ -106,7 +109,9 @@ const announce: Command = {
 
         const sectionHeader = buildSection(announcement.title, avatarUrl);
         const sectionIntro = buildSection(announcement.intro);
-        const featureSections = announcement.sections.flatMap((sec) => buildSection([`**${sec.name}**`, sec.value]));
+        const featureSections = announcement.sections.flatMap((sec) =>
+            buildSection([`**${sec.name}**`, sec.value])
+        );
 
         const components: APIMessageTopLevelComponent[] = [
             ...sectionHeader,
@@ -118,12 +123,10 @@ const announce: Command = {
         const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
         // Send announcement
-        await channel.send(
-            withSuppressedMentions<MessageCreateOptions>(
-                { flags: MessageFlags.IsComponentsV2, components },
-                suppressMentions,
-            ),
-        );
+        await channel.send(withSuppressedMentions<MessageCreateOptions>({
+            flags: MessageFlags.IsComponentsV2,
+            components,
+        }, suppressMentions));
 
         await interaction.editReply({
             content: `Announcement for **v${currentVersion}** posted in <#${channel.id}>.`,

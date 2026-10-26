@@ -64,7 +64,11 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         await batch.commit();
     }
 
-    async incrementStat(userId: string, field: keyof UserStats, amount = 1): Promise<void> {
+    async incrementStat(
+        userId: string,
+        field: keyof UserStats,
+        amount = 1
+    ): Promise<void> {
         const docRef = this.collection.doc(userId);
         const doc = await docRef.get();
 
@@ -82,7 +86,11 @@ export class UserRepository extends GuildScopedRepository<UserStats> implements 
         });
     }
 
-    async updateTierStat(userId: string, fromField: keyof UserStats, toField: keyof UserStats): Promise<void> {
+    async updateTierStat(
+        userId: string,
+        fromField: keyof UserStats,
+        toField: keyof UserStats
+    ): Promise<void> {
         const docRef = this.collection.doc(userId);
         const doc = await docRef.get();
 

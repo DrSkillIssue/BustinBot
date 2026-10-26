@@ -20,10 +20,7 @@ export class KeywordRepository extends GuildScopedRepository<Keyword> implements
     }
 
     async addKeyword(word: string): Promise<void> {
-        const id = word
-            .toLowerCase()
-            .replace(/\s+/g, "_")
-            .replace(/[^\w_]/g, "");
+        const id = word.toLowerCase().replace(/\s+/g, "_").replace(/[^\w_]/g, "");
         const newKeyword: Keyword = {
             id,
             word,

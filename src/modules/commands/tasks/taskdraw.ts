@@ -1,11 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
-import {
-    generatePrizeDrawSnapshot,
-    rollWinnerForSnapshot,
-    announcePrizeDrawWinner,
-} from "../../tasks/HandlePrizeDraw.js";
+import { generatePrizeDrawSnapshot, rollWinnerForSnapshot, announcePrizeDrawWinner } from "../../tasks/HandlePrizeDraw.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
@@ -18,7 +14,7 @@ const taskdraw: Command = {
     slashData: new SlashCommandBuilder()
         .setName("taskdraw")
         .setDescription("Manually trigger a task prize draw.")
-        .addStringOption((option) =>
+        .addStringOption(option =>
             option
                 .setName("action")
                 .setDescription("Which step of the prize draw to run")
@@ -26,23 +22,17 @@ const taskdraw: Command = {
                 .addChoices(
                     { name: "Generate Snapshot", value: "snapshot" },
                     { name: "Roll Winner", value: "roll" },
-                    { name: "Announce Winner", value: "announce" },
-                ),
+                    { name: "Announce Winner", value: "announce" }
+                )
         )
-        .addStringOption((option) =>
+        .addStringOption(option =>
             option
                 .setName("snapshot_id")
                 .setDescription("The snapshot ID to use (required for roll/announce)")
-                .setRequired(false),
+                .setRequired(false)
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -58,7 +48,7 @@ const taskdraw: Command = {
             if (action === "snapshot") {
                 const snapshot = await generatePrizeDrawSnapshot(prizeRepo, taskRepo);
                 await interaction.editReply({
-                    content: `Snapshot created for period **${snapshot.id}** with **${snapshot.totalEntries}** entries.`,
+                    content: `Snapshot created for period **${snapshot.id}** with **${snapshot.totalEntries}** entries.`
                 });
                 return;
             }
@@ -70,12 +60,7 @@ const taskdraw: Command = {
                 }
                 const winner = await rollWinnerForSnapshot(prizeRepo, snapshotId, services);
                 if (winner) {
-                    await interaction.editReply(
-                        withSuppressedMentions(
-                            { content: `Winner rolled for **${snapshotId}**: <@${winner}>` },
-                            suppressMentions,
-                        ),
-                    );
+                    await interaction.editReply(withSuppressedMentions({ content: `Winner rolled for **${snapshotId}**: <@${winner}>` }, suppressMentions));
                 } else {
                     await interaction.editReply(`No eligible entries found for **${snapshotId}**.`);
                 }
@@ -91,9 +76,7 @@ const taskdraw: Command = {
                 if (announced) {
                     await interaction.editReply(`Announcement sent for **${snapshotId}**.`);
                 } else {
-                    await interaction.editReply(
-                        `Unable to announce winner for **${snapshotId}**. Ensure a winner has been rolled and the announcement channel exists.`,
-                    );
+                    await interaction.editReply(`Unable to announce winner for **${snapshotId}**. Ensure a winner has been rolled and the announcement channel exists.`);
                 }
                 return;
             }
@@ -101,7 +84,7 @@ const taskdraw: Command = {
             console.error("[TaskDraw Command Error]", err);
             await interaction.editReply(`An error occurred while running /taskdraw: ${String(err)}`);
         }
-    },
+    }
 };
 
 export default taskdraw;

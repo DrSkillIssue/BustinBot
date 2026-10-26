@@ -8,7 +8,9 @@ const badbot: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
 
-    slashData: new SlashCommandBuilder().setName("badbot").setDescription("Criticize BustinBot."),
+    slashData: new SlashCommandBuilder()
+        .setName("badbot")
+        .setDescription("Criticize BustinBot."),
 
     async execute({ interaction, message, services }) {
         const emoji = "😭";

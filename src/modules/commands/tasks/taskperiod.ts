@@ -25,14 +25,14 @@ const taskperiod: Command = {
                             { name: "2 task events", value: 2 },
                             { name: "4 task events", value: 4 },
                             { name: "8 task events", value: 8 },
-                            { name: "12 task events", value: 12 },
-                        ),
-                ),
+                            { name: "12 task events", value: 12 }
+                        )
+                )
         )
         .addSubcommand((sub) =>
             sub
                 .setName("start")
-                .setDescription("Start a fresh periodic leaderboard so the next task event is counted as the first."),
+                .setDescription("Start a fresh periodic leaderboard so the next task event is counted as the first.")
         ),
 
     async execute({ interaction, services }) {
@@ -48,7 +48,7 @@ const taskperiod: Command = {
                 const events = interaction.options.getInteger("events", true);
                 await services.guilds.update(guildId, { taskSettings: { periodEvents: events } });
                 await interaction.editReply(
-                    `Periodic leaderboard length set to **${events}** task events. This will apply after the current period ends.`,
+                    `Periodic leaderboard length set to **${events}** task events. This will apply after the current period ends.`
                 );
                 return;
             }
@@ -56,7 +56,7 @@ const taskperiod: Command = {
             if (subcommand === "start") {
                 await resetPeriodicLeaderboard(services);
                 await interaction.editReply(
-                    "Periodic leaderboard reset. The next task event will be counted as the first event of the new period.",
+                    "Periodic leaderboard reset. The next task event will be counted as the first event of the new period."
                 );
                 return;
             }
@@ -66,7 +66,7 @@ const taskperiod: Command = {
             console.error("[TaskPeriod Command Error]", err);
             await interaction.editReply("Failed to update the periodic leaderboard length. Check console for details.");
         }
-    },
+    }
 };
 
 export default taskperiod;

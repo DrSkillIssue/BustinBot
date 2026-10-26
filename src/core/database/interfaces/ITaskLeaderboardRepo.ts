@@ -8,6 +8,6 @@ export interface ITaskLeaderboardRepository {
         id: TaskLeaderboardId,
         userId: string,
         amount: number,
-        tierCounts?: Partial<TaskTierCounts>,
+        tierCounts?: Partial<TaskTierCounts>
     ): Promise<void>;
 }

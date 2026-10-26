@@ -37,7 +37,7 @@ export interface ITaskRepository {
     updateSubmissionStatus(
         submissionId: string,
         status: "pending" | "approved" | "rejected" | "bronze" | "silver" | "gold",
-        reviewedBy: string,
+        reviewedBy: string
     ): Promise<boolean>;
     saveSubmissionDraft(draft: TaskSubmissionDraft): Promise<void>;
     getSubmissionDraft(userId: string): Promise<TaskSubmissionDraft | null>;
@@ -51,9 +51,5 @@ export interface ITaskRepository {
     // Utilities
     deleteAllTasks(): Promise<void>;
     seedTasks(tasks: Task[]): Promise<void>;
-    voteInPollOnce(
-        pollId: string,
-        userId: string,
-        optionId: string,
-    ): Promise<{ firstTime: boolean; updatedPoll: TaskPoll }>;
+    voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: TaskPoll; }>;
 }

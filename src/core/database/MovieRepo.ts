@@ -99,17 +99,23 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
     }
 
     async getActiveEvent(): Promise<MovieEvent | null> {
-        const snapshot = await this.eventsCollection.where("completed", "==", false).get();
+        const snapshot = await this.eventsCollection
+            .where("completed", "==", false)
+            .get();
 
         const events = snapshot.docs
-            .map((doc) => doc.data())
+            .map(doc => doc.data())
             .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
 
         return events[0] ?? null;
     }
 
     async getLatestEvent(): Promise<MovieEvent | null> {
-        const snapshot = await this.eventsCollection.orderBy("createdAt", "desc").limit(1).get();
+        const snapshot = await this.eventsCollection
+        .orderBy("createdAt", "desc")
+        .limit(1)
+        .get();
+
         return snapshot.docs[0]?.data() ?? null;
     }
 
@@ -125,11 +131,7 @@ export class MovieRepository extends GuildScopedRepository<Movie> implements IMo
         await batch.commit();
     }
 
-    async voteInPollOnce(
-        pollId: string,
-        userId: string,
-        optionId: string,
-    ): Promise<{ firstTime: boolean; updatedPoll: MoviePoll }> {
+    async voteInPollOnce(pollId: string, userId: string, optionId: string): Promise<{ firstTime: boolean, updatedPoll: MoviePoll; }> {
         const pollRef = this.pollsCollection.doc(pollId);
         return this.db.runTransaction(async (tx) => {
             const snap = await tx.get(pollRef);

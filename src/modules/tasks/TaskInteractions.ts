@@ -1,16 +1,4 @@
-import {
-    ButtonInteraction,
-    Message,
-    Client,
-    ModalSubmitInteraction,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    MessageFlags,
-} from "discord.js";
+import { ButtonInteraction, Message, Client, ModalSubmitInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
 import { SubmissionStatus } from "../../models/TaskSubmission.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { getTaskDisplayName, submissionLabel, TIER_DISPLAY } from "./TaskEmbeds.js";
@@ -56,7 +44,7 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
 
     try {
         await interaction.user.send(
-            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`,
+            `Please upload your screenshot(s) for **${taskName}** and include any notes/comments in the same message.`
         );
         await interaction.editReply({
             content: `Check your DMs to submit your screenshot(s) for **${taskName}**!`,
@@ -64,7 +52,7 @@ export async function handleSubmitButton(interaction: ButtonInteraction, service
     } catch {
         await services.tasks.consumePendingTask(userId);
         await interaction.editReply({
-            content: "I couldn't send you a DM. Please enable direct messages from server members and try again.",
+            content: "I couldn't send you a DM. Please enable direct messages from server members and try again."
         });
     }
 }
@@ -91,36 +79,21 @@ export async function handleDirectMessage(message: Message, client: Client, serv
     }
 
     try {
-        const outcome = await services.tasks.completeSubmission(
-            client,
-            message.author.id,
-            taskEventId,
-            imageUrls,
-            services,
-            message.content.trim() || undefined,
-        );
+        const outcome = await services.tasks.completeSubmission(client, message.author.id, taskEventId, imageUrls, services, message.content.trim() || undefined);
         switch (outcome.result) {
             case "submitted": {
                 const { taskName, screenshotUrls } = outcome.submission;
-                await message.reply(
-                    `✅ Submission for **${taskName ?? "your task"}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? "" : "s"} and sent for review!`,
-                );
+                await message.reply(`✅ Submission for **${taskName ?? "your task"}** received with ${screenshotUrls.length} screenshot${screenshotUrls.length === 1 ? "" : "s"} and sent for review!`);
                 break;
             }
             case "taskNotFound":
-                await message.reply(
-                    "Couldn't locate the task details. Please try submitting again or contact a Task Admin.",
-                );
+                await message.reply("Couldn't locate the task details. Please try submitting again or contact a Task Admin.");
                 break;
             case "adminsUnreachable":
-                await message.reply(
-                    "I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.",
-                );
+                await message.reply("I couldn't pass your submission on to the Task Admins just now. Please send it again later, or contact a Task Admin.");
                 break;
             case "alreadySubmitted":
-                await message.reply(
-                    "I've already received your submission for this task. To send another, click Submit on the task again.",
-                );
+                await message.reply("I've already received your submission for this task. To send another, click Submit on the task again.");
                 break;
         }
     } catch (err) {
@@ -167,8 +140,8 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
                             .setCustomId("reason")
                             .setLabel("Rejection Reason")
                             .setStyle(TextInputStyle.Paragraph)
-                            .setRequired(false),
-                    ),
+                            .setRequired(false)
+                    )
                 );
             await interaction.showModal(modal);
             return;
@@ -210,14 +183,12 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
                 submissionId,
                 tier,
                 reviewerId,
-                services,
+                services
             );
 
             if (!result) {
                 const reviewed = await taskRepo.getSubmissionById(submissionId);
-                await interaction.editReply({
-                    content: alreadyReviewedReply(reviewed?.status),
-                });
+                await interaction.editReply({ content: alreadyReviewedReply(reviewed?.status) });
                 return;
             }
 
@@ -227,14 +198,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
 
             if (deltaPoints > 0) {
                 await incrementLifetimePoints(services, result.userId, deltaPoints);
-                await incrementPeriodicPoints(
-                    services,
-                    result.userId,
-                    deltaPoints,
-                    result.taskEventId,
-                    tier,
-                    result.previousStatus,
-                );
+                await incrementPeriodicPoints(services, result.userId, deltaPoints, result.taskEventId, tier, result.previousStatus);
             }
 
             await applyTaskMilestoneRoles(interaction.client, services, result.userId);
@@ -257,7 +221,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
                 content: kept
                     ? `✅ Submission approved for **${formattedTier} tier**${archivedEnding(result.archived)} The member already holds ${kept.emoji} ${kept.name} for this task, so their tier is unchanged.`
                     : `✅ Submission approved for **${formattedTier} tier** (${result.prizeRolls ?? 0} roll${(result.prizeRolls ?? 0) > 1 ? "s" : ""})${archivedEnding(result.archived)}`,
-                components: [],
+                components: []
             });
         } catch (err) {
             console.error("[TaskInteractions] Tier approval failed:", err);
@@ -299,7 +263,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             new ButtonBuilder()
                 .setCustomId(`review-cancel|${submissionId}`)
                 .setLabel("Cancel")
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.reply({
@@ -324,7 +288,7 @@ export async function handleAdminButton(interaction: ButtonInteraction, services
             new ButtonBuilder()
                 .setCustomId(`review-cancel|${submissionId}`)
                 .setLabel("Cancel")
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
         );
 
         await interaction.reply({
@@ -356,7 +320,7 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
         SubmissionStatus.Rejected,
         reviewerId,
         services,
-        reason,
+        reason
     );
 
     if (!updated) {
@@ -387,4 +351,5 @@ export async function handleRejectionModal(interaction: ModalSubmitInteraction, 
             console.warn(`[TaskInteractions] Failed to notify task admins in channel ${adminChannel.id}:`, err);
         }
     }
+
 }

@@ -16,12 +16,7 @@ export class ManualPollSelections {
     private readonly selections = new Map<string, ManualPollSelection>();
 
     get(userId: string): ManualPollSelection {
-        let selection = this.selections.get(userId);
-        if (!selection) {
-            selection = { selected: new Set<string>(), page: 0 };
-            this.selections.set(userId, selection);
-        }
-        return selection;
+        return this.selections.getOrInsertComputed(userId, () => ({ selected: new Set<string>(), page: 0 }));
     }
 
     select(userId: string, movieIds: string[]): void {
@@ -41,6 +36,7 @@ function normalizeLabel(title: string): string {
     const t = (title || "Untitled").trim();
     return t.length >= 5 ? t.slice(0, 100) : t.padEnd(5, ".");
 }
+
 
 export async function showMovieManualPollMenu(services: ServiceContainer, interaction: MessageComponentInteraction) {
     const movieRepo = services.repos.movieRepo;
@@ -78,7 +74,7 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
         .setPlaceholder(
             remaining > 0
                 ? `Pick up to ${remaining} more movie${remaining > 1 ? "s" : ""}`
-                : "Selection limit reached (5)",
+                : "Selection limit reached (5)"
         )
         .setMinValues(0);
 
@@ -90,7 +86,9 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
         selectMenu.setMaxValues(Math.min(remaining, options.length));
     } else {
         // Disable further selection once the limit is reached to avoid invalid max_values payloads.
-        selectMenu.setDisabled(true).setMaxValues(Math.min(1, Math.max(options.length, 1)));
+        selectMenu
+            .setDisabled(true)
+            .setMaxValues(Math.min(1, Math.max(options.length, 1)));
     }
 
     const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -109,7 +107,10 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
             .setLabel("Confirm")
             .setStyle(ButtonStyle.Success)
             .setDisabled(session.selected.size < 2),
-        new ButtonBuilder().setCustomId("movie_poll_manual_cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId("movie_poll_manual_cancel")
+            .setLabel("Cancel")
+            .setStyle(ButtonStyle.Danger)
     );
 
     const selectedTitles = allMovies
@@ -124,10 +125,15 @@ export async function showMovieManualPollMenu(services: ServiceContainer, intera
 
     const content = [
         `Select **up to 5** movies for the poll (Page ${page + 1})`,
-        selectedTitles ? `\n**Currently selected:**\n${selectedTitles}` : `\n_No movies selected yet._`,
+        selectedTitles
+            ? `\n**Currently selected:**\n${selectedTitles}`
+            : `\n_No movies selected yet._`,
     ].join("\n");
 
-    const components = [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu), controlRow];
+    const components = [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu),
+        controlRow,
+    ];
 
     await interaction.editReply({ content, components });
 }

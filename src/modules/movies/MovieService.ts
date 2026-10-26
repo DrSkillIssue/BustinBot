@@ -71,19 +71,21 @@ export async function fetchMovieDetailsById(id: number): Promise<Partial<Movie> 
     if (!details?.id) return null;
 
     // Extract director and top 3 billed cast
-    const director = credits.crew?.find((member) => member.job === "Director")?.name ?? undefined;
+    const director =
+        credits.crew?.find((member) => member.job === "Director")?.name ?? undefined;
     const cast =
-        credits.cast
-            ?.slice(0, 3)
-            .map((actor) => actor.name)
-            .filter(Boolean) ?? [];
+        credits.cast?.slice(0, 3).map((actor) => actor.name).filter(Boolean) ?? [];
 
     return {
         tmdbId: details.id,
         title: details.title,
         overview: details.overview,
-        releaseDate: details.release_date ? Number(details.release_date.slice(0, 4)) : undefined,
-        posterUrl: details.poster_path ? `${TMDB_IMAGE_BASE}${details.poster_path}` : undefined,
+        releaseDate: details.release_date
+            ? Number(details.release_date.slice(0, 4))
+            : undefined,
+        posterUrl: details.poster_path
+            ? `${TMDB_IMAGE_BASE}${details.poster_path}`
+            : undefined,
         infoUrl: `https://www.themoviedb.org/movie/${details.id}`,
         runtime: details.runtime ?? undefined,
         rating: details.vote_average ?? undefined,
@@ -97,7 +99,7 @@ export const MAX_ACTIVE_MOVIES_PER_USER = 3;
 
 export async function isMovieNightAdmin(
     services: ServiceContainer,
-    interaction: ChatInputCommandInteraction | ButtonInteraction,
+    interaction: ChatInputCommandInteraction | ButtonInteraction
 ): Promise<boolean> {
     if (interaction.guild?.ownerId === interaction.user.id) return true;
     if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
@@ -110,7 +112,7 @@ export async function isMovieNightAdmin(
 export async function checkCanAddMovie(
     services: ServiceContainer,
     interaction: ChatInputCommandInteraction | ButtonInteraction,
-    tmdbId?: number,
+    tmdbId?: number
 ): Promise<string | null> {
     const movies = await services.repos.movieRepo.getAllMovies();
     const active = movies.filter((movie) => !movie.watched);

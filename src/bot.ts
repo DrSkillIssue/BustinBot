@@ -39,14 +39,8 @@ export async function startBot(
     await botStats.init();
 
     const servicesByGuild = new Map<string, ServiceContainer>();
-    const getServices = (guildId: string): ServiceContainer => {
-        let services = servicesByGuild.get(guildId);
-        if (!services) {
-            services = createServiceContainer(db, guildId, botStats);
-            servicesByGuild.set(guildId, services);
-        }
-        return services;
-    };
+    const getServices = (guildId: string): ServiceContainer =>
+        servicesByGuild.getOrInsertComputed(guildId, () => createServiceContainer(db, guildId, botStats));
 
     const primaryGuildId = guildConfigs[0]?.id ?? fallbackGuildId;
     if (!primaryGuildId) {

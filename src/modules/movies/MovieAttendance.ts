@@ -25,7 +25,7 @@ export class MovieAttendance {
         console.log(
             channelId
                 ? `[MovieAttendance] Tracking ${memberIds.length} member(s) in ${channelId} for ${eventId}.`
-                : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`,
+                : `[MovieAttendance] No voice channel for ${eventId}; attendance isn't counted.`
         );
     }
 

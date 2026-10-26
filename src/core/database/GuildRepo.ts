@@ -10,7 +10,11 @@ function isDevMode(): boolean {
 }
 
 function getDevGuildId(): string {
-    return process.env.DISCORD_GUILD_ID_DEV ?? process.env.DISCORD_GUILD_ID ?? DEV_FALLBACK_GUILD_ID;
+    return (
+        process.env.DISCORD_GUILD_ID_DEV ??
+        process.env.DISCORD_GUILD_ID ??
+        DEV_FALLBACK_GUILD_ID
+    );
 }
 
 function isAllowedGuild(guildId: string): boolean {
@@ -57,16 +61,11 @@ export class GuildRepository implements IGuildRepository {
                 ...data,
                 updatedAt: new Date(),
             },
-            { merge: true },
+            { merge: true }
         );
     }
 
-    async updateToggle(
-        guildId: string,
-        toggle: keyof Guild["toggles"],
-        enabled: boolean,
-        userId: string,
-    ): Promise<void> {
+    async updateToggle(guildId: string, toggle: keyof Guild["toggles"], enabled: boolean, userId: string): Promise<void> {
         if (!isAllowedGuild(guildId)) {
             console.warn(`[GuildRepository] Skipping toggle update for guild ${guildId} in dev mode.`);
             return;

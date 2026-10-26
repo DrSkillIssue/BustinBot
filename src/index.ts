@@ -15,7 +15,7 @@ const commandsDir = path.join(import.meta.dirname, "modules", "commands");
 const isDevMode = process.env.BOT_MODE === "dev";
 const botToken = isDevMode
     ? process.env.DISCORD_TOKEN_DEV
-    : (process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV);
+    : process.env.DISCORD_TOKEN_LIVE ?? process.env.DISCORD_TOKEN_DEV;
 
 function resolveCommandSync(): { token: string; clientId: string } | null {
     const enableSync = process.env.ENABLE_GUILD_COMMAND_SYNC === "true" || isDevMode;
@@ -23,7 +23,7 @@ function resolveCommandSync(): { token: string; clientId: string } | null {
 
     const clientId = isDevMode
         ? process.env.DISCORD_CLIENT_ID_DEV
-        : (process.env.DISCORD_CLIENT_ID ?? process.env.DISCORD_CLIENT_ID_DEV);
+        : process.env.DISCORD_CLIENT_ID ?? process.env.DISCORD_CLIENT_ID_DEV;
 
     if (!botToken || !clientId) {
         console.warn("[SlashCommands] Skipping guild sync; missing token or client ID env vars.");
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
                     (err) => {
                         console.error("[Shutdown] BustinBot did not stop cleanly:", err);
                         process.exit(1);
-                    },
+                    }
                 );
         });
     }

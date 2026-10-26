@@ -14,12 +14,11 @@ const updatetask: Command = {
     slashData: new SlashCommandBuilder()
         .setName("updatetask")
         .setDescription("Update an existing task and its embed if currently active.")
-        .addStringOption((opt) =>
-            opt
-                .setName("id")
+        .addStringOption(opt =>
+            opt.setName("id")
                 .setDescription("The task to update: type part of its name or ID")
                 .setRequired(true)
-                .setAutocomplete(true),
+                .setAutocomplete(true)
         ),
 
     async autocomplete({ interaction, services }) {
@@ -28,7 +27,7 @@ const updatetask: Command = {
             (query
                 ? await services.tasks.searchTasks(query, 25)
                 : (await services.tasks.getAllTasks()).slice(0, 25)
-            ).map((task) => ({ name: truncate(`${task.id} · ${task.taskName}`, 100), value: task.id })),
+            ).map((task) => ({ name: truncate(`${task.id} · ${task.taskName}`, 100), value: task.id }))
         );
     },
 
@@ -54,14 +53,12 @@ const updatetask: Command = {
             .setStringSelectMenuComponent(
                 new StringSelectMenuBuilder()
                     .setCustomId("type")
-                    .addOptions(
-                        Object.values(TaskType).map((value) => ({ label: value, value, default: value === task.type })),
-                    ),
+                    .addOptions(Object.values(TaskType).map((value) => ({ label: value, value, default: value === task.type })))
             );
         modal.addLabelComponents(...taskFormFields(task), type);
 
         await interaction.showModal(modal);
-    },
-};
+    }
+}
 
 export default updatetask;

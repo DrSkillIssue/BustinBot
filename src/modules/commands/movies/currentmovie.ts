@@ -16,13 +16,7 @@ const currentmovie: Command = {
         .setName("currentmovie")
         .setDescription("View the currently scheduled movie night details."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

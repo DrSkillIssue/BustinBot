@@ -1,12 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ActionRowBuilder,
-    ChannelSelectMenuBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ChannelType,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { channelLabel } from "../../../utils/TextUtils.js";
@@ -33,21 +25,26 @@ const setup: Command = {
 
         const announceSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_announce")
-            .setPlaceholder(`Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
+            .setPlaceholder(
+                `Channel for bot announcements (Current: ${channelLabel(guild, current.announcements)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
 
         const logSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_log")
-            .setPlaceholder(`Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`)
+            .setPlaceholder(
+                `Channel for errors and logs (Current: ${channelLabel(guild, current.botLog)})`
+            )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
 
         const archiveSelect = new ChannelSelectMenuBuilder()
             .setCustomId("setup_archive")
-            .setPlaceholder(`Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`)
+            .setPlaceholder(
+                `Channel for archived posts (Current: ${channelLabel(guild, current.botArchive)})`
+            )
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
@@ -74,9 +71,9 @@ const setup: Command = {
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(logSelect),
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(archiveSelect),
                 new ActionRowBuilder<ButtonBuilder>().addComponents(timezoneButton, confirmButton, cancelButton),
-            ],
+            ]
         });
-    },
+    }
 };
 
 export default setup;

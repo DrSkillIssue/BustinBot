@@ -35,7 +35,7 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
         },
         setupComplete: {
             movie: true,
-        },
+        }
     }),
     task: (selections) => ({
         roles: {
@@ -49,7 +49,7 @@ const PAYLOAD_BUILDERS: Record<SetupType, PayloadBuilder> = {
         ...(selections.taskPeriodEvents ? { taskSettings: { periodEvents: Number(selections.taskPeriodEvents) } } : {}),
         setupComplete: {
             task: true,
-        },
+        }
     }),
 };
 
@@ -61,10 +61,7 @@ export class SetupService {
     };
 
     setSelection(type: SetupType, userId: string, key: string, value: string) {
-        const map = this.selections[type];
-        const current = map.get(userId) ?? {};
-        current[key] = value;
-        map.set(userId, current);
+        this.selections[type].getOrInsertComputed(userId, () => ({}))[key] = value;
     }
 
     getSelections(type: SetupType, userId: string): SelectionMap | undefined {
@@ -80,7 +77,12 @@ export class SetupService {
         return REQUIRED_FIELDS[type].filter((field) => !selections[field]);
     }
 
-    async persist(type: SetupType, guildService: GuildService, guildId: string, selections: SelectionMap) {
+    async persist(
+        type: SetupType,
+        guildService: GuildService,
+        guildId: string,
+        selections: SelectionMap
+    ) {
         const builder = PAYLOAD_BUILDERS[type];
         const payload = builder(selections);
 
@@ -116,4 +118,5 @@ export class SetupService {
 
         console.log(`[SetupService] Persisted ${type} setup for ${guildId}`);
     }
+
 }

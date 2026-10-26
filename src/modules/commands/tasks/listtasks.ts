@@ -25,16 +25,10 @@ const listtasks: Command = {
                     { name: TaskCategory.Skilling, value: TaskCategory.Skilling },
                     { name: TaskCategory.MinigameMisc, value: TaskCategory.MinigameMisc },
                     { name: TaskCategory.Leagues, value: TaskCategory.Leagues },
-                ),
+                )
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });

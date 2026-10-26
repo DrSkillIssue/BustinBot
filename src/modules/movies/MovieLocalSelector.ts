@@ -5,10 +5,7 @@ import { createMovieEmbed } from "./MovieEmbeds.js";
 import { injectMockUsers, getDisplayNameFromAddedBy } from "./MovieMockUtils.js";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 
-export async function resolveGuildContext(
-    client: Client,
-    services: ServiceContainer,
-): Promise<{ guildId: string | null; guildName: string }> {
+export async function resolveGuildContext(client: Client, services: ServiceContainer): Promise<{ guildId: string | null; guildName: string; }> {
     let guildId: string | undefined = services.guildId;
 
     if (!guildId) {
@@ -47,20 +44,24 @@ export async function pickRandomMovie(services: ServiceContainer): Promise<Movie
 
 export async function buildMovieEmbedWithMeta(
     movie: Movie,
-    style: "random" | "chosen" | "preview" = "random",
+    style: "random" | "chosen" | "preview" = "random"
 ): Promise<EmbedBuilder> {
     const embed = createMovieEmbed(movie);
     const existingDescription = embed.data.description ?? "";
     const addedByText = getDisplayNameFromAddedBy(movie.addedBy, movie.addedByDisplay);
     const addedByLine = `\n\n*Added by ${addedByText}*`;
 
-    const titlePrefix = style === "random" ? "🎲" : style === "chosen" ? "🎯" : "🎥";
+    const titlePrefix =
+        style === "random" ? "🎲" :
+            style === "chosen" ? "🎯" :
+                "🎥";
 
     embed.setTitle(`${titlePrefix} ${movie.title}`);
     embed.setDescription(`${existingDescription}${addedByLine}`);
 
     return embed;
 }
+
 
 export async function notifyMovieSubmitter(selectedMovie: Movie, client: Client, services: ServiceContainer) {
     if (!selectedMovie.addedBy) return;

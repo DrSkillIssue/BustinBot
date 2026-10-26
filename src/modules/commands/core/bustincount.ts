@@ -21,7 +21,7 @@ const bustincount: Command = {
 
         if (interaction) await interaction.reply({ content: response, flags: MessageFlags.Ephemeral });
         else if (message) await message.reply(response);
-    },
+    }
 };
 
 export default bustincount;

@@ -9,7 +9,9 @@ const goodbot: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
 
-    slashData: new SlashCommandBuilder().setName("goodbot").setDescription("Praise BustinBot."),
+    slashData: new SlashCommandBuilder()
+        .setName("goodbot")
+        .setDescription("Praise BustinBot."),
 
     async execute({ interaction, message, services }) {
         const guild = message?.guild ?? interaction?.guild ?? null;

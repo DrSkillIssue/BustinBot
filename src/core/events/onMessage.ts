@@ -33,7 +33,7 @@ export async function handleMessage(message: Message, commands: Map<string, Comm
     // Role-based permission logic
     const hasPermission =
         command.allowedRoles.includes(CommandRole.Everyone) ||
-        command.allowedRoles.some((role) => {
+        command.allowedRoles.some(role => {
             switch (role) {
                 case CommandRole.BotAdmin:
                     return guildRoles.admin && userRoleIds.includes(guildRoles.admin);

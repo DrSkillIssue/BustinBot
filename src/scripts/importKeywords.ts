@@ -28,10 +28,7 @@ async function importKeywords(guildId: string, filePath: string) {
     console.log(`Found ${words.length} keywords`);
 
     for (const word of words) {
-        const id = word
-            .toLowerCase()
-            .replace(/\s+/g, "_")
-            .replace(/[^\w_]/g, "");
+        const id = word.toLowerCase().replace(/\s+/g, "_").replace(/[^\w_]/g, "");
 
         const keyword: Keyword = {
             id,

@@ -16,13 +16,7 @@ const closemoviepoll: Command = {
         .setName("closemoviepoll")
         .setDescription("Manually close the active movie poll and announce the winner."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -39,13 +33,13 @@ const closemoviepoll: Command = {
                 result.winner,
                 interaction.user.username,
                 result.winningVotes ?? 0,
-                result.tieBreak ?? false,
+                result.tieBreak ?? false
             );
             await channel?.send({ embeds: [embed] });
         }
 
         await interaction.editReply(`✅ Movie poll closed successfully.\n${result.message}`);
-    },
-};
+    }
+}
 
 export default closemoviepoll;

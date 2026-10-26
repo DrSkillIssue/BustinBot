@@ -1,18 +1,11 @@
-import {
-    AutocompleteInteraction,
-    ChatInputCommandInteraction,
-    Message,
-    SlashCommandBuilder,
-    type SlashCommandOptionsOnlyBuilder,
-    type SlashCommandSubcommandsOnlyBuilder,
-} from "discord.js";
+import { AutocompleteInteraction, ChatInputCommandInteraction, Message, SlashCommandBuilder, type SlashCommandOptionsOnlyBuilder, type SlashCommandSubcommandsOnlyBuilder } from "discord.js";
 import type { ServiceContainer } from "../core/services/ServiceContainer.js";
 
 export enum CommandRole {
     Everyone = "Everyone",
     TaskAdmin = "TaskAdmin",
     MovieAdmin = "MovieAdmin",
-    BotAdmin = "BotAdmin",
+    BotAdmin = "BotAdmin"
 }
 
 export enum CommandModule {
@@ -59,5 +52,5 @@ export interface Command {
     autocomplete?: (context: { interaction: AutocompleteInteraction; services: ServiceContainer }) => Promise<void>;
 
     // Optional method to return a SlashCommandBuilder for registering slash commands
-    slashData?: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
+    slashData?: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder
 }

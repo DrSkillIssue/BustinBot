@@ -19,12 +19,7 @@ import {
     shouldFinalizePeriodicLeaderboard,
     type RankedEntry,
 } from "./TaskLeaderboards.js";
-import type {
-    TaskLeaderboard,
-    TaskLeaderboardEntry,
-    TaskLeaderboardPeriod,
-    TaskTierCounts,
-} from "../../models/TaskLeaderboard.js";
+import type { TaskLeaderboard, TaskLeaderboardEntry, TaskLeaderboardPeriod, TaskTierCounts } from "../../models/TaskLeaderboard.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../utils/MentionUtils.js";
 
 async function resolveTaskUserMention(services: ServiceContainer): Promise<string | null> {
@@ -38,7 +33,7 @@ async function sendLeaderboardEmbed(
     services: ServiceContainer,
     channel: GuildTextBasedChannel,
     embed: EmbedBuilder,
-    mention?: string | null,
+    mention?: string | null
 ): Promise<void> {
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
@@ -55,7 +50,7 @@ type PeriodFooter = { elapsed: number; total: number };
 async function notifyChampionWinners(
     client: Client,
     services: ServiceContainer,
-    placements: ReturnType<typeof resolvePeriodicPlacements>,
+    placements: ReturnType<typeof resolvePeriodicPlacements>
 ): Promise<void> {
     const guild = await client.guilds.fetch(services.guildId);
     const guildName = guild.name;
@@ -69,13 +64,13 @@ async function notifyChampionWinners(
 
     const roleNames = {
         first: guildConfig?.roles?.taskChampionFirst
-            ? (guild.roles.cache.get(guildConfig.roles.taskChampionFirst)?.name ?? null)
+            ? guild.roles.cache.get(guildConfig.roles.taskChampionFirst)?.name ?? null
             : null,
         second: guildConfig?.roles?.taskChampionSecond
-            ? (guild.roles.cache.get(guildConfig.roles.taskChampionSecond)?.name ?? null)
+            ? guild.roles.cache.get(guildConfig.roles.taskChampionSecond)?.name ?? null
             : null,
         third: guildConfig?.roles?.taskChampionThird
-            ? (guild.roles.cache.get(guildConfig.roles.taskChampionThird)?.name ?? null)
+            ? guild.roles.cache.get(guildConfig.roles.taskChampionThird)?.name ?? null
             : null,
     };
 
@@ -95,7 +90,7 @@ async function notifyChampionWinners(
                         ? `You have been awarded the **${entry.roleName}** role to flex.`
                         : "Your placement has been recorded by the task admins.";
                 await user.send(
-                    `🏆 Congratulations! You placed **${entry.label}** on the periodic task leaderboard in **${guildName}**.\n${roleLine}`,
+                    `🏆 Congratulations! You placed **${entry.label}** on the periodic task leaderboard in **${guildName}**.\n${roleLine}`
                 );
             } catch (err) {
                 console.warn(`[LeaderboardUpdate] Failed to DM leaderboard winner ${winner.userId}:`, err);
@@ -111,7 +106,7 @@ async function buildFinalLeaderboardEmbed(
     placements: ReturnType<typeof resolvePeriodicPlacements>,
     topTen: RankedEntry<TaskLeaderboardEntry>[],
     summaryNote?: string,
-    options?: { periodLabel?: string; footer?: PeriodFooter; tierCounts?: Record<string, TaskTierCounts> },
+    options?: { periodLabel?: string; footer?: PeriodFooter; tierCounts?: Record<string, TaskTierCounts> }
 ): Promise<EmbedBuilder> {
     const context = { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) };
     const topTenLines = await buildTopTenTableLines(topTen, context, options?.tierCounts ?? leaderboard.tierCounts);
@@ -123,17 +118,17 @@ async function buildFinalLeaderboardEmbed(
         ].map(async (group) => {
             if (group.winners.length === 0) return `${group.label} — None`;
             const names = await Promise.all(
-                group.winners.map(async (entry) => await getUserLabel(entry.userId, context)),
+                group.winners.map(async (entry) => await getUserLabel(entry.userId, context))
             );
             return `${group.label} ${names.join(", ")}`;
-        }),
+        })
     );
 
     const periodLabel = options?.periodLabel ?? resolvePeriodicLabel(leaderboard.period?.length);
     const descriptionLines = [
         "The leaderboard period has ended! Congratulations to our top finishers.",
         "Temporary Task Champion roles have been awarded to the top 3.",
-        `${periodLabel} leaderboard standings have been reset.`,
+        `${periodLabel} leaderboard standings have been reset.`
     ];
 
     if (summaryNote) {
@@ -152,7 +147,7 @@ async function buildFinalLeaderboardEmbed(
             {
                 name: "Final Top 10",
                 value: topTenLines.length ? topTenLines.join("\n") : "No points recorded yet.",
-            },
+            }
         );
 
     if (options?.footer) {
@@ -169,17 +164,13 @@ async function postCurrentStandings(
     client: Client,
     services: ServiceContainer,
     leaderboard: TaskLeaderboard,
-    period: TaskLeaderboardPeriod,
+    period: TaskLeaderboardPeriod
 ): Promise<boolean> {
     const channel = await configuredChannel(client, services, "taskChannel");
     if (!channel) return false;
 
     const topTen = buildRankedPeriodicEntries(leaderboard.points).slice(0, 10);
-    const lines = await buildTopTenTableLines(
-        topTen,
-        { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) },
-        leaderboard.tierCounts,
-    );
+    const lines = await buildTopTenTableLines(topTen, { client, guild: await client.guilds.fetch(services.guildId).catch(() => null) }, leaderboard.tierCounts);
     const progress = await resolvePeriodicProgress(services, period);
 
     const embed = new EmbedBuilder()
@@ -194,7 +185,7 @@ async function postCurrentStandings(
             {
                 name: "Period Progress",
                 value: `Week ${progress.elapsed + 1} of ${period.length}`,
-            },
+            }
         )
         .setFooter({
             text: `Task events elapsed: ${progress.elapsed}/${period.length}`,
@@ -253,7 +244,7 @@ export async function postFinalLeaderboardSnapshot(client: Client, services: Ser
                 periodLabel: resolvePeriodicLabel(elapsed),
                 footer: { elapsed, total: elapsed },
                 tierCounts: completed.tierCounts ?? {},
-            },
+            }
         );
         const mention = await resolveTaskUserMention(services);
         await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
@@ -264,7 +255,7 @@ export async function postFinalLeaderboardSnapshot(client: Client, services: Ser
     const ranked = buildRankedPeriodicEntries(leaderboard.points);
     const topTen = ranked.slice(0, 10);
     const placements = resolvePeriodicPlacements(
-        ranked.map((entry) => ({ userId: entry.userId, points: entry.points })),
+        ranked.map((entry) => ({ userId: entry.userId, points: entry.points }))
     );
     const finalEmbed = await buildFinalLeaderboardEmbed(client, services, leaderboard, placements, topTen, undefined, {
         periodLabel: resolvePeriodicLabel(leaderboard.period.length),
@@ -302,7 +293,7 @@ export async function postPeriodicLeaderboardUpdate(client: Client, services: Se
             rankedAll.map((entry) => ({
                 userId: entry.userId,
                 points: entry.points,
-            })),
+            }))
         );
 
         await finalizePeriodicLeaderboard(services, leaderboard, placements.winners);
@@ -311,22 +302,14 @@ export async function postPeriodicLeaderboardUpdate(client: Client, services: Se
         const channel = await configuredChannel(client, services, "taskChannel");
         if (channel) {
             const progress = await resolvePeriodicProgress(services, period);
-            const finalEmbed = await buildFinalLeaderboardEmbed(
-                client,
-                services,
-                leaderboard,
-                placements,
-                rankedAll.slice(0, 10),
-                undefined,
-                {
-                    periodLabel: resolvePeriodicLabel(period.length),
-                    footer: {
-                        elapsed: progress.elapsed,
-                        total: progress.total,
-                    },
-                    tierCounts: leaderboard.tierCounts ?? {},
+            const finalEmbed = await buildFinalLeaderboardEmbed(client, services, leaderboard, placements, rankedAll.slice(0, 10), undefined, {
+                periodLabel: resolvePeriodicLabel(period.length),
+                footer: {
+                    elapsed: progress.elapsed,
+                    total: progress.total,
                 },
-            );
+                tierCounts: leaderboard.tierCounts ?? {},
+            });
             const mention = await resolveTaskUserMention(services);
             await sendLeaderboardEmbed(services, channel, finalEmbed, mention);
         }
@@ -359,7 +342,7 @@ export async function warnPendingLeaderboardFinalization(client: Client, service
         leaderboard.period.eventIds.map(async (eventId) => {
             const submissions = await taskRepo.getSubmissionsForTask(eventId);
             return submissions.filter((submission) => submission.status === SubmissionStatus.Pending).length;
-        }),
+        })
     );
 
     const pendingTotal = pendingCounts.reduce((sum, count) => sum + count, 0);
@@ -372,12 +355,7 @@ export async function warnPendingLeaderboardFinalization(client: Client, service
     const mention = adminRoleId ? `<@&${adminRoleId}>` : "Task Admins";
     const suppressMentions = await isMentionSuppressed(services.guilds, services.guildId);
 
-    await channel.send(
-        withSuppressedMentions(
-            {
-                content: `${mention} There are ${pendingTotal} pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`,
-            },
-            suppressMentions,
-        ),
-    );
+    await channel.send(withSuppressedMentions({
+        content: `${mention} There are ${pendingTotal} pending task submissions and the periodic leaderboard will finalise in ~24 hours. Please review before the update.`
+    }, suppressMentions));
 }

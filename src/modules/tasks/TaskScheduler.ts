@@ -14,15 +14,9 @@ let nextPollTime: Date | null = null;
 let nextEventTime: Date | null = null;
 let nextPrizeTime: Date | null = null;
 
-export function getNextPollDate() {
-    return nextPollTime;
-}
-export function getNextEventDate() {
-    return nextEventTime;
-}
-export function getNextPrizeDrawDate() {
-    return nextPrizeTime;
-}
+export function getNextPollDate() { return nextPollTime; }
+export function getNextEventDate() { return nextEventTime; }
+export function getNextPrizeDrawDate() { return nextPrizeTime; }
 
 // TODO: Replace with config store (admin editable)
 const defaultSchedule = {
@@ -54,7 +48,7 @@ function getNextRunDate(expression: string): Date | null {
 function getNextMatchingRunDate(
     expression: string,
     predicate: (date: Date) => boolean,
-    baseDate: Date = new Date(),
+    baseDate: Date = new Date()
 ): Date | null {
     try {
         const interval = CronExpressionParser.parse(expression, {
@@ -102,13 +96,12 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
     const baseMinutes = base.minute;
     const remainder = baseMinutes % testIntervalMinutes;
 
-    const pollOffset =
-        (testIntervalMinutes - 1 - remainder + testIntervalMinutes) % testIntervalMinutes || testIntervalMinutes;
-    const eventOffset = (testIntervalMinutes - remainder) % testIntervalMinutes || testIntervalMinutes;
+    const pollOffset = ((testIntervalMinutes - 1 - remainder + testIntervalMinutes) % testIntervalMinutes) || testIntervalMinutes;
+    const eventOffset = ((testIntervalMinutes - remainder) % testIntervalMinutes) || testIntervalMinutes;
 
     const cycleMinutes = 2 * testIntervalMinutes;
-    const prizeRemainder = (((baseMinutes - 1) % cycleMinutes) + cycleMinutes) % cycleMinutes;
-    const prizeOffset = (cycleMinutes - prizeRemainder) % cycleMinutes || cycleMinutes;
+    const prizeRemainder = ((baseMinutes - 1) % cycleMinutes + cycleMinutes) % cycleMinutes;
+    const prizeOffset = ((cycleMinutes - prizeRemainder) % cycleMinutes) || cycleMinutes;
 
     nextPollTime = base.plus({ minutes: pollOffset }).toJSDate();
     nextEventTime = base.plus({ minutes: eventOffset }).toJSDate();
@@ -119,10 +112,7 @@ function updateTestModeNextTimes(reference: Date = new Date()) {
 const PRIZE_WEEKS: WeekSettings = { firstDay: 7, minimalDays: 1, weekend: [6, 7] };
 
 function isPrizeDrawWeek(date: Date): boolean {
-    const week = DateTime.fromMillis(date.getTime(), {
-        zone: schedulerTimezone,
-        weekSettings: PRIZE_WEEKS,
-    }).localWeekNumber;
+    const week = DateTime.fromMillis(date.getTime(), { zone: schedulerTimezone, weekSettings: PRIZE_WEEKS }).localWeekNumber;
     return (week + defaultSchedule.prizeWeekOffset) % defaultSchedule.prizeFrequencyWeeks === 0;
 }
 
@@ -172,39 +162,35 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
         const T = testIntervalMinutes;
         updateTestModeNextTimes();
 
-        cron.schedule(
-            "* * * * *",
-            async () => {
-                const now = new Date();
-                const minute = now.getMinutes();
-                updateTestModeNextTimes(now);
+        cron.schedule("* * * * *", async () => {
+            const now = new Date();
+            const minute = now.getMinutes();
+            updateTestModeNextTimes(now);
 
-                if (minute % T === T - 1) {
-                    await runTaskPollJob(client, services);
-                    if (nextPollTime) {
-                        SchedulerStatusReporter.onNewTrigger("[TEST] Task Poll", nextPollTime);
-                    }
+            if (minute % T === (T - 1)) {
+                await runTaskPollJob(client, services);
+                if (nextPollTime) {
+                    SchedulerStatusReporter.onNewTrigger("[TEST] Task Poll", nextPollTime);
                 }
+            }
 
-                if (minute % T === 0) {
-                    await runTaskStartJob(client, services);
-                    if (nextEventTime) {
-                        SchedulerStatusReporter.onNewTrigger("[TEST] Task Event", nextEventTime);
-                    }
+            if (minute % T === 0) {
+                await runTaskStartJob(client, services);
+                if (nextEventTime) {
+                    SchedulerStatusReporter.onNewTrigger("[TEST] Task Event", nextEventTime);
                 }
+            }
 
-                if ((minute - 1) % (2 * T) === 0) {
-                    console.log("[TaskScheduler] [TEST] Running prize draw...");
-                    await drawPrize(client, services);
-                    if (nextPrizeTime) {
-                        SchedulerStatusReporter.onNewTrigger("[TEST] Prize Draw", nextPrizeTime);
-                    }
+            if ((minute - 1) % (2 * T) === 0) {
+                console.log("[TaskScheduler] [TEST] Running prize draw...");
+                await drawPrize(client, services);
+                if (nextPrizeTime) {
+                    SchedulerStatusReporter.onNewTrigger("[TEST] Prize Draw", nextPrizeTime);
                 }
-                console.log("[TaskScheduler] Test mode active (interval: every 7 minutes)");
-                return;
-            },
-            jobOptions(guildId, "test"),
-        );
+            }
+            console.log("[TaskScheduler] Test mode active (interval: every 7 minutes)");
+            return;
+        }, jobOptions(guildId, "test"));
     } else {
         // ------------------------------
         // PRODUCTION MODE (admin-configured cycle)
@@ -217,7 +203,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
                 nextPollTime = getNextRunDate(pollExpr);
                 if (nextPollTime) SchedulerStatusReporter.onNewTrigger("Task Poll", nextPollTime);
             },
-            jobOptions(guildId, "poll"),
+            jobOptions(guildId, "poll")
         );
 
         cron.schedule(
@@ -228,7 +214,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
                 nextEventTime = getNextRunDate(eventExpr);
                 if (nextEventTime) SchedulerStatusReporter.onNewTrigger("Task Event", nextEventTime);
             },
-            jobOptions(guildId, "taskStart"),
+            jobOptions(guildId, "taskStart")
         );
 
         const scheduleNextPrize = (reference: Date) => {
@@ -247,18 +233,18 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
                     scheduleNextPrize(new Date());
                 }
             },
-            jobOptions(guildId, "prizeDraw"),
+            jobOptions(guildId, "prizeDraw")
         );
         cron.schedule(
             "0 0 * * 2",
             () => warnPendingLeaderboardFinalization(client, services),
-            jobOptions(guildId, "leaderboardWarning"),
+            jobOptions(guildId, "leaderboardWarning")
         );
 
         cron.schedule(
             "0 0 * * 3",
             () => postPeriodicLeaderboardUpdate(client, services),
-            jobOptions(guildId, "leaderboardUpdate"),
+            jobOptions(guildId, "leaderboardUpdate")
         );
         const pollExpr = `0 ${defaultSchedule.pollHourUTC} * * ${defaultSchedule.pollDay}`;
         nextPollTime = getNextRunDate(pollExpr);
@@ -275,11 +261,7 @@ export async function initTaskScheduler(client: Client, services: ServiceContain
 
 export function taskSchedulerJobs(guildId: string): Map<string, ScheduledTask> {
     const prefix = `${JOB_PREFIX}:${guildId}:`;
-    return new Map(
-        [...cron.getTasks().values()].flatMap((job) =>
-            job.name?.startsWith(prefix) ? [[job.name.slice(prefix.length), job]] : [],
-        ),
-    );
+    return new Map([...cron.getTasks().values()].flatMap((job) => job.name?.startsWith(prefix) ? [[job.name.slice(prefix.length), job]] : []));
 }
 
 export async function stopTaskScheduler(guildId: string): Promise<void> {

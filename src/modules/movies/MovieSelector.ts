@@ -1,11 +1,4 @@
-import {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonInteraction,
-    ButtonStyle,
-    ChatInputCommandInteraction,
-    MessageFlags,
-} from "discord.js";
+import { ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, MessageFlags } from "discord.js";
 import { randomUUID } from "node:crypto";
 import { createMovieEmbed, createMoviePreviewEmbeds } from "./MovieEmbeds.js";
 import { addMovieWithStats, checkCanAddMovie, fetchMovieDetailsById, searchMovies } from "./MovieService.js";
@@ -27,22 +20,22 @@ export async function presentMovieSelection(
     }
 
     const topResults = results.slice(0, maxResults);
+    const embeds = createMoviePreviewEmbeds(topResults);
+
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         ...topResults.map((result, i) =>
             new ButtonBuilder()
                 .setCustomId(`${ADD_MOVIE_BUTTON}select|${result.id}`)
                 .setLabel(`${i + 1}`)
-                .setStyle(ButtonStyle.Primary),
+                .setStyle(ButtonStyle.Primary)
         ),
-        new ButtonBuilder().setCustomId(`${ADD_MOVIE_BUTTON}cancel`).setLabel("Cancel").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`${ADD_MOVIE_BUTTON}cancel`)
+            .setLabel("Cancel")
+            .setStyle(ButtonStyle.Danger)
     );
 
-    await interaction.editReply({
-        content:
-            "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.",
-        embeds: createMoviePreviewEmbeds(topResults),
-        components: [buttons],
-    });
+    await interaction.editReply({ content: "Here are the **top 3** results for that movie; click the button that matches the movie you're looking for. If none of these match, click **Cancel** and try again with a different search term.", embeds, components: [buttons] });
 }
 
 export async function handleAddMovieButton(services: ServiceContainer, interaction: ButtonInteraction): Promise<void> {
@@ -63,10 +56,7 @@ export async function handleAddMovieButton(services: ServiceContainer, interacti
     // Fetch full metadata from TMDb
     const metadata = await fetchMovieDetailsById(tmdbId);
     if (!metadata?.title) {
-        await interaction.followUp({
-            content: `Could not fetch details for that movie.`,
-            flags: MessageFlags.Ephemeral,
-        });
+        await interaction.followUp({ content: `Could not fetch details for that movie.`, flags: MessageFlags.Ephemeral });
         return;
     }
 

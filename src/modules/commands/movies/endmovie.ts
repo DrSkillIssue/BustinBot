@@ -15,13 +15,7 @@ const endmovie: Command = {
         .setName("endmovie")
         .setDescription("Manually end the current movie night and archive the movie."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -40,7 +34,7 @@ const endmovie: Command = {
         }
 
         await interaction.editReply(result.message);
-    },
+    }
 };
 
 export default endmovie;

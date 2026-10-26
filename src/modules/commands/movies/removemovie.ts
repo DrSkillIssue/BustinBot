@@ -16,17 +16,13 @@ const removemovie: Command = {
     slashData: new SlashCommandBuilder()
         .setName("removemovie")
         .setDescription("Remove a movie you have added from the list (removie).")
-        .addStringOption((option) =>
-            option.setName("title").setDescription("The movie title to remove.").setRequired(true),
+        .addStringOption(option =>
+            option.setName("title")
+                .setDescription("The movie title to remove.")
+                .setRequired(true)
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -36,7 +32,7 @@ const removemovie: Command = {
         const userId = interaction.user.id;
         const isAdmin = interaction.memberPermissions?.has("Administrator") || false;
 
-        try {
+       try {
             // Fetch all movies
             const movies: Movie[] = (await movieRepo.getAllMovies()).filter((movie) => !movie.watched);
 
@@ -78,11 +74,13 @@ const removemovie: Command = {
                 embeds: [embed],
             });
 
-            console.log(`[RemoveMovie] ${interaction.user.username} removed "${matched.title}" (${matched.id})`);
+            console.log(
+                `[RemoveMovie] ${interaction.user.username} removed "${matched.title}" (${matched.id})`
+            );
         } catch (error) {
             console.error("[RemoveMovie Command Error]", error);
             await interaction.editReply(
-                "An error occurred while trying to remove the movie. Check console for details.",
+                "An error occurred while trying to remove the movie. Check console for details."
             );
         }
     },

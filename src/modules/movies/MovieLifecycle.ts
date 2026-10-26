@@ -1,8 +1,8 @@
 import type { Movie } from "../../models/Movie.js";
 import type { MovieEvent } from "../../models/MovieEvent.js";
+import { DateTime } from "luxon";
 import type { ServiceContainer } from "../../core/services/ServiceContainer.js";
 import { Client } from "discord.js";
-import { DateTime } from "luxon";
 import { resolveGuildContext } from "./MovieLocalSelector.js";
 import { MAX_ACTIVE_MOVIES_PER_USER } from "./MovieService.js";
 
@@ -26,24 +26,21 @@ export function movieNightEndsAt(event: MovieEvent): Date | null {
 
 function getMostRecentlySelectedUnwatchedMovie(movies: Movie[]): Movie | null {
     const selectedUnwatched = movies
-        .flatMap((movie) => (!movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : []))
+        .flatMap((movie) => !movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : [])
         .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
     return selectedUnwatched[0]?.movie ?? null;
 }
 
-async function resolveEventToFinish(services: ServiceContainer, targetEventId?: string): Promise<MovieEvent | null> {
+async function resolveEventToFinish(
+    services: ServiceContainer,
+    targetEventId?: string
+): Promise<MovieEvent | null> {
     const event = await services.repos.movieRepo.getActiveEvent();
     return !targetEventId || event?.id === targetEventId ? event : null;
 }
 
-async function notifySubmitterMovieEnded(
-    client: Client,
-    addedBy: string,
-    finishedMovie: Movie,
-    remainingSlots: number,
-    services: ServiceContainer,
-) {
+async function notifySubmitterMovieEnded(client: Client, addedBy: string, finishedMovie: Movie, remainingSlots: number, services: ServiceContainer) {
     const { guildName } = await resolveGuildContext(client, services);
     const plural = remainingSlots === 1 ? "movie" : "movies";
     const message = `Hey <@${addedBy}>, your movie **${finishedMovie.title}** has been watched as part of a movie night in **${guildName}**. You can now add **${remainingSlots} more ${plural}** to the list!`;
@@ -63,7 +60,7 @@ export async function finishMovieNight(
     services: ServiceContainer,
     client: Client,
     now: Date = new Date(),
-    targetEventId?: string,
+    targetEventId?: string
 ): Promise<{ success: boolean; message: string; finishedMovie?: Movie }> {
     const movieRepo = services.repos.movieRepo;
 
@@ -75,7 +72,10 @@ export async function finishMovieNight(
 
         const allMovies = await movieRepo.getAllMovies();
         const eventMovie = latestEvent.movie ?? null;
-        const movieFromDb = eventMovie?.id ? (allMovies.find((movie) => movie.id === eventMovie.id) ?? null) : null;
+        const movieFromDb =
+            eventMovie?.id
+                ? allMovies.find((movie) => movie.id === eventMovie.id) ?? null
+                : null;
         const selectedMovie = getMostRecentlySelectedUnwatchedMovie(allMovies);
         const resolvedMovie = movieFromDb ?? selectedMovie ?? (!isPlaceholderMovie(eventMovie) ? eventMovie : null);
 
@@ -91,19 +91,11 @@ export async function finishMovieNight(
             await movieRepo.upsertMovie(finishedMovie);
             console.log(`[MovieLifecycle] Movie night ended by ${endedBy}: ${finishedMovie.title}`);
 
-            const userMovies = allMovies.filter(
-                (m) => m.addedBy === finishedMovie.addedBy && !m.watched && m.id !== finishedMovie.id,
-            );
-            await notifySubmitterMovieEnded(
-                client,
-                finishedMovie.addedBy,
-                finishedMovie,
-                Math.max(0, MAX_ACTIVE_MOVIES_PER_USER - userMovies.length),
-                services,
-            );
+            const userMovies = allMovies.filter(m => m.addedBy === finishedMovie.addedBy && !m.watched && m.id !== finishedMovie.id);
+            await notifySubmitterMovieEnded(client, finishedMovie.addedBy, finishedMovie, Math.max(0, MAX_ACTIVE_MOVIES_PER_USER - userMovies.length), services);
         } else {
             console.warn(
-                `[MovieLifecycle] Movie night ended by ${endedBy}, but no selected movie record could be resolved for event ${latestEvent.id}.`,
+                `[MovieLifecycle] Movie night ended by ${endedBy}, but no selected movie record could be resolved for event ${latestEvent.id}.`
             );
         }
 

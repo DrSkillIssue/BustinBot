@@ -15,37 +15,25 @@ const testtaskapproval: Command = {
     slashData: new SlashCommandBuilder()
         .setName("testtaskapproval")
         .setDescription("Spawn a fake submission for testing the approval flow.")
-        .addStringOption((opt) =>
-            opt
-                .setName("tier")
+        .addStringOption(opt =>
+            opt.setName("tier")
                 .setDescription("Pre-select a tier (bronze/silver/gold). Omit for random.")
                 .setRequired(false)
                 .addChoices(
                     { name: "Bronze", value: SubmissionStatus.Bronze },
                     { name: "Silver", value: SubmissionStatus.Silver },
                     { name: "Gold", value: SubmissionStatus.Gold },
-                ),
-        )
-        .addStringOption((opt) =>
-            opt
-                .setName("taskid")
+                ))
+        .addStringOption(opt =>
+            opt.setName("taskid")
                 .setDescription("Task event ID (e.g. test-PVM001-123456). Omit for latest.")
-                .setRequired(false),
-        )
-        .addUserOption((opt) =>
-            opt
-                .setName("user")
+                .setRequired(false))
+        .addUserOption(opt =>
+            opt.setName("user")
                 .setDescription("User to attribute the submission to. Omit for yourself.")
-                .setRequired(false),
-        ),
+                .setRequired(false)),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -54,8 +42,8 @@ const testtaskapproval: Command = {
 
         // Resolve tier
         const tierArg = interaction.options.getString("tier");
-        const tiers = Object.values(SubmissionStatus).filter((s) => s === "bronze" || s === "silver" || s === "gold");
-        const tier = tiers.find((t) => t === tierArg) ?? sample(tiers);
+        const tiers = Object.values(SubmissionStatus).filter(s => s === "bronze" || s === "silver" || s === "gold");
+        const tier = tiers.find(t => t === tierArg) ?? sample(tiers);
 
         // Resolve task event
         const taskIdArg = interaction.options.getString("taskid");
@@ -63,17 +51,13 @@ const testtaskapproval: Command = {
         if (taskIdArg) {
             taskEvent = await taskRepo.getTaskEventById(taskIdArg);
             if (!taskEvent) {
-                await interaction.editReply({
-                    content: `❌ Task event \`${taskIdArg}\` not found. This expects an event ID (e.g. \`test-PVM001-123456\`), not a task ID. Run \`/testtask\` first, then use the ID from the embed footer.`,
-                });
+                await interaction.editReply({ content: `❌ Task event \`${taskIdArg}\` not found. This expects an event ID (e.g. \`test-PVM001-123456\`), not a task ID. Run \`/testtask\` first, then use the ID from the embed footer.` });
                 return;
             }
         } else {
             taskEvent = await taskRepo.getLatestTaskEvent();
             if (!taskEvent) {
-                await interaction.editReply({
-                    content: "❌ No task events found. Run `/testtask` first to create one.",
-                });
+                await interaction.editReply({ content: "❌ No task events found. Run `/testtask` first to create one." });
                 return;
             }
         }
@@ -86,14 +70,7 @@ const testtaskapproval: Command = {
 
         // Use the real submission flow: create → complete
         await services.tasks.setPendingTask(userId, taskEvent.id);
-        const outcome = await services.tasks.completeSubmission(
-            interaction.client,
-            userId,
-            taskEvent.id,
-            [],
-            services,
-            `[Test] Tier hint: ${tier}`,
-        );
+        const outcome = await services.tasks.completeSubmission(interaction.client, userId, taskEvent.id, [], services, `[Test] Tier hint: ${tier}`);
         if (outcome.result !== "submitted") {
             await interaction.editReply({ content: `❌ The test submission couldn't be posted (${outcome.result}).` });
             return;
@@ -104,8 +81,7 @@ const testtaskapproval: Command = {
         const verificationChannelId = guildConfig?.channels?.taskVerification;
 
         await interaction.editReply({
-            content:
-                `✅ Test submission posted to <#${verificationChannelId ?? "unknown"}>.\n` +
+            content: `✅ Test submission posted to <#${verificationChannelId ?? "unknown"}>.\n` +
                 `**Task:** ${taskName}\n` +
                 `**User:** <@${userId}>\n` +
                 `**Tier hint:** ${tier}\n` +

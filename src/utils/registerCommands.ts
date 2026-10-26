@@ -2,16 +2,14 @@ import { Routes, type REST, type RESTPutAPIApplicationCommandsJSONBody } from "d
 import type { Command } from "../models/Command.js";
 
 function slashCommandPayloads(commands: Map<string, Command>): RESTPutAPIApplicationCommandsJSONBody {
-    return [...new Set(commands.values())].flatMap((command) =>
-        command.slashData ? [command.slashData.toJSON()] : [],
-    );
+    return [...new Set(commands.values())].flatMap((command) => command.slashData ? [command.slashData.toJSON()] : []);
 }
 
 export async function registerGuildCommands(
     rest: REST,
     applicationId: string,
     guildId: string,
-    commands: Map<string, Command>,
+    commands: Map<string, Command>
 ): Promise<void> {
     const body = slashCommandPayloads(commands);
     console.log(`🏠 Registering ${body.length} commands for guild ${guildId}...`);
@@ -23,7 +21,7 @@ export async function registerGlobalCommands(
     rest: REST,
     applicationId: string,
     commands: Map<string, Command>,
-    clearGuildId: string | null,
+    clearGuildId: string | null
 ): Promise<void> {
     const body = slashCommandPayloads(commands);
     console.log(`🌍 Registering ${body.length} commands globally...`);

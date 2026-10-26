@@ -10,15 +10,11 @@ const taskpoll: Command = {
     module: CommandModule.Task,
     allowedRoles: [CommandRole.BotAdmin],
 
-    slashData: new SlashCommandBuilder().setName("taskpoll").setDescription("Manually trigger the weekly task poll."),
+    slashData: new SlashCommandBuilder()
+        .setName("taskpoll")
+        .setDescription("Manually trigger the weekly task poll."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction, services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -30,7 +26,7 @@ const taskpoll: Command = {
             console.error("[TaskPoll Command Error]", error);
             await interaction.editReply("Failed to post the task poll. Check console for details.");
         }
-    },
+    }
 };
 
 export default taskpoll;

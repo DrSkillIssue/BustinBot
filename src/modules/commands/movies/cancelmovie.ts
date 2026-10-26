@@ -1,10 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    DiscordAPIError,
-    RESTJSONErrorCodes,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, DiscordAPIError, RESTJSONErrorCodes, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
@@ -21,13 +15,7 @@ const cancelmovie: Command = {
         .setName("cancelmovie")
         .setDescription("Cancel the currently scheduled movie night and selected movie."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -77,7 +65,7 @@ const cancelmovie: Command = {
                         const pollMessage = await fetchMessageFromChannels(
                             activePoll.messageId,
                             activePoll.channelId,
-                            guildConfig?.channels?.movieNight,
+                            guildConfig?.channels?.movieNight
                         );
 
                         if (pollMessage) {
@@ -85,9 +73,7 @@ const cancelmovie: Command = {
                                 content: `❌ This movie poll was cancelled by <@${interaction.user.id}>.`,
                                 embeds: [],
                                 components: [],
-                                ...(suppressMentions
-                                    ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } }
-                                    : {}),
+                                ...(suppressMentions ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } } : {}),
                             });
                             actions.push("Poll message updated to show cancellation");
                         } else {
@@ -112,7 +98,7 @@ const cancelmovie: Command = {
                         const announcement = await fetchMessageFromChannels(
                             latestEvent.announcementMessageId,
                             latestEvent.channelId,
-                            guildConfig?.channels?.movieNight,
+                            guildConfig?.channels?.movieNight
                         );
 
                         if (announcement) {
@@ -120,9 +106,7 @@ const cancelmovie: Command = {
                                 content: cancellationMessage,
                                 embeds: [],
                                 components: [],
-                                ...(suppressMentions
-                                    ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } }
-                                    : {}),
+                                ...(suppressMentions ? { allowedMentions: { parse: [], users: [], roles: [], repliedUser: false } } : {}),
                             });
                             actions.push("Movie night announcement updated to show cancellation");
                             announcementHandled = true;
@@ -138,9 +122,7 @@ const cancelmovie: Command = {
             // Unpick currently selected movie (if any)
             const movies = await movieRepo.getAllMovies();
             const withSelection = movies
-                .flatMap((movie) =>
-                    !movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : [],
-                )
+                .flatMap((movie) => !movie.watched && movie.selectedAt ? [{ movie, selectedAt: movie.selectedAt }] : [])
                 .sort((a, b) => b.selectedAt.getTime() - a.selectedAt.getTime());
 
             const currentlySelected = withSelection[0]?.movie;
@@ -173,10 +155,8 @@ const cancelmovie: Command = {
         await interaction.editReply({
             content: [
                 "Movie night cancelled successfully.",
-                actions.length ? `Actions taken:\n- ${actions.join("\n- ")}` : "",
-            ]
-                .filter(Boolean)
-                .join("\n\n"),
+                actions.length ? `Actions taken:\n- ${actions.join("\n- ")}` : ""
+            ].filter(Boolean).join("\n\n"),
         });
 
         console.log(`[CancelMovie] Cancelled movie night.`);

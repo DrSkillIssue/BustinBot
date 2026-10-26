@@ -12,8 +12,10 @@ const testmovie: Command = {
     slashData: new SlashCommandBuilder()
         .setName("testmovie")
         .setDescription("Search TMDb for a movie and preview its metadata.")
-        .addStringOption((option) =>
-            option.setName("title").setDescription("The title of the movie to search for.").setRequired(true),
+        .addStringOption(option =>
+            option.setName("title")
+                .setDescription("The title of the movie to search for.")
+                .setRequired(true)
         ),
 
     async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
@@ -37,7 +39,7 @@ const testmovie: Command = {
             console.error("[TestMovie Command Error]", error);
             await interaction.editReply("An error occurred while fetching movie data. Check console for details.");
         }
-    },
+    }
 };
 
 export default testmovie;

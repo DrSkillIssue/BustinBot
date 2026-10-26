@@ -1,13 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ActionRowBuilder,
-    RoleSelectMenuBuilder,
-    ChannelSelectMenuBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ChannelType,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { channelLabel, roleLabel } from "../../../utils/TextUtils.js";
@@ -47,9 +38,7 @@ const moviesetup: Command = {
 
         const movieNightChannelSelect = new ChannelSelectMenuBuilder()
             .setCustomId("moviesetup_channel")
-            .setPlaceholder(
-                `Channel for movie night announcements (Current: ${channelLabel(guild, currentChannels.movieNight)})`,
-            )
+            .setPlaceholder(`Channel for movie night announcements (Current: ${channelLabel(guild, currentChannels.movieNight)})`)
             .setChannelTypes(ChannelType.GuildText)
             .setMinValues(1)
             .setMaxValues(1);
@@ -79,9 +68,9 @@ const moviesetup: Command = {
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(movieNightChannelSelect),
                 new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(movieVCSelect),
                 new ActionRowBuilder<ButtonBuilder>().addComponents(confirmButton, cancelButton),
-            ],
+            ]
         });
-    },
+    }
 };
 
 export default moviesetup;

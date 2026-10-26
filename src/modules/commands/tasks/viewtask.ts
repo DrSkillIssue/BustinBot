@@ -14,16 +14,13 @@ const viewtask: Command = {
         .setName("viewtask")
         .setDescription("View details for a specific task by ID or name.")
         .addStringOption((option) =>
-            option.setName("search").setDescription("Task ID or task name.").setRequired(true),
+            option
+                .setName("search")
+                .setDescription("Task ID or task name.")
+                .setRequired(true)
         ),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer }) {
         if (!interaction) return;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });

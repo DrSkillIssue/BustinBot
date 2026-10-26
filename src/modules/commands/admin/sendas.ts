@@ -10,31 +10,27 @@ const sendas: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.BotAdmin],
     usage: "/sendas <channel> <message>",
-    examples: ["/sendas #general Hello, this is BustinBot!"],
+    examples: [
+        "/sendas #general Hello, this is BustinBot!"
+    ],
 
     slashData: new SlashCommandBuilder()
         .setName("sendas")
         .setDescription("Send a message as BustinBot in a chosen channel")
-        .addChannelOption((option) =>
-            option.setName("channel").setDescription("Select the channel to send the message in").setRequired(true),
+        .addChannelOption(option =>
+            option.setName("channel")
+                .setDescription("Select the channel to send the message in")
+                .setRequired(true)
         )
-        .addStringOption((option) =>
-            option.setName("message").setDescription("The message to send as BustinBot").setRequired(true),
+        .addStringOption(option =>
+            option.setName("message")
+                .setDescription("The message to send as BustinBot")
+                .setRequired(true)
         ),
 
-    async execute({
-        interaction,
-        message,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        message?: Message;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, message, services }: { interaction?: ChatInputCommandInteraction, message?: Message, services: ServiceContainer }) {
         if (message) {
-            await message.reply(
-                "The `!sendas` command has been replaced with a slash command. Please use `/sendas` instead.",
-            );
+            await message.reply("The `!sendas` command has been replaced with a slash command. Please use `/sendas` instead.");
             return;
         }
 
@@ -60,7 +56,7 @@ const sendas: Command = {
         }
 
         await interaction.editReply({ content: `Message sent in ${channel}.` });
-    },
-};
+    }
+}
 
 export default sendas;

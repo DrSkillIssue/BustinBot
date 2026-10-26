@@ -7,7 +7,7 @@ const bustin: Command = {
     name: "bustin",
     description: "Ping the bot to see if it is responsive.",
     module: CommandModule.Core,
-    allowedRoles: [CommandRole.Everyone],
+    allowedRoles: [ CommandRole.Everyone ],
     slashData: new SlashCommandBuilder()
         .setName("bustin")
         .setDescription("Ping the bot to see if it is responsive (it makes him feel good)."),
@@ -15,7 +15,7 @@ const bustin: Command = {
         const baseResponse = "Bustin makes me feel good!";
         await interaction?.deferReply();
         await services.botStats.incrementBustin();
-
+        
         const guild = message?.guild ?? interaction?.guild ?? null;
         const response = appendBustinEmote(baseResponse, guild);
 

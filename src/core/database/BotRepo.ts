@@ -75,7 +75,11 @@ export class BotRepository implements IBotRepository {
         });
     }
 
-    async updateGuildStats(guildCount: number, channelCount: number, userCount: number): Promise<void> {
+    async updateGuildStats(
+        guildCount: number,
+        channelCount: number,
+        userCount: number
+    ): Promise<void> {
         await this.docRef.update({
             guildCount,
             channelCount,

@@ -18,7 +18,7 @@ const suppress: Command = {
                 .setDescription("How long mention suppression should stay active.")
                 .setRequired(true)
                 .setMinValue(1)
-                .setMaxValue(1440),
+                .setMaxValue(1440)
         ),
 
     async execute({ interaction, services }) {

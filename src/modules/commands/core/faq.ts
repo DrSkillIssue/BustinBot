@@ -10,7 +10,9 @@ const faq: Command = {
     module: CommandModule.Core,
     allowedRoles: [CommandRole.Everyone],
 
-    slashData: new SlashCommandBuilder().setName("faq").setDescription("Get the link to the BustinBot FAQ."),
+    slashData: new SlashCommandBuilder()
+        .setName("faq")
+        .setDescription("Get the link to the BustinBot FAQ."),
 
     async execute({ interaction }: { interaction?: ChatInputCommandInteraction }) {
         if (!interaction) return;

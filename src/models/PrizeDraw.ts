@@ -11,7 +11,7 @@ export interface PrizeDraw {
         bronze: number;
         silver: number;
         gold: number;
-    };
+    }
 
     winnerId?: string;
     rolledAt?: string;

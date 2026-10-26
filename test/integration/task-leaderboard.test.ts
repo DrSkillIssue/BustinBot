@@ -101,6 +101,30 @@ describe("the weekly leaderboard update", () => {
         expect(embed?.footer?.text).toBe("Task events elapsed: 1/4");
     });
 
+    test("counts a week as elapsed only once its last category's task has ended", async ({
+        discord,
+        services,
+        factories,
+    }) => {
+        const weekStart = DateTime.now().minus({ days: 6 }).toJSDate();
+        await factories.taskEvent.create({
+            id: "pvm",
+            startTime: weekStart,
+            endTime: DateTime.now().minus({ hours: 1 }).toJSDate(),
+        });
+        await factories.taskEvent.create({
+            id: "skilling",
+            startTime: weekStart,
+            endTime: DateTime.now().plus({ days: 1 }).toJSDate(),
+        });
+        await storePeriodic(factories, { period: { length: 4, eventIds: ["pvm", "skilling"] } });
+        discord.acceptMessages(IDS.channel);
+
+        await postPeriodicLeaderboardUpdate(discord.client, services);
+
+        expect(discord.messagesSentTo(IDS.channel)[0]?.embeds?.[0]?.footer?.text).toBe("Task events elapsed: 0/4");
+    });
+
     test("ends a finished period: champions, final standings and congratulations", async ({
         discord,
         services,

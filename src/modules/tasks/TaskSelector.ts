@@ -34,14 +34,16 @@ export function pickWeightedRandom(tasks: Task[], count: number): Task[] {
     }
 
     console.log(
-        `[TaskSelector] Selected tasks: ${selected.map((t) => `${t.taskName} (weight: ${t.weight ?? DEFAULT_TASK_WEIGHT})`).join(", ")}`,
+        `[TaskSelector] Selected tasks: ${selected
+            .map(t => `${t.taskName} (weight: ${t.weight ?? DEFAULT_TASK_WEIGHT})`)
+            .join(", ")}`
     );
 
     return selected;
 }
 
 export function selectTasksForCategory(category: TaskCategory, allTasks: Task[]): Task[] {
-    const taskData = allTasks.filter((t) => t.category === category);
+    const taskData = allTasks.filter(t => t.category === category);
     if (taskData.length === 0) {
         console.warn(`[TaskSelector] No tasks found for category ${category}`);
         return [];

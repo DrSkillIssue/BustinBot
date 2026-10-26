@@ -32,10 +32,7 @@ function loadServiceAccount(): ServiceAccount | undefined {
     }
 
     // Fallback to bundled config for local scripts.
-    const defaultPath = path.resolve(
-        import.meta.dirname,
-        "../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json",
-    );
+    const defaultPath = path.resolve(import.meta.dirname, "../../config/bustinbot-3840f-firebase-adminsdk-fbsvc-39e719dd30.json");
     if (fs.existsSync(defaultPath)) {
         const fileContents = fs.readFileSync(defaultPath, "utf8");
         try {

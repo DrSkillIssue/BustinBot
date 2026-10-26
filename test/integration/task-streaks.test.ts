@@ -81,6 +81,33 @@ describe("task streaks", () => {
         });
     });
 
+    test("treat a week as starting with its earliest completed task, so a task that started late keeps the streak", async ({
+        services,
+        factories,
+    }) => {
+        const start = DateTime.now().minus({ days: 8 });
+        const weekTwo = start.plus({ days: 7 });
+        await storeWeeks(factories, start, ["week-1", "week-2"]);
+        await factories.taskEvent.create({
+            id: "week-2-late",
+            startTime: weekTwo.plus({ days: 2 }).toJSDate(),
+            endTime: weekTwo.plus({ days: 7 }).toJSDate(),
+        });
+        await factories.taskEvent.create({
+            id: "missed-between",
+            startTime: weekTwo.toJSDate(),
+            endTime: weekTwo.plus({ days: 1 }).toJSDate(),
+        });
+        await submit(factories, "week-1", start.plus({ days: 1 }).toJSDate());
+        await submit(factories, "week-2-late", weekTwo.plus({ days: 3 }).toJSDate());
+        await submit(factories, "week-2", weekTwo.plus({ days: 3 }).toJSDate());
+
+        expect(await calculateTaskStreakSummary(IDS.user, services.repos.taskRepo)).toMatchObject({
+            currentStreak: 2,
+            longestStreak: 2,
+        });
+    });
+
     test("count a submission made before the week ended even if it was reviewed afterwards", async ({
         services,
         factories,

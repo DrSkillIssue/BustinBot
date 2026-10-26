@@ -1,11 +1,4 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    EmbedBuilder,
-    time,
-    TimestampStyles,
-    MessageFlags,
-} from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, time, TimestampStyles, MessageFlags } from "discord.js";
 import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import { calculateTaskStreakSummary } from "../../tasks/TaskStreaks.js";
@@ -22,13 +15,7 @@ const taskstreak: Command = {
         .setName("taskstreak")
         .setDescription("View your current task streak and streak deadline."),
 
-    async execute({
-        interaction,
-        services,
-    }: {
-        interaction?: ChatInputCommandInteraction;
-        services: ServiceContainer;
-    }) {
+    async execute({ interaction, services }: { interaction?: ChatInputCommandInteraction; services: ServiceContainer; }) {
         if (!interaction) return;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -71,10 +58,7 @@ const taskstreak: Command = {
 
         const embed = new EmbedBuilder()
             .setColor(0xa60000)
-            .setAuthor({
-                name: `${interaction.user.username}'s Task Streak`,
-                iconURL: interaction.user.displayAvatarURL(),
-            })
+            .setAuthor({ name: `${interaction.user.username}'s Task Streak`, iconURL: interaction.user.displayAvatarURL() })
             .setDescription("Track your weekly task streak progress.")
             .addFields(
                 { name: "🔥 Current Streak", value: `${displayCurrent}`, inline: true },
@@ -84,7 +68,7 @@ const taskstreak: Command = {
             .setFooter({ text: `BustinBot ${packageVersion} • Developed by dossyb` });
 
         await interaction.editReply({ embeds: [embed] });
-    },
+    }
 };
 
 export default taskstreak;

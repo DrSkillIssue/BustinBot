@@ -19,9 +19,7 @@ export async function refreshTaskEventMessage(client: Client, event: TaskEvent):
 
     const channel = await client.channels.fetch(event.channelId).catch(() => null);
     if (!channel?.isTextBased()) {
-        throw new Error(
-            `Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`,
-        );
+        throw new Error(`Task event ${event.id} is posted in ${event.channelId}, which is not a text channel the bot can reach.`);
     }
 
     const message = await channel.messages.fetch(event.messageId);
@@ -47,7 +45,7 @@ export async function startAllTaskEvents(client: Client, services: ServiceContai
         services,
         guildConfig,
         `**The new tasks are live!**\n` +
-            `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`,
+            `Include the keyword **${sharedKeyword}** in your screenshots for verification 🔑`
     );
 
     for (const category of weeklyTaskCategories(guildConfig)) {
@@ -60,7 +58,7 @@ export async function startTaskEventForCategory(
     services: ServiceContainer,
     category: TaskCategory,
     sharedKeyword: string,
-    channelOverride?: GuildTextBasedChannel,
+    channelOverride?: GuildTextBasedChannel
 ): Promise<void> {
     const { repos, taskEvents } = services;
 
@@ -79,8 +77,8 @@ export async function startTaskEventForCategory(
     // Tally votes per option ID
     const voteCounts = countBy(Object.values(pollData.votes), (taskId) => taskId);
 
-    const maxVotes = Math.max(...pollData.options.map((opt) => voteCounts[opt.id] ?? 0));
-    const topTasks = pollData.options.filter((opt) => (voteCounts[opt.id] ?? 0) === maxVotes);
+    const maxVotes = Math.max(...pollData.options.map(opt => voteCounts[opt.id] ?? 0));
+    const topTasks = pollData.options.filter(opt => (voteCounts[opt.id] ?? 0) === maxVotes);
 
     // Deterministically select winner; fall back to first in poll order for ties
     const winningTask = topTasks[0];
@@ -88,9 +86,7 @@ export async function startTaskEventForCategory(
 
     const winnerLabel = winningTask.taskName ?? winningTask.id;
     if (topTasks.length > 1) {
-        console.log(
-            `[TaskStart] Tie detected in ${category}: ${topTasks.length} tasks tied with ${maxVotes} votes. Selected winner by poll order: ${winnerLabel}`,
-        );
+        console.log(`[TaskStart] Tie detected in ${category}: ${topTasks.length} tasks tied with ${maxVotes} votes. Selected winner by poll order: ${winnerLabel}`);
     } else {
         console.log(`[TaskStart] Winner for ${category}: ${winnerLabel} (${maxVotes} votes)`);
     }
@@ -120,7 +116,7 @@ export async function startTaskEventForCategory(
         completionCounts: {
             bronze: 0,
             silver: 0,
-            gold: 0,
+            gold: 0
         },
         completedUserIds: [],
         createdAt: now.toJSDate(),
