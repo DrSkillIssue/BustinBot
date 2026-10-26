@@ -65,14 +65,14 @@ export class GuildRepository implements IGuildRepository {
         );
     }
 
-    async updateToggle(guildId: string, key: string, enabled: boolean, userId: string): Promise<void> {
+    async updateToggle(guildId: string, toggle: keyof Guild["toggles"], enabled: boolean, userId: string): Promise<void> {
         if (!isAllowedGuild(guildId)) {
             console.warn(`[GuildRepository] Skipping toggle update for guild ${guildId} in dev mode.`);
             return;
         }
 
         await this.collection.doc(guildId).update({
-            [key]: enabled,
+            [`toggles.${toggle}`]: enabled,
             updatedBy: userId,
             updatedAt: FieldValue.serverTimestamp(),
         });
