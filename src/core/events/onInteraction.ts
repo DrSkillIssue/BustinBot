@@ -32,26 +32,12 @@ export async function handleInteraction(
             return;
         }
 
-        const guildMember = rawMember instanceof GuildMember ? rawMember : null;
-        const apiMember = rawMember as APIInteractionGuildMember;
-
-        const userRoleIds = guildMember
-            ? guildMember.roles.cache.map((role) => role.id)
-            : Array.isArray(apiMember.roles)
-            ? apiMember.roles
-            : [];
-
-        const userRoleNames = guildMember
-            ? guildMember.roles.cache.map((role) => role.name)
-            : [];
+        const userRoleIds = memberRoleIds(interaction.member);
 
         if (isSetupCommand) {
             const adminRoleName = "BustinBot Admin";
 
-            const hasAdminRole =
-                guildMember?.roles.cache.some(
-                    (role) => role.name === adminRoleName || role.id === adminRoleName,
-                ) ?? false;
+            const hasAdminRole = (await memberRoleNames(interaction, userRoleIds)).includes(adminRoleName);
 
             if (!hasAdminRole) {
                 await interaction.reply({
@@ -74,7 +60,8 @@ export async function handleInteraction(
             const guildConfig = await services.guilds.requireConfig(interaction);
             if (!guildConfig) return;
 
-            const guildRoles = guildConfig!.roles ?? {};
+            const guildRoles = guildConfig.roles ?? {};
+            const userRoleNames = await memberRoleNames(interaction, userRoleIds);
 
             const hasRole = (configured?: string, fallbackEnv?: string) => {
                 const value = configured ?? fallbackEnv;
