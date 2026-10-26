@@ -32,7 +32,7 @@ const updatetask: Command = {
 
         const task = await repo.getTaskById(taskId);
         if (!task) {
-            await interaction.reply(`No task found with ID **${taskId}**.`);
+            await interaction.reply({ content: `No task found with ID **${taskId}**.`, flags: MessageFlags.Ephemeral });
             return;
         }
 

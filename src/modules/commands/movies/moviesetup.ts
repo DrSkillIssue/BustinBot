@@ -13,10 +13,12 @@ const moviesetup: Command = {
         .setDescription('Configure channels and roles for the movie module.'),
 
     async execute({ interaction, services }) {
-        if (!interaction || !services) return;
+        if (!interaction) return;
 
-        const guild = interaction.guild!;
-        const guildId = interaction.guildId!;
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const guildId = interaction.guildId;
+        const guild = await interaction.client.guilds.fetch(guildId);
         const guildConfig = await services.guilds.get(guildId);
         const currentRoles = guildConfig?.roles ?? {};
         const currentChannels = guildConfig?.channels ?? {};

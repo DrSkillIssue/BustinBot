@@ -1,6 +1,5 @@
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
     MessageFlags,
     ComponentType,
     type APIMessageTopLevelComponent,
@@ -11,7 +10,6 @@ import type { Command } from "../../../models/Command.js";
 import { CommandModule, CommandRole } from "../../../models/Command.js";
 import fs from "fs";
 import path from "path";
-import type { ServiceContainer } from "../../../core/services/ServiceContainer.js";
 import { packageVersion } from "../../../utils/version.js";
 import { isMentionSuppressed, withSuppressedMentions } from "../../../utils/MentionUtils.js";
 
@@ -68,9 +66,9 @@ const announce: Command = {
         .setName("announce")
         .setDescription("Post the latest BustinBot version announcement."),
 
-    async execute({ interaction, services, }: { interaction?: ChatInputCommandInteraction, services?: ServiceContainer; }) {
+    async execute({ interaction, services }) {
         if (!interaction) return;
-        await interaction.deferReply({ flags: 1 << 6 });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const announcementsPath = path.resolve(process.cwd(), "data/announcements.json");
         if (!fs.existsSync(announcementsPath)) {
@@ -125,9 +123,7 @@ const announce: Command = {
             ...featureSections,
         ];
 
-        const suppressMentions = services
-            ? await isMentionSuppressed(services.guilds, interaction.guildId)
-            : false;
+        const suppressMentions = await isMentionSuppressed(services.guilds, interaction.guildId);
 
         // Send announcement
         await channel.send(withSuppressedMentions({
